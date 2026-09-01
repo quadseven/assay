@@ -1,5 +1,7 @@
 # nutrition -- macro extraction on NutriBench
 
+_This suite exists because of [@ccqw](https://github.com/ccqw)._
+
 **Question:** given a meal described in natural language, can a language model
 produce its energy, protein, carbohydrate and fat?
 
