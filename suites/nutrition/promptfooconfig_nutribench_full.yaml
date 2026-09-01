@@ -1,0 +1,169 @@
+# NutriBench public-benchmark eval  --  FULL multi-provider bake-off.
+#
+# Wider matrix than the 5-cell config (local + Poolside + OpenRouter free).
+# Use this when you want to compare across LLM marketplaces / providers,
+# at the cost of needing more API keys staged in env. For the minimal,
+# documented-from-README run, use `promptfooconfig_nutribench_5cell.yaml`
+# instead.
+#
+# Cells:
+#   - 1x mistral-small:24b on local the local Ollama host
+#   - 4x Poolside laguna-{xs.2, m.1} x {direct, thinking}
+#   - 4x OpenRouter free-tier (rotate as availability shifts)
+#   - Anthropic / OpenAI / Gemini stanzas commented out  --  uncomment +
+#     stage matching SSM key + re-run.
+#
+# How to run:
+#   cd suites/nutrition
+#   OLLAMA_BASE_URL=http://localhost:11434 \
+#   POOLSIDE_API_KEY=<your Poolside API key> \
+#   OPENROUTER_API_KEY=<your OpenRouter API key> \
+#   DD_LLMOBS_ENABLED=1 DD_LLMOBS_ML_APP=nutribench-eval \
+#   DD_API_KEY=<your Datadog API key> \
+#   DD_SITE=datadoghq.com \
+#     npx --yes promptfoo@0.121.11 eval \
+#       --config promptfooconfig_nutribench_full.yaml \
+#       --output results/$(date +%Y%m%d-%H%M%S)_nutribench_full.json \
+#       --no-cache
+#
+# When a cell's API key is missing, the provider raises and that cell
+# fails for the run. The 5-cell config exists so the documented happy
+# path doesn't require keys you haven't staged yet.
+
+description: "NutriBench (meals->macros)  --  full multi-provider bake-off"
+
+prompts:
+  - "Estimate macros for: {{ meal_description }}"
+
+providers:
+  # -- Local Ollama (local) ------------------------------------------
+  - id: 'python:nutribench_provider.py'
+    label: 'mistral-small:24b (local)'
+    config:
+      kind: ollama
+      model: mistral-small:24b
+      base_url: http://localhost:11434
+
+  # -- Poolside cloud  --  4 cells (model x thinking) -----------------
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: true
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: true
+
+  # -- OpenRouter free-tier (rotate as availability changes) --------
+  # List current free models:
+  #   curl -sS https://openrouter.ai/api/v1/models \
+  #     -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  #     | jq -r '.data[] | select(.id | contains(":free")) | .id'
+  - id: 'python:nutribench_provider.py'
+    label: 'openrouter gpt-oss-120b free'
+    config:
+      kind: cloud
+      provider: openrouter
+      model: openai/gpt-oss-120b:free
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'openrouter qwen3-next-80b free'
+    config:
+      kind: cloud
+      provider: openrouter
+      model: qwen/qwen3-next-80b-a3b-instruct:free
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'openrouter nemotron-3-super-120b free'
+    config:
+      kind: cloud
+      provider: openrouter
+      model: nvidia/nemotron-3-super-120b-a12b:free
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'openrouter glm-4.5-air free'
+    config:
+      kind: cloud
+      provider: openrouter
+      model: z-ai/glm-4.5-air:free
+      thinking: false
+
+  # -- Anthropic stanzas (uncomment once ANTHROPIC_API_KEY is set) --
+  # - id: 'python:nutribench_provider.py'
+  #   label: 'anthropic claude-haiku-4-5'
+  #   config:
+  #     kind: cloud
+  #     provider: anthropic
+  #     model: claude-haiku-4-5-20251001
+  #     thinking: false
+  # - id: 'python:nutribench_provider.py'
+  #   label: 'anthropic claude-sonnet-4-6'
+  #   config:
+  #     kind: cloud
+  #     provider: anthropic
+  #     model: claude-sonnet-4-6
+  #     thinking: false
+
+  # -- Gemini (Gemma family)  --  DISABLED 2026-05-09: the Gemini API
+  # quota used for these runs was exhausted. Re-enable when quota allows. Note: dense
+  # gemma-4-31b-it returns 500 INTERNAL on prompts >300 max_tokens;
+  # gemma-4-26b-a4b-it (MoE) works reliably + nailed row 1 within 2%.
+  #
+  # - id: 'python:nutribench_provider.py'
+  #   label: 'gemini gemma-4-26b-a4b'
+  #   config:
+  #     kind: cloud
+  #     provider: gemini
+  #     model: gemma-4-26b-a4b-it
+  #     thinking: false
+
+  # -- OpenAI stanzas (uncomment once OPENAI_API_KEY is set) --
+  # - id: 'python:nutribench_provider.py'
+  #   label: 'openai gpt-4o-mini'
+  #   config:
+  #     kind: cloud
+  #     provider: openai
+  #     model: gpt-4o-mini
+  #     thinking: false
+  # - id: 'python:nutribench_provider.py'
+  #   label: 'openai gpt-4.1-mini'
+  #   config:
+  #     kind: cloud
+  #     provider: openai
+  #     model: gpt-4.1-mini
+  #     thinking: false
+
+tests: file://eval_prompts_nutribench.csv
+
+defaultTest:
+  options:
+    cache: false
+  assert:
+    - type: python
+      value: file://nutribench_judge.py

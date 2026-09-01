@@ -1,0 +1,7 @@
+"meal_description","expected_energy","expected_protein","expected_carb","expected_fat","country","serving_type","source_tag"
+"I had a restaurant burger with: double patty prime black angus 30 day dry-aged beef (640 cal), brioche bun (290 cal), uncured bacon (130 cal), organic sunny egg (150 cal), little gems lettuce (2 cal), roma tomato (5 cal), raw red onion (4 cal), pickled red onion (21 cal), dill pickle (3 cal), alfalfa sprouts (3 cal), and WHAM BAM SAUCE (50 cal).","1298","85","60","85","USA","menu_kcal","trusted_menu_full_kcal"
+"For lunch I had grilled chicken breast (200g) with brown rice (150g) and steamed broccoli (100g).","540","58","35","7","USA","metric","no_kcal_hints"
+"Breakfast: 2 eggs (300 cal) on whole-wheat toast (80 cal) with butter (35 cal).","325","14","20","20","USA","menu_kcal","adversarial_typo_kcal"
+"Lunch from cafeteria: chicken caesar salad (650 cal). I ate maybe half.","325","20","8","18","USA","portion_qualifier","partial_portion_with_kcal"
+"Yesterdays leftover Pad Thai (~720 cal per the takeout container label).","720","32","85","30","USA","menu_kcal","trusted_takeout_label"
+"Chipotle burrito bowl (450 cal, 2010 menu).","850","40","90","40","USA","menu_kcal","adversarial_stale_kcal"

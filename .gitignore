@@ -1,0 +1,18 @@
+
+__pycache__/
+!suites/*/data/README.md
+.DS_Store
+.promptfoo/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.parquet
+*.py[cod]
+# and large; they are downloaded, never committed.
+# Benchmark corpora. Both are redistribution-restricted (see suites/nutrition/data/README.md)
+# Local-only leak-scan term list; the scanner is published, the terms are not.
+# Promptfoo run output. `index.md` and `README.md` under results/ are tracked;
+# the raw run JSON is not.
+suites/*/data/*
+suites/*/results/*.json
+tools/leakscan.local.txt

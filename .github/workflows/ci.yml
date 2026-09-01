@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # The documented dev flow is `git clone && uv sync && pytest`. This job
+    # runs exactly that, from a clean checkout, so the README cannot drift
+    # away from what actually works.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: uv sync
+        run: uv sync --locked
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest
+
+      - name: Leak scan
+        # Positive control first: if a pattern stops matching its own control
+        # the scan reports clean for the wrong reason, which is worse than
+        # not scanning at all.
+        #
+        # WHAT THIS STEP CANNOT SEE. `tools/leakscan.local.txt` is gitignored,
+        # so the runner has no local terms and this scan covers only the
+        # BUILT-IN topology patterns -- private addresses, cluster naming,
+        # username-bearing paths. A bare product name or host nickname passes
+        # here every time. That is deliberate on both counts: the terms are not
+        # published with the scanner, and on a public repo the workflow log is
+        # public, so a finding would print the term it exists to protect.
+        #
+        # Nickname coverage is therefore a LOCAL pre-publish gate, run with the
+        # terms file present, and this step is not evidence of it. The selftest
+        # line reports how many classes fired -- 19 without local terms, more
+        # with them -- which is the number that tells you which mode ran.
+        run: |
+          python3 tools/leakscan.py --selftest
+          python3 tools/leakscan.py .

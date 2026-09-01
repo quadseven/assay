@@ -1,0 +1,7 @@
+{
+  "name": "absent_row_vs_error",
+  "summary": "A store outage is swallowed and reported as 'never seen', so every key re-fires at once.",
+  "why_this_task": "Another of this operator's standing rules: 'An absent row is first-run; a DB error is not. Treating a connection failure as first-run re-notifies everything at once.' It is a silent-failure shape -- the code has a real except block, so it looks defensive rather than wrong.",
+  "instruction": "seen_before() in state.py treats a StoreUnavailable error the same as a missing key, so an outage makes every key look unseen and re-fires everything. A missing key must still mean first-run, but a store failure must propagate. Edit state.py only -- do not modify any test file.",
+  "allowed": ["state.py"]
+}

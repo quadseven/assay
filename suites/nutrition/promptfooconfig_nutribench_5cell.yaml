@@ -1,0 +1,90 @@
+# NutriBench public-benchmark eval  --  REPRODUCIBLE 5-cell matrix.
+#
+# This is the "documented + reproducible" config. Following the README's
+# documented env vars (OLLAMA_BASE_URL + POOLSIDE_API_KEY) gives a
+# clean 5-cell run with no environment-failure noise on the leaderboard.
+#
+# For the larger model bake-off that includes OpenRouter / Anthropic /
+# OpenAI / Gemini cells, use `promptfooconfig_nutribench_full.yaml`  -- 
+# but that one needs more API keys in env (see that file's header).
+#
+# 5 cells (5 x 30 rows = 150 cell-evaluations):
+#   1. mistral-small:24b on local the local Ollama host
+#   2-5. Poolside laguna-{xs.2, m.1} x {direct, thinking}
+#
+# How to run:
+#   cd suites/nutrition
+#   OLLAMA_BASE_URL=http://localhost:11434 \
+#   POOLSIDE_API_KEY=<your Poolside API key> \
+#   DD_LLMOBS_ENABLED=1 DD_LLMOBS_ML_APP=nutribench-eval \
+#   DD_API_KEY=<your Datadog API key> \
+#   DD_SITE=datadoghq.com \
+#     npx --yes promptfoo@0.121.11 eval \
+#       --config promptfooconfig_nutribench_5cell.yaml \
+#       --output results/$(date +%Y%m%d-%H%M%S)_nutribench_5cell.json \
+#       --no-cache
+#
+# Then:
+#   npx --yes promptfoo@0.121.11 view  # browser report
+#
+# Archive convention:
+#   results/<YYYYMMDD>-<HHMMSS>_nutribench_5cell.json
+#   results/index.md  # 1-line summary of each run + git SHA + best-cell row
+
+description: "NutriBench (meals->macros)  --  reproducible 5-cell bake-off (local + Poolside)"
+
+prompts:
+  - "Estimate macros for: {{ meal_description }}"
+
+providers:
+  # -- Local Ollama (local) ------------------------------------------
+  - id: 'python:nutribench_provider.py'
+    label: 'mistral-small:24b (local)'
+    config:
+      kind: ollama
+      model: mistral-small:24b
+      base_url: http://localhost:11434
+
+  # -- Poolside cloud  --  4 cells (model x thinking) -----------------
+  # Requires valid POOLSIDE_API_KEY (current key starts with `sky_`).
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: true
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: true
+
+# 30 NutriBench v2 rows  --  same corpus the custom runners use.
+tests: file://eval_prompts_nutribench.csv
+
+defaultTest:
+  options:
+    cache: false   # latency measurements are real
+  assert:
+    - type: python
+      value: file://nutribench_judge.py

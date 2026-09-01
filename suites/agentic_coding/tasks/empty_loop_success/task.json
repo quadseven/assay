@@ -1,0 +1,7 @@
+{
+  "name": "empty_loop_success",
+  "summary": "A verifier given zero items reports zero failures, which reads as a pass.",
+  "why_this_task": "A real bug from this operator's fleet, recorded as \"'0 failures' from ZERO runs\": a verification loop iterated an empty collection and reported success, so a check that never ran looked identical to a check that passed. The unused NothingToVerify exception is already defined in the file -- the fix is to use it, and a model that adds its own new exception type instead has not read the code it is editing.",
+  "instruction": "verify_all() in verify.py returns a clean result when given an empty list, so a run that checked nothing is indistinguishable from a run where everything passed. Make an empty input raise the NothingToVerify exception already defined in that file. Edit verify.py only -- do not modify any test file.",
+  "allowed": ["verify.py"]
+}

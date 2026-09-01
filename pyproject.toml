@@ -1,0 +1,56 @@
+[project]
+name = "assay"
+version = "0.1.0"
+description = "Eval suites that measure models against public benchmarks."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+
+# Every entry below is imported by code in this repo. Nothing here is
+# aspirational, and nothing imported is missing -- `tests/test_declared_deps.py`
+# fails the build if the two ever drift apart.
+dependencies = [
+    # DuckDB reads the NutriBench and Open Food Facts parquet files directly.
+    # Only `.execute(...).fetchall()` is used, so no pandas/pyarrow is needed.
+    "duckdb>=1.1",
+    # Cloud runners speak OpenAI-compatible HTTP. Local Ollama calls go
+    # through stdlib urllib, so httpx is only on the cloud path.
+    "httpx>=0.27",
+    # spark_serving's vision probe GENERATES its red test image rather than
+    # committing one. A hand-written PNG here previously produced "Failed to
+    # load image", which reads exactly like a model that cannot see rather
+    # than a corrupt fixture -- the probe must not be able to fail that way.
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# Datadog LLM Observability spans. Strictly opt-in: every import sits behind
+# a `DD_LLMOBS_ENABLED` check, so the suites run without it installed.
+llmobs = ["ddtrace>=2.9"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+# The suites are run both as scripts (`python nutribench_runner.py`) and by
+# promptfoo, which resolves `python:nutribench_provider.py` relative to the
+# config file. Both require the modules to be importable by bare name from
+# the suite directory, so pytest is pointed at the same directories rather
+# than the modules being repackaged.
+pythonpath = ["suites/nutrition", "suites/nutrition/scripts", "suites/spark_serving", "suites/agentic_coding"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.uv]
+package = false

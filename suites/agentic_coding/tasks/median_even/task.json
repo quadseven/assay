@@ -1,0 +1,7 @@
+{
+  "name": "median_even",
+  "summary": "Off-by-one: integer floor division picks the upper middle element on an even-length list.",
+  "why_this_task": "Baseline sanity check. It is the easiest task in the corpus on purpose -- a model that cannot pass this cannot be trusted with any of the others, and a corpus with no floor gives no way to tell 'hard task' from 'broken harness'.",
+  "instruction": "median() in stats.py is wrong for even-length lists: it returns the upper middle element instead of the average of the two middle ones. Fix it. Edit stats.py only -- do not modify any test file.",
+  "allowed": ["stats.py"]
+}

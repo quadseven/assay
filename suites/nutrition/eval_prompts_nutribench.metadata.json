@@ -1,0 +1,62 @@
+{
+  "seed": 17,
+  "total_rows": 30,
+  "source": "data/nutribench/v2/*.parquet",
+  "strata": [
+    {
+      "label": "non_usa_metric",
+      "n": 24,
+      "countries": [
+        "PER",
+        "MEX",
+        "GTM",
+        "CRI",
+        "IND",
+        "KNA"
+      ],
+      "per_country": 4
+    },
+    {
+      "label": "usa_metric",
+      "n": 3,
+      "rows_drawn": 3
+    },
+    {
+      "label": "usa_natural",
+      "n": 3,
+      "rows_drawn": 3
+    }
+  ],
+  "row_hashes": [
+    "b56444159f5d0007",
+    "af57a9f962e7e953",
+    "677d3bc85309d52b",
+    "9446953b74e4949b",
+    "6e4b0746391dfa80",
+    "74c9b462b8d12f9b",
+    "0d8d81a182e2bf36",
+    "8bfa52052b34cff6",
+    "cde3c25affafc6fc",
+    "379bec5674c73166",
+    "9f36e978fc1080d0",
+    "120b9726f481a5c9",
+    "3d92aefaf281c411",
+    "63ffc8477a12653d",
+    "fca99202ca449db1",
+    "86a0be65cec53f5e",
+    "2be85945d080af5c",
+    "cacb1891ad04e7d3",
+    "a6cdf7026eb2bbe6",
+    "854f7ddd2bf5e35d",
+    "d71a7b8801f48083",
+    "2fe9944b54204149",
+    "87793708be322d65",
+    "1ccbbead45fac270",
+    "08fd19268e514b2f",
+    "a73c27fbf944524a",
+    "08cc6e8e6839fb81",
+    "fbf70079cf503f94",
+    "dff58cc904966dd3",
+    "a8947dfad64fd9d8"
+  ]
+}

@@ -1,0 +1,80 @@
+# Realworld meal corpus eval  --  wires `eval_prompts_realworld.csv` to
+# the same provider+judge as `promptfooconfig_nutribench_5cell.yaml`. This
+# is what exercises the validate-then-use kcal-hint defense + the
+# portion-normalize-first protocol on adversarial rows (typo'd kcal,
+# stale menu, partial portion).
+#
+# Pre-merge gate for internal ref 439 + internal ref 432 prompt changes: at least the typo'd
+# (row 4) and stale (row 7) adversarial rows must hit energy within
+# +/-20% via the model's defense, NOT by repeating the bad hint.
+#
+# How to run:
+#   cd suites/nutrition
+#   PROMPTFOO_PYTHON=$(uv run python -c 'import sys; print(sys.executable)') \
+#   OLLAMA_BASE_URL=http://localhost:11434 \
+#   POOLSIDE_API_KEY=<your Poolside API key> \
+#   DD_LLMOBS_ENABLED=1 DD_LLMOBS_ML_APP=realworld-eval \
+#   DD_API_KEY=<your Datadog API key> \
+#   DD_SITE=datadoghq.com \
+#     npx --yes promptfoo@0.121.11 eval \
+#       --config promptfooconfig_realworld.yaml \
+#       --output "results/$(date +%Y%m%d-%H%M%S)_realworld.json" \
+#       --no-cache --max-concurrency 2
+
+description: "Realworld meal corpus  --  kcal-hint defense gate (N=6 incl. typo'd, stale, partial-portion adversarial rows)"
+
+prompts:
+  - "Estimate macros for: {{ meal_description }}"
+
+providers:
+  # -- Local Ollama --------------------------------------------------
+  - id: 'python:nutribench_provider.py'
+    label: 'mistral-small:24b (local)'
+    config:
+      kind: ollama
+      model: mistral-small:24b
+      base_url: http://localhost:11434
+
+  # -- Poolside cloud (4 cells: model x thinking) -------------------
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside xs.2 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-xs.2
+      thinking: true
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 direct'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: false
+
+  - id: 'python:nutribench_provider.py'
+    label: 'poolside m.1 thinking'
+    config:
+      kind: cloud
+      provider: poolside
+      model: poolside/laguna-m.1
+      thinking: true
+
+# 6 rows from the realworld corpus: 1 trusted-menu, 1 hintless-metric,
+# 2 adversarial (typo'd / stale), 1 trusted-takeout, 1 partial-portion.
+tests: file://eval_prompts_realworld.csv
+
+defaultTest:
+  options:
+    cache: false
+  assert:
+    - type: python
+      value: file://nutribench_judge.py

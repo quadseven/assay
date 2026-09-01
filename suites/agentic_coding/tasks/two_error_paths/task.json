@@ -1,0 +1,7 @@
+{
+  "name": "two_error_paths",
+  "summary": "Two distinct error paths were collapsed into one: a corrupt existing config falls through and writes anyway.",
+  "why_this_task": "The hardest invariant from an internal refactor PR, where a local model refactored this exact shape. Its patch passed 1823 tests because NO existing test distinguished the paths -- the distinction lived only in a comment, which the model deleted. This task keeps the trap: the shipped tests pass on the broken code, so a model that only runs them will report success.",
+  "instruction": "sync() in sync.py treats a corrupt EXISTING config as a recoverable error and carries on writing into an empty dict, which silently discards whatever the real config held. A corrupt existing config must abort cleanly: record the error and write nothing. A malformed INCOMING entry must keep its current behavior -- that one entry is skipped and the remaining valid entries still write. Edit sync.py only -- do not modify any test file.",
+  "allowed": ["sync.py"]
+}

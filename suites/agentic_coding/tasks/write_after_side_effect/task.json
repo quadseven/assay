@@ -1,0 +1,7 @@
+{
+  "name": "write_after_side_effect",
+  "summary": "State is persisted BEFORE the side effect succeeds, so a failed delivery is never retried.",
+  "why_this_task": "Taken verbatim from this operator's own standing rule: 'Write AFTER the side effect succeeds, never before. Persisting first loses the notification forever on a dead webhook.' It cost two real incidents. The bug is invisible to the happy-path tests that ship with the file, which is exactly why it survives review.",
+  "instruction": "notify_new_version() in notifier.py records that it notified BEFORE the send actually succeeds, so a failed delivery is recorded as sent and never retried. Fix the ordering so state is only persisted after a successful send. Edit notifier.py only -- do not modify any test file.",
+  "allowed": ["notifier.py"]
+}
