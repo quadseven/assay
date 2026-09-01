@@ -1,0 +1,7 @@
+{
+  "name": "vacuous_pass",
+  "summary": "\"all N criteria ticked\" over zero criteria is vacuously true, so a prose issue reads as fully verified.",
+  "why_this_task": "The sharpest instance of this corpus's central shape, and the only one with no domain knowledge in the way. Two independent guards on a real fleet passed an issue for exactly this reason on 2026-09-01 -- one reported 'linked issue(s) all checkboxes ticked' about an issue containing zero checkboxes, and the other reopens issues with unticked boxes and found none to be unticked. Both green, both measuring an empty set, and the green is what stopped anyone looking. A model does not need to know what the guards guard: it needs to notice that 'all N ticked' with N unstated asserts nothing.",
+  "instruction": "A guard uses criteria_status() in close_guard.py to decide whether a pull request may close an issue. An issue written entirely in prose -- no checkbox list at all -- was allowed to close as though it had been fully verified, even though nothing about it had been checked. Work out why and fix it, so that case is reported distinctly rather than as a pass. An issue that genuinely has all its criteria ticked must still pass. Edit close_guard.py only -- do not modify any test file.",
+  "allowed": ["close_guard.py"]
+}
