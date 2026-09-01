@@ -33,7 +33,7 @@ collapsing them hides which one a model actually has.
 ## Why these tasks
 
 The corpus is **seeded from this operator's own recorded failures**, not mined
-from a public benchmark. Four of the five encode a rule or incident from the
+from a public benchmark. Five of the six encode a rule or incident from the
 fleet's own history, which is the point: a model that tops a generic coding
 benchmark has not been measured on the work it would actually be given here.
 
@@ -43,6 +43,7 @@ benchmark has not been measured on the work it would actually be given here.
 | `write_after_side_effect` | The standing rule "write AFTER the side effect succeeds, never before". Cost two real incidents. Invisible to the happy-path tests shipped with the file. |
 | `absent_row_vs_error` | "An absent row is first-run; a DB error is not." A silent-failure shape: the code has a real `except` block, so it reads as defensive rather than wrong. |
 | `empty_loop_success` | A verifier that reports "0 failures" having checked zero items. The unused exception is already in the file, so a model that invents a new one has not read the code it is editing. |
+| `vacuous_pass` | "All N criteria ticked" over **zero** criteria. Two independent guards on a real fleet passed an issue for exactly this reason, both green, both measuring an empty set. The only task here with no domain knowledge in the way. |
 | `two_error_paths` | The hardest invariant from an internal refactor PR. The shipped tests **pass on the broken code**, so a model that only runs them reports success. |
 
 ## The corpus invariant
@@ -71,7 +72,7 @@ re-graded later without re-running any model.
 
 ## What these numbers are not
 
-They are not a general coding-ability ranking. Five tasks is a small corpus,
+They are not a general coding-ability ranking. Six tasks is a small corpus,
 each model gets one attempt per task, and agentic runs are not deterministic.
 What they measure is narrower and more useful: **on the specific failure
 shapes this fleet has actually shipped, does this model produce a patch that
