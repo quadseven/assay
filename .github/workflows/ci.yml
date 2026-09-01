@@ -13,29 +13,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Install, lint and test come from the fleet's shared reusable rather than a
+  # local copy, so a change to the house Python gate reaches this repo the same
+  # way it reaches every other caller. Pinned to the SHA the rest of the fleet
+  # already uses, not to infra-public's HEAD -- a second pin would mean this
+  # repo silently gets a different gate from its siblings, which is the whole
+  # failure the shared workflow exists to prevent.
+  #
+  # `install-cmd` overrides the reusable's `uv sync --frozen` default: --locked
+  # additionally ASSERTS the lockfile is current, so a stale lock fails here
+  # instead of being silently tolerated.
   test:
-    # The documented dev flow is `git clone && uv sync && pytest`. This job
-    # runs exactly that, from a clean checkout, so the README cannot drift
-    # away from what actually works.
+    uses: quadseven/infra-public/.github/workflows/check.python.yml@cd83e5727c0a7b904f780960664a51b3a3a0c685
+    with:
+      install-cmd: "uv sync --locked"
+      test-cmd: "uv run pytest -q"
+      ruff: true
+
+  # DELIBERATELY NOT in the shared reusable. The scan is specific to this repo
+  # being publishable, its terms file is local-only, and folding it into the
+  # house Python gate would make every caller pay for a check that means
+  # nothing to them.
+  leak-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: uv sync
-        run: uv sync --locked
-
-      - name: Lint
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-
-      - name: Test
-        run: uv run pytest
 
       - name: Leak scan
         # Positive control first: if a pattern stops matching its own control
