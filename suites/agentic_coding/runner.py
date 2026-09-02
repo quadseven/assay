@@ -43,6 +43,44 @@ from grade import Outcome, PytestRun, grade, parse_pytest  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 TASKS = HERE / "tasks"
+# Read-only to the agent. On 2026-09-02 a model working a task in its /tmp
+# copy also wrote a correct patch into a DIFFERENT repository's checkout on
+# this host; the grader snapshots the task directory and saw nothing. These
+# are every checkout root on the operator's machines plus this repo itself
+# (the corpus is under it), and containment is an invariant of the run, not
+# an option: the runner refuses to start without a way to enforce it.
+PROTECTED_ROOTS = (Path.home() / "dev", Path.home() / "Developer", HERE.parent.parent)
+
+
+def containment(work: Path, protect: tuple[Path, ...] = PROTECTED_ROOTS) -> list[str]:
+    """The argv prefix that makes `protect` unwritable for the agent while
+    `work` stays writable. macOS: sandbox-exec, last matching rule wins, so
+    the work-dir allow follows the denies (a task copy placed under a
+    protected root is still workable). Linux: bubblewrap with the roots
+    bound read-only. Anything else, or a tool that is missing, is a refusal:
+    a run without containment is the run this suite already voided once."""
+    roots = [str(p.resolve()) for p in protect]
+    if sys.platform == "darwin" and shutil.which("sandbox-exec"):
+        denies = "".join(f'(deny file-write* (subpath "{p}"))' for p in roots)
+        profile = f'(version 1)(allow default){denies}(allow file-write* (subpath "{work.resolve()}"))'
+        return ["sandbox-exec", "-p", profile]
+    if sys.platform.startswith("linux") and shutil.which("bwrap"):
+        binds = [a for p in roots for a in ("--ro-bind", p, p)]
+        return [
+            "bwrap",
+            "--dev-bind",
+            "/",
+            "/",
+            *binds,
+            "--bind",
+            str(work.resolve()),
+            str(work.resolve()),
+            "--",
+        ]
+    raise SystemExit(
+        f"no filesystem containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
+        "refusing to run an agent that could write outside its task directory"
+    )
 
 
 def corpus_fingerprint() -> str:
@@ -92,8 +130,17 @@ def run_pytest(cwd: Path, target: str = "") -> PytestRun:
     return parse_pytest(proc.stdout + proc.stderr)
 
 
-def run_agent(agent: str, cwd: Path, instruction: str, *, timeout: int, env: dict) -> tuple[bool, str]:
-    """Shell out to the agent. Returns (completed, tail of its output).
+def run_agent(
+    agent: str,
+    cwd: Path,
+    instruction: str,
+    *,
+    timeout: int,
+    env: dict,
+    protect: tuple[Path, ...] = PROTECTED_ROOTS,
+) -> tuple[bool, str]:
+    """Shell out to the agent, contained: `protect` is read-only to it.
+    Returns (completed, tail of its output).
 
     A timeout is NOT an error to swallow: it is recorded and the attempt is
     graded on whatever the tree looks like, because a model that half-edits a
@@ -108,6 +155,7 @@ def run_agent(agent: str, cwd: Path, instruction: str, *, timeout: int, env: dic
     # instead of sending it to the model. `shlex.split` handles the agent
     # prefix so a quoted model name still works.
     argv = [
+        *containment(cwd, protect),
         *shlex.split(agent),
         "--",
         "--print",

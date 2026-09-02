@@ -205,6 +205,41 @@ class TestNoShellInterpolation(unittest.TestCase):
                 os.kill(child, signal.SIGKILL)
                 self.fail(f"grandchild {child} survived the interrupt")
 
+    def test_the_agent_cannot_write_outside_its_task_directory(self):
+        """A model wrote a correct patch into a different repository's
+        checkout mid-sweep and the grader, which snapshots only the task
+        directory, counted the attempt. Containment is an invariant of the
+        run: the write must FAIL, not merely be noticed afterwards, and the
+        task directory must still be writable through the same containment."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout = Path(tmp) / "some-other-repo"
+            checkout.mkdir()
+            (checkout / "sync.py").write_text("original\n")
+            work = Path(tmp) / "work"
+            work.mkdir()
+            agent = f"sh -c 'echo patched > {checkout}/sync.py; echo patched > {work}/pkg.py; echo mine > {checkout}/new.py'"
+            ok, _tail = runner.run_agent(agent, work, "x", timeout=30, env={}, protect=(checkout,))
+            self.assertTrue(ok)
+            self.assertEqual(
+                (checkout / "sync.py").read_text(), "original\n", "the other checkout was written"
+            )
+            self.assertFalse((checkout / "new.py").exists())
+            self.assertEqual(
+                (work / "pkg.py").read_text(), "patched\n", "the task directory must stay writable"
+            )
+
+    def test_the_runner_refuses_to_start_without_containment(self):
+        from unittest import mock
+
+        import runner
+
+        with mock.patch.object(runner.shutil, "which", return_value=None):
+            with self.assertRaises(SystemExit) as ctx:
+                runner.containment(Path("/tmp"), (Path("/tmp"),))
+        self.assertIn("refusing", str(ctx.exception))
+
     def test_run_agent_builds_argv_not_a_shell_string(self):
         import inspect
 

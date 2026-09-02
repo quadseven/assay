@@ -70,6 +70,15 @@ python3 runner.py --agent 'claude-or <target> spark:warm-any' \
 `grade.py` is pure -- dicts in, verdict out -- so a stored result can be
 re-graded later without re-running any model.
 
+The agent runs **contained**: `~/dev`, `~/Developer` and this repo are
+read-only to it (`sandbox-exec` on macOS, `bwrap` on Linux), and the runner
+refuses to start where neither exists. A model working its `/tmp` copy of a
+task once wrote a correct patch into a different repository's checkout on
+the same host, and the grader -- which snapshots the task directory and
+nothing else -- counted the attempt. That row is void, and this is what
+makes the next one not be. It is filesystem containment only: the agent
+still has the network and the rest of `$HOME`.
+
 ## What these numbers are not
 
 They are not a general coding-ability ranking. Six tasks is a small corpus,

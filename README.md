@@ -91,8 +91,9 @@ same host. The grader snapshots the task's working directory and nothing
 else, so that attempt still counted. The suite asks whether a model can be
 trusted with a ticket unattended; a run that answered "no" on the
 filesystem is not published as 4/6 on the tests. It is `void` until it is
-re-run under enforced filesystem isolation, which is now the rule for every
-Ollama candidate on the board's to-do list.
+re-run contained, and the runner now enforces that: checkouts are read-only
+to the agent (`sandbox-exec` on macOS, `bwrap` on Linux) and it refuses to
+start where neither is available.
 
 ### Adding a model to the scoreboard
 
