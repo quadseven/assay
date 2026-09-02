@@ -36,6 +36,7 @@ import argparse
 import hashlib
 import json
 import os
+import select
 import shlex
 import shutil
 import signal
@@ -161,7 +162,7 @@ class ModelProxy:
     the body is read whole and its `model` compared to the one the results
     are labeled with, and only then is the request written upstream with
     `Connection: close`, after which the response is relayed until the
-    server hangs up.
+    server hangs up, or the client does.
 
     sandbox-exec cannot name a remote host -- `(remote ip ...)` takes `*` or
     `localhost` plus a port (measured 2026-09-02: "host must be * or
@@ -178,6 +179,7 @@ class ModelProxy:
         self.refused: list[str] = []
         self.mismatched: list[str] = []
         self._lock = threading.Lock()
+        self._live: set[socket.socket] = set()
         self.server: socket.socket | None = None
         self.socket_path: str | None = None
         self.port: int = RELAY_PORT
@@ -248,12 +250,25 @@ class ModelProxy:
                 self._refuse(client, f"the model endpoint refused the connection: {exc}")
                 return
             with upstream:
-                upstream.settimeout(None)
-                client.settimeout(None)
-                upstream.sendall(request_line + b"\r\n" + headers + b"\r\n\r\n" + body[:length])
-                upstream.shutdown(socket.SHUT_WR)
-                while data := upstream.recv(65536):
-                    client.sendall(data)
+                with self._lock:
+                    self._live.add(upstream)
+                try:
+                    upstream.settimeout(None)
+                    client.settimeout(None)
+                    upstream.sendall(request_line + b"\r\n" + headers + b"\r\n\r\n" + body[:length])
+                    # No half-close after the request. The first version
+                    # sent SHUT_WR here to say "nothing follows", and the
+                    # stub server did not mind; Ollama's (Go's net/http)
+                    # treats EOF from the client as the client leaving and
+                    # cancels the request: every real call hung until the
+                    # agent's timeout (measured 2026-09-02, 25 s vs 0.5 s
+                    # without it). Nothing follows because nothing more is
+                    # ever written, and `Connection: close` ends the
+                    # exchange from the server's side.
+                    _relay(upstream, client)
+                finally:
+                    with self._lock:
+                        self._live.discard(upstream)
         except OSError:
             pass
         finally:
@@ -263,11 +278,53 @@ class ModelProxy:
                 pass
             client.close()
 
+    def abandon(self) -> int:
+        """Hang up on the model for every request still in flight, and say
+        how many there were. Called when an attempt ends: the agent's death
+        closes its sockets, which `_relay` turns into an upstream close, but
+        the attempt does not depend on that arriving in time. The server
+        sees a client gone and stops generating for it; the next attempt
+        starts against a quiet server."""
+        with self._lock:
+            live = list(self._live)
+        for upstream in live:
+            try:
+                upstream.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        return len(live)
+
     def close(self) -> None:
+        self.abandon()
         if self.server is not None:
             self.server.close()
         if self.socket_path:
             Path(self.socket_path).unlink(missing_ok=True)
+
+
+def _relay(upstream: socket.socket, client: socket.socket) -> None:
+    """The response, upstream to client, until the server hangs up -- or the
+    client does. A `recv()` blocked on the server never notices that the
+    agent it was relaying to has been killed: the model would go on
+    generating, and the next attempt would be timed against it (Codex,
+    round 8; the same contention the process-group kill was for, one hop
+    further out). So the client is watched too, and its EOF or reset closes
+    the upstream socket, which the server sees as the abort it is. Bytes
+    the client sends after its one request go nowhere."""
+    while True:
+        readable, _, _ = select.select([upstream, client], [], [])
+        if client in readable:
+            try:
+                extra = client.recv(65536)
+            except OSError:
+                extra = b""
+            if not extra:
+                return
+            continue
+        data = upstream.recv(65536)
+        if not data:
+            return
+        client.sendall(data)
 
 
 def check_request(head: bytes, *, model: str) -> tuple[bytes, bytes, int] | str:
@@ -589,22 +646,44 @@ def load_tasks(only: list[str] | None) -> list[dict]:
     return out
 
 
+# What running the agent's own tests leaves behind, in every task, on every
+# attempt: not output, not graded, not carried into the grading box (a .pyc
+# there could even be loaded in place of the source it claims to compile).
+BYPRODUCT_DIRS = frozenset({"__pycache__", ".pytest_cache"})
+
+
+def _entries(root: Path, rel: str = "") -> list[tuple[str, Path, int]]:
+    """(path relative to `root`, the entry, its lstat mode) for everything
+    under `root`, in name order, symlinks never followed and by-product
+    directories left out. The agent owned this tree, names included, so
+    nothing here is trusted enough to follow."""
+    out = []
+    for p in sorted(root.iterdir()):
+        name = f"{rel}/{p.name}" if rel else p.name
+        mode = p.lstat().st_mode
+        if stat.S_ISDIR(mode) and p.name in BYPRODUCT_DIRS:
+            continue
+        out.append((name, p, mode))
+        if stat.S_ISDIR(mode):
+            out.extend(_entries(p, name))
+    return out
+
+
 def snapshot(root: Path) -> dict[str, str]:
-    """Every regular file's text, keyed by name relative to the tree root.
-    Used on both sides of the run so `changed_files` compares content, not
-    timestamps. Symlinks are not followed: a link the agent left pointing
-    at a host file is `harvest`'s finding, not something to read."""
-    return {
-        p.name: p.read_text(errors="replace")
-        for p in sorted(root.iterdir())
-        if p.is_file() and not p.is_symlink()
-    }
+    """Every regular file's text, keyed by path relative to the tree root,
+    subdirectories included. Used on both sides of the run so
+    `changed_files` compares content, not timestamps; a file the agent put
+    in a directory of its own is a change the task did not allow (Codex,
+    round 8: the first version read the top level only, so `pkg/x.py` was
+    invisible to the scope check). Symlinks are not followed: a link the
+    agent left pointing at a host file is `harvest`'s finding."""
+    return {name: p.read_text(errors="replace") for name, p, mode in _entries(root) if stat.S_ISREG(mode)}
 
 
 def harvest(work: Path, dest: Path) -> list[str]:
     """Copy the agent's tree into `dest`, a directory the agent never had:
-    regular files only, byte for byte, each created exclusively. Returns
-    the names of the entries that were NOT regular files or directories.
+    regular files and directories only, byte for byte, each file created
+    exclusively. Returns the paths of the entries that were neither.
 
     The agent owned `work` and everything in it is its output, names
     included. The first grader copied the hidden test INTO that tree with
@@ -612,19 +691,18 @@ def harvest(work: Path, dest: Path) -> list[str]:
     `hidden_test.py -> ~/.ssh/authorized_keys` would have had the grader
     overwrite that file with the runner's privileges (Codex adversarial
     review, PR #6). Nothing is graded in place any more, and a link or a
-    device in the tree is a finding that voids the attempt. Directories
-    (`__pycache__`, `.pytest_cache`) are left behind: the corpus is flat and
-    the grade is on the files the task names.
+    device anywhere in the tree is a finding that voids the attempt.
     """
     dest.mkdir()
     rejected = []
-    for p in sorted(work.iterdir()):
-        mode = p.lstat().st_mode
+    for name, p, mode in _entries(work):
         if stat.S_ISREG(mode):
-            with open(p, "rb") as src, open(dest / p.name, "xb") as out:
+            with open(p, "rb") as src, open(dest / name, "xb") as out:
                 shutil.copyfileobj(src, out)
-        elif not stat.S_ISDIR(mode):
-            rejected.append(f"{p.name}: {'symlink' if stat.S_ISLNK(mode) else 'not a regular file'}")
+        elif stat.S_ISDIR(mode):
+            (dest / name).mkdir()
+        else:
+            rejected.append(f"{name}: {'symlink' if stat.S_ISLNK(mode) else 'not a regular file'}")
     return rejected
 
 
@@ -738,16 +816,17 @@ def run_agent(
     try:
         out, err = proc.communicate(timeout=timeout)
         return proc.returncode, (out or err)[-1200:]
-    except BaseException as exc:
-        # Every exceptional exit, not only the timeout: the new session means
-        # a Ctrl-C at the terminal never reaches the agent's group, so a
-        # KeyboardInterrupt that left this function without the killpg would
-        # orphan the same expensive generation the timeout path was written
-        # to end. Kill, reap, then decide what the exit means.
+    except subprocess.TimeoutExpired:
+        return None, f"TIMEOUT after {timeout}s"
+    finally:
+        # EVERY exit, the clean one included. The timeout path killed the
+        # group; a KeyboardInterrupt did not (the new session means Ctrl-C
+        # never reaches the agent's group); and a wrapper that started a
+        # child with its streams redirected and then exited 0 returned from
+        # communicate() with that child alive in the box, still holding the
+        # proxy (Codex, round 8). Kill the group, reap, then let the return
+        # value or the exception say what the exit meant.
         _kill_group(proc)
-        if isinstance(exc, subprocess.TimeoutExpired):
-            return None, f"TIMEOUT after {timeout}s"
-        raise
 
 
 def _kill_group(proc: subprocess.Popen) -> None:
@@ -755,7 +834,8 @@ def _kill_group(proc: subprocess.Popen) -> None:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    proc.communicate()
+    if proc.poll() is None:
+        proc.communicate()
 
 
 def attempt(
@@ -781,6 +861,7 @@ def attempt(
             agent, work, task["instruction"], timeout=timeout, env=env, box=box, proxy=proxy
         )
         elapsed = time.monotonic() - started
+        abandoned = proxy.abandon()
 
         # The agent is dead (its whole group, on every exit path). What it
         # left is copied out of its box into a fresh one, graded there, and
@@ -819,6 +900,7 @@ def attempt(
             "agent_tail": tail,
             "proxy_refused": refused,
             "tampered": tampered,
+            "generations_abandoned": abandoned,
         }
         return outcome, evidence
 

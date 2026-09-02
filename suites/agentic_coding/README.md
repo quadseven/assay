@@ -112,7 +112,19 @@ The agent runs **contained**, and every boundary is an allowlist:
   `localhost` and a port); on Linux the box has its own network namespace
   with nothing in it but loopback, the proxy listens on a Unix socket bound
   into the box, and a relay started inside the namespace joins a loopback
-  port to it.
+  port to it. The proxy also ends what it started: a generation is relayed
+  until the server hangs up or the client does, and when an attempt ends
+  (killed at the cap, or exited on its own) every upstream connection still
+  open is shut, so a timed-out attempt cannot keep the server busy with a
+  generation nobody will read while the next attempt is measured against
+  it (Codex adversarial review, PR #6, high; the count is recorded as
+  `generations_abandoned`). One measured detail: the proxy must NOT
+  half-close its upstream socket after sending the request. Go's `net/http`
+  (Ollama) treats EOF from the client as the client leaving and cancels
+  the request, so a relay that did that took 25 s to answer through Ollama
+  and 0.5 s without it, while the Python stub in the tests had happily
+  answered a half-closed request all along. The stub now behaves like Go,
+  and a live check against the fleet is part of shipping a proxy change.
 - **Environment**: `PATH`, locale and terminal variables, the operator's
   `--env`, and the box's own paths on top. No token, no `SSH_AUTH_SOCK`, no
   cloud profile reaches the agent.

@@ -21,15 +21,48 @@ from unittest import mock
 from grade import Outcome, PytestRun, changed_files, grade, out_of_scope, parse_pytest
 
 
+def read_one_request(conn: socket.socket) -> bytes | None:
+    """One HTTP request, the way a server reads it: the head, then exactly
+    Content-Length bytes of body -- and then a look for the client's EOF.
+    Go's net/http (Ollama) cancels a request whose client half-closes after
+    sending it; the proxy's first version did exactly that, and every real
+    call hung while the stub server here did not mind. None means the
+    client left and a real server would not have answered."""
+    import select
+
+    got = b""
+    while b"\r\n\r\n" not in got:
+        chunk = conn.recv(65536)
+        if not chunk:
+            return None
+        got += chunk
+    head, _, body = got.partition(b"\r\n\r\n")
+    length = 0
+    for line in head.split(b"\r\n"):
+        if line.lower().startswith(b"content-length:"):
+            length = int(line.split(b":", 1)[1])
+    while len(body) < length:
+        chunk = conn.recv(65536)
+        if not chunk:
+            return None
+        body += chunk
+    readable, _, _ = select.select([conn], [], [], 0.2)
+    if readable and not conn.recv(65536):
+        return None
+    return head + b"\r\n\r\n" + body
+
+
 class StubModel:
     """A model server that records every request it is handed and answers
     each with a fixed streamed response. What the proxy lets through is
-    read here; what it refuses never arrives."""
+    read here; what it refuses never arrives; a client that half-closes is
+    not answered at all, as Ollama would not."""
 
     def __init__(self, response: bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"):
         self.server = socket.create_server(("127.0.0.1", 0))
         self.port = self.server.getsockname()[1]
         self.requests: list[bytes] = []
+        self.abandoned = 0
         self.response = response
         import threading
 
@@ -45,17 +78,65 @@ class StubModel:
                 return
             with conn:
                 conn.settimeout(5)
-                got = b""
                 try:
-                    while chunk := conn.recv(65536):
-                        got += chunk
+                    got = read_one_request(conn)
                 except OSError:
-                    pass
+                    got = None
+                if got is None:
+                    self.abandoned += 1
+                    continue
                 self.requests.append(got)
                 # three writes with a pause: a response that streams
                 for piece in (self.response[:8], self.response[8:16], self.response[16:]):
                     conn.sendall(piece)
                     time.sleep(0.02)
+
+    def close(self):
+        self.server.close()
+
+
+class StallingModel:
+    """A model server mid-prefill: it answers the head of a response and
+    then goes quiet, the way a reasoning model does for minutes before its
+    first token. It learns its client is gone the way Go's net/http does,
+    by reading: EOF or a reset on the connection, never by a failed write,
+    because it is not writing. `aborted` holds the moment it learned; a
+    server that never learns is the orphaned generation."""
+
+    def __init__(self):
+        self.server = socket.create_server(("127.0.0.1", 0))
+        self.port = self.server.getsockname()[1]
+        self.aborted: list[float] = []
+        self.give_up_at = 10.0
+        import threading
+
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self):
+        import time
+
+        while True:
+            try:
+                conn, _ = self.server.accept()
+            except OSError:
+                return
+            with conn:
+                conn.settimeout(5)
+                try:
+                    if read_one_request(conn) is None:
+                        continue
+                except OSError:
+                    continue
+                started = time.monotonic()
+                try:
+                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n")
+                    conn.settimeout(self.give_up_at)
+                    if not conn.recv(1):
+                        self.aborted.append(time.monotonic() - started)
+                except TimeoutError:
+                    pass
+                except OSError:
+                    self.aborted.append(time.monotonic() - started)
 
     def close(self):
         self.server.close()
@@ -314,6 +395,44 @@ class TestNoShellInterpolation(unittest.TestCase):
             else:
                 os.kill(child, signal.SIGKILL)
                 self.fail(f"grandchild {child} survived the interrupt")
+
+    def test_a_wrapper_that_exits_cleanly_leaves_no_child_behind(self):
+        """The timeout and interrupt paths killed the group; a wrapper that
+        started a child with its streams redirected and exited 0 came back
+        from communicate() with that child alive in the box, holding the
+        proxy (Codex, round 8). The group dies on the clean exit too."""
+        import os
+        import signal
+        import time
+
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"
+            work.mkdir()
+            agent = f"sh -c 'sleep 30 >/dev/null 2>&1 & echo $! > {work}/child.pid; exit 0'"
+            with mock.patch.object(runner, "contain", lambda box, argv, **kw: argv):
+                rc, _tail = runner.run_agent(
+                    agent,
+                    work,
+                    "x",
+                    timeout=30,
+                    env={},
+                    box=Path(tmp),
+                    proxy=runner.ModelProxy("127.0.0.1", 1, model="m"),
+                )
+            self.assertEqual(rc, 0)
+            child = int((work / "child.pid").read_text().strip())
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+            else:
+                os.kill(child, signal.SIGKILL)
+                self.fail(f"child {child} outlived the wrapper's clean exit")
 
     @unittest.skipUnless(
         shutil.which("sandbox-exec") or shutil.which("bwrap"),
@@ -679,6 +798,38 @@ def _task(root: Path, *, agent_script: str, hidden_test: str, planted: str = "")
     return {"name": "t", "dir": root, "instruction": "x", "allowed": ["mod.py"]}
 
 
+class TestHarvest(unittest.TestCase):
+    def test_the_whole_tree_is_carried_over_but_links_and_byproducts_are_not(self):
+        """The first harvest copied the top level and left every directory
+        behind, so `pkg/evil.py` was neither graded nor in the scope check
+        (Codex, round 8). Now: every regular file by relative path; links
+        and devices anywhere are findings; what running the tests leaves
+        (`__pycache__`, `.pytest_cache`) is neither output nor carried."""
+        import os
+
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"
+            (work / "pkg" / ".pytest_cache").mkdir(parents=True)
+            (work / "__pycache__").mkdir()
+            (work / "mod.py").write_text("a")
+            (work / "pkg" / "evil.py").write_text("b")
+            (work / "pkg" / ".pytest_cache" / "v").write_text("v")
+            (work / "__pycache__" / "mod.pyc").write_bytes(b"\x00")
+            os.symlink("/etc", work / "etcdir")
+            os.symlink("/etc/hosts", work / "pkg" / "hosts")
+            os.mkfifo(work / "pipe")
+            dest = Path(tmp) / "graded"
+            rejected = runner.harvest(work, dest)
+            self.assertEqual(rejected, ["etcdir: symlink", "pipe: not a regular file", "pkg/hosts: symlink"])
+            self.assertEqual(
+                sorted(str(p.relative_to(dest)) for p in dest.rglob("*")), ["mod.py", "pkg", "pkg/evil.py"]
+            )
+            self.assertEqual(runner.snapshot(work), {"mod.py": "a", "pkg/evil.py": "b"})
+            self.assertEqual(runner.snapshot(dest), runner.snapshot(work))
+
+
 class TestGradingBox(unittest.TestCase):
     """The tests are the agent's code running a second time. Both pytest
     runs used to execute the modified tree through the host interpreter,
@@ -741,6 +892,37 @@ class TestGradingBox(unittest.TestCase):
             self.assertTrue(outcome.solved, "the fix itself was fine")
             self.assertFalse(outcome.contained)
             self.assertFalse(outcome.qualifies, "a tree with a link into the host cannot qualify")
+
+    def test_a_file_the_agent_put_in_a_directory_of_its_own_is_out_of_scope(self):
+        """A correct fix plus `pkg/extra.py` used to qualify: the directory
+        was invisible to the grader. The by-products of running the tests
+        are not an edit, though, or every attempt that ran them would void."""
+        import runner
+
+        fix = "printf 'def f():\\n    return 2\\n' > mod.py\n"
+        caches = "mkdir -p __pycache__ .pytest_cache; printf j > __pycache__/junk.pyc; printf v > .pytest_cache/v\n"
+        hidden = "from mod import f\n\n\ndef test_fixed():\n    assert f() == 2\n"
+        proxy = runner.ModelProxy("127.0.0.1", 1, model="m")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(runner, "contain", lambda box, argv, **kw: argv),
+        ):
+            task = _task(
+                Path(tmp) / "nested",
+                agent_script=fix + caches + "mkdir pkg; printf x > pkg/extra.py\n",
+                hidden_test=hidden,
+            )
+            outcome, _ = runner.attempt(
+                task, agent="bash agent.sh", label="m", timeout=60, env={}, proxy=proxy
+            )
+            self.assertTrue(outcome.solved and outcome.contained)
+            self.assertFalse(outcome.in_scope)
+            self.assertEqual(outcome.detail, "edited outside scope: ['pkg/extra.py']")
+            task = _task(Path(tmp) / "caches", agent_script=fix + caches, hidden_test=hidden)
+            outcome, _ = runner.attempt(
+                task, agent="bash agent.sh", label="m", timeout=60, env={}, proxy=proxy
+            )
+            self.assertTrue(outcome.qualifies, outcome.detail)
 
     @unittest.skipUnless(
         shutil.which("sandbox-exec") or shutil.which("bwrap"),
@@ -834,6 +1016,7 @@ class TestModelProxy(unittest.TestCase):
         self.assertIn(b"Connection: close\r\n", seen)
         self.assertTrue(seen.endswith(b'{"model":"m","stream":true}'))
         self.assertEqual(self.proxy.refused, [])
+        self.assertEqual(self.model.abandoned, 0, "the proxy half-closed the request; a Go server cancels it")
 
     def test_the_preconnect_and_count_tokens_are_forwarded(self):
         self.request("HEAD /api/hello")
@@ -884,6 +1067,57 @@ class TestModelProxy(unittest.TestCase):
         self.assertEqual(len(self.model.requests), 1)
         self.assertTrue(self.model.requests[0].endswith(body))
         self.assertNotIn(b"/api/delete", self.model.requests[0])
+
+    def _stalling(self):
+        import runner
+
+        model = StallingModel()
+        proxy = runner.ModelProxy("127.0.0.1", model.port, model="m")
+        proxy.listen_tcp()
+        self.addCleanup(model.close)
+        self.addCleanup(proxy.close)
+        body = b'{"model":"m"}'
+        client = socket.create_connection(("127.0.0.1", proxy.port), timeout=5)
+        client.sendall(
+            b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body)
+        )
+        self.assertTrue(client.recv(65536).startswith(b"HTTP/1.1 200"), "the generation never started")
+        return model, proxy, client
+
+    def _aborted_within(self, model, seconds):
+        import time
+
+        deadline = time.monotonic() + seconds
+        while not model.aborted and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertTrue(model.aborted, f"the server was still generating {seconds}s after its client left")
+
+    def test_a_client_that_hangs_up_mid_response_ends_the_generation_upstream(self):
+        """The relay blocked on the server's next chunk and never looked at
+        the client: an agent killed on timeout closed its socket, the proxy
+        did not notice, and the model went on generating for nobody -- the
+        contention the process-group kill was for, one hop out (Codex,
+        round 8). The client's EOF must reach the server as a hang-up."""
+        model, proxy, client = self._stalling()
+        client.close()
+        self._aborted_within(model, 2)
+        self.assertLess(model.aborted[0], 2)
+
+    def test_abandon_hangs_up_on_every_generation_in_flight(self):
+        """The attempt does not depend on the agent's death closing its
+        sockets in time: the proxy is told the attempt is over and hangs up
+        on the server itself, and the client is cut off with it."""
+        model, proxy, client = self._stalling()
+        self.assertEqual(proxy.abandon(), 1)
+        self._aborted_within(model, 2)
+        client.settimeout(2)
+        try:
+            rest = client.recv(65536)
+            while rest:
+                rest = client.recv(65536)
+        except OSError:
+            pass
+        self.assertEqual(proxy.abandon(), 0, "the relay thread is gone with the connection")
 
     def test_a_unix_socket_proxy_is_reachable_through_the_in_box_relay(self):
         """On Linux the box has its own network namespace; the proxy listens
