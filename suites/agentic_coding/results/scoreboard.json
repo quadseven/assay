@@ -4,6 +4,15 @@
   "note": "qualify rate over the task corpus, then mean wall-clock per task",
   "measurements": [
     {
+      "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "where": "local, vLLM, TP=2 across BOTH nodes, via the Anthropic bridge",
+      "value": "5/6",
+      "detail": "79s/task",
+      "measured": "2026-09-01",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "first run on the six-task corpus (vacuous_pass included), so not directly comparable to the 5/5 above; the miss put the no-criteria sentinel in a new key instead of the documented detail field; thinking off; one task took 226s, the rest 33-80s"
+    },
+    {
       "model": "qwen3-coder-next:q8_0",
       "where": "local, Ollama",
       "value": "5/5",
