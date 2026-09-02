@@ -15,6 +15,7 @@ blank cell means "not run", never "not good".
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | Serving contracts / decode |
 |---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
@@ -44,6 +45,15 @@ a tok/s benchmark counts that as output, an agent counts it as latency several
 round trips deep.
 
 Picking a local coding model on tok/s would have picked the wrong one here.
+
+**Both boxes together can now serve a model neither can hold alone.**
+`DeepSeek-V4-Flash-0731` (304B MoE, 167 GB at NVFP4) runs tensor-parallel
+across the two GB10 nodes with tonyd2wild's community DSpark recipe (a
+patched vLLM with MXFP4 MoE kernels and speculative decoding) and, with
+thinking off, is the first local model to clear the six-task
+corpus at 5/6 while decoding as fast as the 35B model above. The price is
+the whole fleet: nothing else can be served while it is up, and each task
+takes about twice as long as `qwen3-coder-next` did on the five-task corpus.
 
 ### Adding a model to the scoreboard
 
