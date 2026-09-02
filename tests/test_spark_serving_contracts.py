@@ -101,3 +101,42 @@ def test_malformed_tool_calls_fails_rather_than_passing_with_an_empty_name():
 def test_empty_tool_name_fails():
     v = holds_tool_calling(_chat(None, tool_calls=[{"function": {"name": ""}}]))
     assert not v.held
+
+
+# --- the probe host itself ---------------------------------------------------
+
+
+def test_a_probe_host_without_pillow_aborts_instead_of_failing_the_model(monkeypatch):
+    """Measured 2026-09-01: a host missing Pillow reported
+    'vision: held=False ModuleNotFoundError' against DeepSeek-V4-Flash, which
+    is pixel-identical to the model refusing images. An environment error
+    must surface as an error, never as a measurement."""
+    import probe
+
+    calls = []
+
+    def fake_post(url, body, timeout=180.0):
+        calls.append(body)
+        if "response_format" in body:
+            return _chat('{"findings": []}')
+        if "tools" in body:
+            return _chat(
+                None,
+                finish_reason="tool_calls",
+                tool_calls=[{"function": {"name": "read_file", "arguments": "{}"}}],
+            )
+        raise AssertionError("the vision request must never be sent")
+
+    def no_pillow():
+        raise ModuleNotFoundError("No module named 'PIL'")
+
+    monkeypatch.setattr(probe, "_post", fake_post)
+    monkeypatch.setattr(probe, "_red_png_data_uri", no_pillow)
+
+    try:
+        probe.probe("http://example.invalid", "m")
+    except ModuleNotFoundError:
+        pass
+    else:
+        raise AssertionError("a missing Pillow was recorded as a vision verdict")
+    assert len(calls) == 2

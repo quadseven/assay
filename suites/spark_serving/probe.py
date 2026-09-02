@@ -94,6 +94,10 @@ def probe(base_url: str, model: str) -> dict:
     timings["tool_calling_s"] = round(time.monotonic() - t, 2)
     results.append(holds_tool_calling(body))
 
+    # Built OUTSIDE the try below on purpose: a probe host without Pillow must
+    # abort the probe, not record "vision: held=False" against the model. The
+    # except only exists for the SERVER refusing the image.
+    red_png = _red_png_data_uri()
     t = time.monotonic()
     try:
         body = _post(
@@ -105,7 +109,7 @@ def probe(base_url: str, model: str) -> dict:
                         "role": "user",
                         "content": [
                             {"type": "text", "text": "What color is this image? Reply with one word."},
-                            {"type": "image_url", "image_url": {"url": _red_png_data_uri()}},
+                            {"type": "image_url", "image_url": {"url": red_png}},
                         ],
                     }
                 ],
