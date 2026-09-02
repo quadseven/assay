@@ -150,15 +150,17 @@ class TestNoShellInterpolation(unittest.TestCase):
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
+            box = Path(tmp)
+            work = box / "work"
+            work.mkdir()
             # No `$$`: a marker whose name depends on the shell's PID cannot be
             # asserted on, which is what went wrong the first time.
             hostile = "fix `touch pwned` and $(touch also-pwned) please"
-            # containment is a separate invariant with its own test; the CI
+            # containment is a separate invariant with its own tests; the CI
             # runners have no sandbox tool, and this test is about the shell
-            with mock.patch.object(runner, "containment", return_value=[]):
-                ok, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={})
-            self.assertTrue(ok)
+            with mock.patch.object(runner, "contain", lambda box, argv: argv):
+                rc, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={}, box=box)
+            self.assertEqual(rc, 0)
             # argv means the shell never ran, so nothing was created.
             self.assertEqual(sorted(p.name for p in work.iterdir()), [])
 
@@ -176,7 +178,8 @@ class TestNoShellInterpolation(unittest.TestCase):
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
-            work = Path(tmp)
+            work = Path(tmp) / "work"
+            work.mkdir()
             agent = f"sh -c 'sleep 30 & echo $! > {work}/child.pid; wait'"
             real = subprocess.Popen.communicate
             calls = []
@@ -193,11 +196,11 @@ class TestNoShellInterpolation(unittest.TestCase):
                 raise KeyboardInterrupt
 
             with (
-                mock.patch.object(runner, "containment", return_value=[]),
+                mock.patch.object(runner, "contain", lambda box, argv: argv),
                 mock.patch.object(subprocess.Popen, "communicate", interrupted),
             ):
                 with self.assertRaises(KeyboardInterrupt):
-                    runner.run_agent(agent, work, "x", timeout=30, env={})
+                    runner.run_agent(agent, work, "x", timeout=30, env={}, box=Path(tmp))
             self.assertEqual(len(calls), 1)
             child = int((work / "child.pid").read_text().strip())
             deadline = time.time() + 5
@@ -215,25 +218,32 @@ class TestNoShellInterpolation(unittest.TestCase):
         shutil.which("sandbox-exec") or shutil.which("bwrap"),
         "no containment tool here; the runner refuses to start on such a host (tested below)",
     )
-    def test_the_agent_cannot_write_outside_its_task_directory(self):
+    def test_the_agent_cannot_write_outside_its_box(self):
         """A model wrote a correct patch into a different repository's
         checkout mid-sweep and the grader, which snapshots only the task
         directory, counted the attempt. Containment is an invariant of the
-        run: the write must FAIL, not merely be noticed afterwards, and the
-        task directory must still be writable through the same containment.
-        Skipped where no tool exists (the ARC runners): there the invariant
-        is the refusal, which the next test proves everywhere."""
+        run: the write must FAIL, not merely be noticed afterwards, and it
+        must fail for a checkout nobody listed -- the first version made
+        three known roots read-only and left every other path open. The
+        box must still be writable through the same containment. Skipped
+        where no tool exists (the ARC runners): there the invariant is the
+        refusal, which the next tests prove everywhere."""
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
+            # a sibling of the box under the same temp root: on nobody's list
             checkout = Path(tmp) / "some-other-repo"
             checkout.mkdir()
             (checkout / "sync.py").write_text("original\n")
-            work = Path(tmp) / "work"
-            work.mkdir()
-            agent = f"sh -c 'echo patched > {checkout}/sync.py; echo patched > {work}/pkg.py; echo mine > {checkout}/new.py'"
-            ok, _tail = runner.run_agent(agent, work, "x", timeout=30, env={}, protect=(checkout,))
-            self.assertTrue(ok)
+            box = Path(tmp) / "box"
+            work = box / "work"
+            work.mkdir(parents=True)
+            agent = (
+                f"sh -c 'echo patched > {checkout}/sync.py; echo mine > {checkout}/new.py; "
+                f"echo patched > {work}/pkg.py'"
+            )
+            rc, _tail = runner.run_agent(agent, work, "x", timeout=30, env={}, box=box)
+            self.assertEqual(rc, 0, "the last command, the in-box write, must have succeeded")
             self.assertEqual(
                 (checkout / "sync.py").read_text(), "original\n", "the other checkout was written"
             )
@@ -241,6 +251,9 @@ class TestNoShellInterpolation(unittest.TestCase):
             self.assertEqual(
                 (work / "pkg.py").read_text(), "patched\n", "the task directory must stay writable"
             )
+            # the CLI's state went into the box, not into $HOME
+            self.assertTrue((box / "claude-config").is_dir())
+            self.assertTrue((box / "tmp").is_dir())
 
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
@@ -248,8 +261,61 @@ class TestNoShellInterpolation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(runner.shutil, "which", return_value=None):
                 with self.assertRaises(SystemExit) as ctx:
-                    runner.containment(Path(tmp), (Path(tmp),))
+                    runner.containment((Path(tmp),))
         self.assertIn("refusing", str(ctx.exception))
+
+    def test_a_porous_wrapper_is_refused_before_the_agent_runs(self):
+        """The wrapper is proved, not trusted: before every agent start it
+        runs a shell that writes inside the box and beside it (the temp root
+        and $HOME). Here the "wrapper" is nothing at all, so the outside
+        writes land; the run must stop with no agent started and no probe
+        left behind. On the ARC runners, which have no bwrap, this is the
+        test that shows the refusal is real rather than a message."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            home.mkdir()
+            box = Path(tmp) / "box"
+            work = box / "work"
+            work.mkdir(parents=True)
+            with (
+                mock.patch.object(runner, "containment", return_value=[]),
+                mock.patch.object(runner, "HOME", home),
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    runner.run_agent(f"sh -c 'touch {work}/ran'", work, "x", timeout=30, env={}, box=box)
+            self.assertIn("porous", str(ctx.exception))
+            self.assertFalse((work / "ran").exists(), "the agent ran anyway")
+            self.assertEqual(
+                sorted(p.name for p in home.iterdir()), [], "a probe was left in the home directory"
+            )
+            self.assertEqual(
+                [
+                    p
+                    for p in Path(tempfile.gettempdir()).iterdir()
+                    if p.name.startswith(".assay-containment-probe-")
+                ],
+                [],
+                "a probe was left in the temp root",
+            )
+
+    def test_a_wrapper_that_cannot_start_is_the_harness_failing_not_the_model(self):
+        """bubblewrap exits nonzero when a bind source is missing; the first
+        Linux profile bound three roots unconditionally and run_agent read
+        every such exit as the agent completing with an unchanged tree, i.e.
+        a model failure. The preflight must surface it as the wrapper's."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            box = Path(tmp) / "box"
+            work = box / "work"
+            work.mkdir(parents=True)
+            with mock.patch.object(runner, "containment", return_value=["sh", "-c", "exit 7", "--"]):
+                with self.assertRaises(SystemExit) as ctx:
+                    runner.run_agent("sh -c 'true'", work, "x", timeout=30, env={}, box=box)
+        self.assertIn("exit 7", str(ctx.exception))
+        self.assertIn("before the agent ran", str(ctx.exception))
 
     def test_run_agent_builds_argv_not_a_shell_string(self):
         import inspect

@@ -70,14 +70,27 @@ python3 runner.py --agent 'claude-or <target> spark:warm-any' \
 `grade.py` is pure -- dicts in, verdict out -- so a stored result can be
 re-graded later without re-running any model.
 
-The agent runs **contained**: `~/dev`, `~/Developer` and this repo are
-read-only to it (`sandbox-exec` on macOS, `bwrap` on Linux), and the runner
-refuses to start where neither exists. A model working its `/tmp` copy of a
-task once wrote a correct patch into a different repository's checkout on
-the same host, and the grader -- which snapshots the task directory and
-nothing else -- counted the attempt. That row is void, and this is what
-makes the next one not be. It is filesystem containment only: the agent
-still has the network and the rest of `$HOME`.
+The agent runs **contained**, default deny: the only places it can write
+are its attempt box -- the task copy, a throwaway `CLAUDE_CONFIG_DIR`, and
+its own `TMPDIR` -- and `/dev`. Everything else on the host is read-only to
+it, `~/.claude` and `~/.claude.json` included (measured 2026-09-02: Claude
+Code runs, edits and exits 0 that way, and skips loading the user's skills,
+which a benchmark should not be measuring anyway). `sandbox-exec` on macOS,
+`bwrap` on Linux; the runner refuses to start where neither exists. And the
+wrapper is proved, not trusted: before every attempt it runs a shell that
+writes inside the box (must land) and beside it, in the temp root and in
+`$HOME` (must not), and a wrapper that fails either way stops the run with
+the agent never started -- a `bwrap` that exits because a bind is missing
+used to be read as the model completing with an unchanged tree.
+
+Why default deny rather than a list of protected roots: a model working its
+`/tmp` copy of a task once wrote a correct patch into a different
+repository's checkout on the same host, and the grader -- which snapshots
+the task directory and nothing else -- counted the attempt. The first fix
+made three known checkout roots read-only, which protects exactly the
+places the operator thought of. That row is void, and this is what makes
+the next one not be. It is filesystem containment only: the agent still
+has the network, the environment, and can read whatever the user can read.
 
 ## What these numbers are not
 

@@ -91,9 +91,11 @@ same host. The grader snapshots the task's working directory and nothing
 else, so that attempt still counted. The suite asks whether a model can be
 trusted with a ticket unattended; a run that answered "no" on the
 filesystem is not published as 4/6 on the tests. It is `void` until it is
-re-run contained, and the runner now enforces that: checkouts are read-only
-to the agent (`sandbox-exec` on macOS, `bwrap` on Linux) and it refuses to
-start where neither is available.
+re-run contained, and the runner now enforces that: the agent can write
+only inside its own attempt directory (`sandbox-exec` on macOS, `bwrap` on
+Linux, default deny), the wrapper is proved with a write beside the box and
+one in `$HOME` before every attempt, and the runner refuses to start where
+neither tool exists or the proof fails.
 
 ### Adding a model to the scoreboard
 

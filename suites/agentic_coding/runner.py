@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from dataclasses import asdict
 from pathlib import Path
 
@@ -43,44 +44,94 @@ from grade import Outcome, PytestRun, grade, parse_pytest  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 TASKS = HERE / "tasks"
-# Read-only to the agent. On 2026-09-02 a model working a task in its /tmp
-# copy also wrote a correct patch into a DIFFERENT repository's checkout on
-# this host; the grader snapshots the task directory and saw nothing. These
-# are every checkout root on the operator's machines plus this repo itself
-# (the corpus is under it), and containment is an invariant of the run, not
-# an option: the runner refuses to start without a way to enforce it.
-PROTECTED_ROOTS = (Path.home() / "dev", Path.home() / "Developer", HERE.parent.parent)
+HOME = Path.home()
 
 
-def containment(work: Path, protect: tuple[Path, ...] = PROTECTED_ROOTS) -> list[str]:
-    """The argv prefix that makes `protect` unwritable for the agent while
-    `work` stays writable. macOS: sandbox-exec, last matching rule wins, so
-    the work-dir allow follows the denies (a task copy placed under a
-    protected root is still workable). Linux: bubblewrap with the roots
-    bound read-only. Anything else, or a tool that is missing, is a refusal:
-    a run without containment is the run this suite already voided once."""
-    roots = [str(p.resolve()) for p in protect]
+def containment(writable: tuple[Path, ...]) -> list[str]:
+    """The argv prefix under which a process can write ONLY under `writable`
+    and /dev. Default deny, not a list of places to protect: the first
+    version made three checkout roots read-only and left the rest of the
+    host open, which "protects" exactly the places the operator thought of.
+    macOS: sandbox-exec, last matching rule wins. Linux: bubblewrap, the
+    whole tree bound read-only and the writable roots bound over it. Any
+    other host, or a missing tool, is a refusal: a run without containment
+    is the run this suite already voided once. What is NOT contained: the
+    network, the environment, and reads of anything the user can read."""
+    roots = [str(p.resolve()) for p in writable]
     if sys.platform == "darwin" and shutil.which("sandbox-exec"):
-        denies = "".join(f'(deny file-write* (subpath "{p}"))' for p in roots)
-        profile = f'(version 1)(allow default){denies}(allow file-write* (subpath "{work.resolve()}"))'
-        return ["sandbox-exec", "-p", profile]
+        allows = "".join(f'(subpath "{p}")' for p in (*roots, "/dev"))
+        return [
+            "sandbox-exec",
+            "-p",
+            f"(version 1)(allow default)(deny file-write*)(allow file-write* {allows})",
+        ]
     if sys.platform.startswith("linux") and shutil.which("bwrap"):
-        binds = [a for p in roots for a in ("--ro-bind", p, p)]
+        binds = [a for p in roots for a in ("--bind", p, p)]
         return [
             "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
             "--dev-bind",
-            "/",
-            "/",
+            "/dev",
+            "/dev",
             *binds,
-            "--bind",
-            str(work.resolve()),
-            str(work.resolve()),
+            "--die-with-parent",
             "--",
         ]
     raise SystemExit(
         f"no filesystem containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
         "refusing to run an agent that could write outside its task directory"
     )
+
+
+def contain(box: Path, argv: list[str]) -> list[str]:
+    """`argv` wrapped so that it can write only under `box`, and PROVED
+    before it is returned: the wrapper runs once with a shell that writes
+    inside the box (must land; a wrapper that exits nonzero here, as
+    bubblewrap does for a bind it cannot make, would otherwise be reported
+    as the agent's own failure) and beside it, in the temp root and in the
+    home directory (must not). A prefix that cannot show both is refused
+    with the agent never started."""
+    prefix = containment((box,))
+    token = uuid.uuid4().hex
+    inside = box / f".containment-probe-{token}"
+    outside = [
+        Path(tempfile.gettempdir()) / f".assay-containment-probe-{token}",
+        HOME / f".assay-containment-probe-{token}",
+    ]
+    probe = subprocess.run(
+        [
+            *prefix,
+            "sh",
+            "-c",
+            # exit status is the in-box write's alone: the outside writes are
+            # SUPPOSED to fail, and their status is read from the filesystem
+            'touch "$0" || exit 1; for p in "$@"; do touch "$p" 2>/dev/null; done; exit 0',
+            str(inside),
+            *map(str, outside),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    landed = inside.exists()
+    inside.unlink(missing_ok=True)
+    leaked = [p for p in outside if p.exists()]
+    for p in leaked:
+        p.unlink()
+    if probe.returncode != 0 or not landed:
+        raise SystemExit(
+            f"containment wrapper failed before the agent ran (exit {probe.returncode}, nothing written inside "
+            f"{box}): {probe.stderr.strip()[-500:]}"
+        )
+    if leaked:
+        raise SystemExit(
+            "containment is porous: a write outside the box landed at "
+            + ", ".join(str(p.parent) for p in leaked)
+            + "; refusing to run the agent"
+        )
+    return [*prefix, *argv]
 
 
 def corpus_fingerprint() -> str:
@@ -137,15 +188,23 @@ def run_agent(
     *,
     timeout: int,
     env: dict,
-    protect: tuple[Path, ...] = PROTECTED_ROOTS,
-) -> tuple[bool, str]:
-    """Shell out to the agent, contained: `protect` is read-only to it.
-    Returns (completed, tail of its output).
+    box: Path | None = None,
+) -> tuple[int | None, str]:
+    """Shell out to the agent, contained to `box` (default: `cwd`), which
+    also holds its throwaway Claude config dir and TMPDIR so the CLI needs
+    nothing writable in $HOME. Returns (exit code, tail of its output); the
+    exit code is None on timeout.
 
     A timeout is NOT an error to swallow: it is recorded and the attempt is
     graded on whatever the tree looks like, because a model that half-edits a
-    file and hangs has still changed the tree and must be scored for it.
+    file and hangs has still changed the tree and must be scored for it. A
+    nonzero exit is recorded the same way, and printed: the tree is graded,
+    and the reader can see the CLI did not finish on its own terms.
     """
+    box = (box or cwd).resolve()
+    config, tmp = box / "claude-config", box / "tmp"
+    config.mkdir(exist_ok=True)
+    tmp.mkdir(exist_ok=True)
     # argv, never `shell=True`. AI-REVIEW 2026-08-31 [gpt-5.6-luna
     # (opencode-go)] ruff S602 (Elder, PR #2): the instruction was interpolated
     # into a shell string as `json.dumps(...)`, whose double quotes still let
@@ -154,15 +213,29 @@ def run_agent(
     # mentions a shell command in backticks would execute it on the host
     # instead of sending it to the model. `shlex.split` handles the agent
     # prefix so a quoted model name still works.
-    argv = [
-        *containment(cwd, protect),
-        *shlex.split(agent),
-        "--",
-        "--print",
-        "--dangerously-skip-permissions",
-        instruction,
-    ]
-    merged = {**os.environ, **env}
+    argv = contain(
+        box,
+        [
+            *shlex.split(agent),
+            "--",
+            "--print",
+            "--dangerously-skip-permissions",
+            instruction,
+        ],
+    )
+    # The box's config dir and tmp win over the operator's --env: they are
+    # what makes the rest of $HOME unnecessary to the CLI. Measured 2026-09-02:
+    # Claude Code with a fresh CLAUDE_CONFIG_DIR runs, edits, and exits 0 with
+    # ~/.claude and ~/.claude.json read-only; it also skips loading the
+    # user's skills, which a benchmark should not be measuring anyway.
+    merged = {
+        **os.environ,
+        **env,
+        "CLAUDE_CONFIG_DIR": str(config),
+        "TMPDIR": str(tmp),
+        "TMP": str(tmp),
+        "TEMP": str(tmp),
+    }
     # The agent is a wrapper script that execs the real CLI as a child. On
     # timeout `subprocess.run` kills only the wrapper; the child is reparented
     # to init and keeps calling the model server. Measured 2026-09-02: four
@@ -181,7 +254,7 @@ def run_agent(
     )
     try:
         out, err = proc.communicate(timeout=timeout)
-        return True, (out or err)[-1200:]
+        return proc.returncode, (out or err)[-1200:]
     except BaseException as exc:
         # Every exceptional exit, not only the timeout: the new session means
         # a Ctrl-C at the terminal never reaches the agent's group, so a
@@ -190,7 +263,7 @@ def run_agent(
         # to end. Kill, reap, then decide what the exit means.
         _kill_group(proc)
         if isinstance(exc, subprocess.TimeoutExpired):
-            return False, f"TIMEOUT after {timeout}s"
+            return None, f"TIMEOUT after {timeout}s"
         raise
 
 
@@ -204,7 +277,11 @@ def _kill_group(proc: subprocess.Popen) -> None:
 
 def attempt(task: dict, *, agent: str, label: str, timeout: int, env: dict) -> tuple[Outcome, dict]:
     with tempfile.TemporaryDirectory() as tmp:
-        work = Path(tmp)
+        # Everything the agent may write lives under this box: the task copy
+        # it is graded on, plus the CLI's own config dir and TMPDIR.
+        box = Path(tmp)
+        work = box / "work"
+        work.mkdir()
         # is_file() guard, not decoration: a stray __pycache__ inside a task
         # tree crashed the whole run with IsADirectoryError, caught by this
         # suite's own corpus-invariant test.
@@ -214,7 +291,7 @@ def attempt(task: dict, *, agent: str, label: str, timeout: int, env: dict) -> t
 
         before = snapshot(work)
         started = time.monotonic()
-        completed, tail = run_agent(agent, work, task["instruction"], timeout=timeout, env=env)
+        agent_exit, tail = run_agent(agent, work, task["instruction"], timeout=timeout, env=env, box=box)
         elapsed = time.monotonic() - started
         after = snapshot(work)
 
@@ -233,7 +310,8 @@ def attempt(task: dict, *, agent: str, label: str, timeout: int, env: dict) -> t
         )
         evidence = {
             "elapsed_s": round(elapsed, 1),
-            "agent_completed": completed,
+            "agent_completed": agent_exit == 0,
+            "agent_exit": agent_exit,
             "existing": asdict(existing),
             "hidden": asdict(hidden),
             "agent_tail": tail,
@@ -273,10 +351,11 @@ def main() -> int:
             )
             return 3
         mark = "QUALIFY" if outcome.qualifies else "no"
+        ended = "" if evidence["agent_exit"] == 0 else f"  agent exit={evidence['agent_exit']}"
         print(
             f"{mark:8} {outcome.task:24} solved={outcome.solved!s:5} "
             f"scope={outcome.in_scope!s:5} regressed={outcome.regressed!s:5} "
-            f"{evidence['elapsed_s']}s  {outcome.detail}",
+            f"{evidence['elapsed_s']}s  {outcome.detail}{ended}",
             flush=True,
         )
         results.append({**asdict(outcome), "qualifies": outcome.qualifies, **evidence})
