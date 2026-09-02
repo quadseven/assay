@@ -138,7 +138,15 @@ The agent runs **contained**, and every boundary is an allowlist:
   open is shut, so a timed-out attempt cannot keep the server busy with a
   generation nobody will read while the next attempt is measured against
   it (Codex adversarial review, PR #6, high; the count is recorded as
-  `generations_abandoned`). One measured detail: the proxy must NOT
+  `generations_abandoned`). Ending an attempt is a close, not a snapshot:
+  the attempt is marked closed under the lock a handler takes before it
+  opens an upstream connection and again before it writes the request,
+  every client the attempt accepted is cut (which wakes a handler still
+  reading a slow head or body), and the handler threads are joined, so a
+  request that was accepted but not yet through cannot reach the model
+  after the attempt, and nothing the attempt refused is recorded against
+  the next one (round 11: only the upstreams already open were shut, and
+  a handler mid-read finished afterwards). One measured detail: the proxy must NOT
   half-close its upstream socket after sending the request. Go's `net/http`
   (Ollama) treats EOF from the client as the client leaving and cancels
   the request, so a relay that did that took 25 s to answer through Ollama

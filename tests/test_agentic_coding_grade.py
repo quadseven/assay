@@ -1265,6 +1265,130 @@ class TestModelProxy(unittest.TestCase):
             pass
         self.assertEqual(proxy.abandon(), 0, "the relay thread is gone with the connection")
 
+    def test_a_request_still_arriving_when_the_attempt_ends_never_reaches_the_model(self):
+        """`end_attempt` closed the listener and hung up on the generations
+        it knew about; a request accepted but not yet read through was
+        neither, and its handler finished after the attempt: a new
+        upstream connection, a generation during the next attempt, a
+        refusal recorded against the wrong attempt (Codex, round 11)."""
+        import time
+
+        client = socket.create_connection(("127.0.0.1", self.proxy.port), timeout=5)
+        client.sendall(b"POST /v1/messages HTTP/1.1\r\nHost: x\r\n")  # head unfinished
+        time.sleep(0.1)
+        self.assertEqual(self.proxy.end_attempt(), 0)
+        client.settimeout(2)
+        self.assertEqual(client.recv(65536), b"", "the client was not cut when the attempt ended")
+        body = b'{"model":"m"}'
+        try:
+            client.sendall(b"Content-Length: %d\r\n\r\n%s" % (len(body), body))
+        except OSError:
+            pass
+        time.sleep(0.2)
+        self.assertEqual(self.model.requests, [])
+        self.assertEqual(self.proxy.refused, [])
+
+    def test_a_request_read_through_as_the_attempt_ends_is_not_written_upstream(self):
+        """The narrower window: the head and body are in, the upstream
+        connection is being made, and the attempt ends. The request is
+        not written -- the server sees a connection with nothing on it --
+        and the record of the attempt is complete when `end_attempt`
+        returns, because it waits for the handler."""
+        import threading
+        from unittest import mock
+
+        import runner
+
+        connecting = threading.Event()
+        proceed = threading.Event()
+        real = runner.socket.create_connection
+        written: list[bytes] = []
+
+        class Spy:
+            """The upstream socket, with every write on record: whether the
+            request went out is the question, and a server that had its
+            connection reset right after may never parse what arrived."""
+
+            def __init__(self, sock):
+                self._sock = sock
+
+            def sendall(self, data):
+                written.append(data)
+                return self._sock.sendall(data)
+
+            def __getattr__(self, name):
+                return getattr(self._sock, name)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self._sock.close()
+
+        def slow_connect(address, *args, **kwargs):
+            # only the proxy's connection to the model is slowed; the
+            # test's own client connect goes through the same module
+            if address != ("127.0.0.1", self.model.port):
+                return real(address, *args, **kwargs)
+            connecting.set()
+            proceed.wait(5)
+            return Spy(real(address, *args, **kwargs))
+
+        body = b'{"model":"m"}'
+        with mock.patch.object(runner.socket, "create_connection", slow_connect):
+            client = socket.create_connection(("127.0.0.1", self.proxy.port), timeout=5)
+            client.sendall(
+                b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body)
+            )
+            self.assertTrue(connecting.wait(5), "the handler never got to the connect")
+            ended = threading.Thread(target=self.proxy.end_attempt)
+            ended.start()
+            ended.join(0.3)
+            self.assertTrue(ended.is_alive(), "end_attempt returned while a handler was still in flight")
+            proceed.set()
+            ended.join(5)
+            self.assertFalse(ended.is_alive())
+        self.assertEqual(written, [], "the request was written upstream after the attempt ended")
+        self.assertEqual(self.model.requests, [])
+        self.assertEqual(client.recv(65536), b"")
+
+    def test_a_unix_socket_proxy_refuses_between_attempts_and_serves_the_next(self):
+        """The Unix socket is opened once per sweep, so between attempts the
+        listener is still there: a connection accepted then is closed
+        without being read, and the next `begin_attempt` serves again."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            proxy = runner.ModelProxy("127.0.0.1", self.model.port, model="m")
+            proxy.listen_unix(Path(tmp) / "model.sock")
+            self.addCleanup(proxy.close)
+            body = b'{"model":"m"}'
+            request = b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (
+                len(body),
+                body,
+            )
+
+            def over_unix(data):
+                with socket.socket(socket.AF_UNIX) as c:
+                    c.settimeout(5)
+                    c.connect(proxy.socket_path)
+                    c.sendall(data)
+                    got = b""
+                    try:
+                        while chunk := c.recv(65536):
+                            got += chunk
+                    except OSError:
+                        pass
+                    return got
+
+            self.assertEqual(over_unix(request), self.model.response)
+            proxy.end_attempt()
+            self.assertEqual(over_unix(request), b"")
+            self.assertEqual(len(self.model.requests), 1)
+            proxy.begin_attempt()
+            self.assertEqual(over_unix(request), self.model.response)
+            self.assertEqual(len(self.model.requests), 2)
+
     def test_a_unix_socket_proxy_is_reachable_through_the_in_box_relay(self):
         """On Linux the box has its own network namespace; the proxy listens
         on a Unix socket bound in and RELAY joins a loopback port to it from

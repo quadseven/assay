@@ -209,6 +209,15 @@ class ModelProxy:
         self.mismatched: list[str] = []
         self._lock = threading.Lock()
         self._live: set[socket.socket] = set()
+        # Everything an attempt accepted, and the threads serving it: an
+        # attempt ends by cutting every one of them and waiting for the
+        # threads, so no request accepted during it can reach the model
+        # after it, and nothing it refused is recorded after it either
+        # (Codex, round 11). `_closed` is read under the lock before an
+        # upstream is opened and again before the request is written.
+        self._clients: set[socket.socket] = set()
+        self._handlers: set[threading.Thread] = set()
+        self._closed = True
         self.server: socket.socket | None = None
         self.socket_path: str | None = None
         self.port: int = RELAY_PORT
@@ -228,7 +237,12 @@ class ModelProxy:
             server.close()
         self._ports_used.add(port)
         self.server, self.port = server, port
+        self._open()
         threading.Thread(target=self._serve, daemon=True).start()
+
+    def _open(self) -> None:
+        with self._lock:
+            self._closed = False
 
     def begin_attempt(self) -> None:
         """Listen for one attempt. A Unix socket is bound into a box whose
@@ -236,10 +250,18 @@ class ModelProxy:
         a TCP port is opened here, per attempt, and retired after it."""
         if self.socket_path is None:
             self.listen_tcp()
+        else:
+            self._open()
 
     def end_attempt(self) -> int:
-        """Hang up on every generation in flight and, on TCP, stop listening:
-        from here nothing that came out of the box can reach the model.
+        """Close the attempt: nothing accepted during it reaches the model
+        after it. Under the lock the attempt is marked closed, so a handler
+        that has read its request and is about to open an upstream refuses
+        instead; every generation in flight is hung up on; every accepted
+        client is cut, which wakes a handler blocked reading a slow head
+        or body; then the handlers are joined, so what this attempt refused
+        is on record before the caller grades it and the next attempt
+        starts against a quiet server. On TCP the listener is closed too.
         Returns how many generations were abandoned."""
         abandoned = self.abandon()
         if self.socket_path is None and self.server is not None:
@@ -252,6 +274,7 @@ class ModelProxy:
         self.server.bind(str(path))
         self.server.listen()
         self.socket_path = str(path)
+        self._open()
         threading.Thread(target=self._serve, daemon=True).start()
 
     def _serve(self) -> None:
@@ -261,7 +284,14 @@ class ModelProxy:
                 client, _ = self.server.accept()
             except OSError:
                 return
-            threading.Thread(target=self._handle, args=(client,), daemon=True).start()
+            with self._lock:
+                if self._closed:
+                    client.close()
+                    continue
+                self._clients.add(client)
+                thread = threading.Thread(target=self._handle, args=(client,), daemon=True)
+                self._handlers.add(thread)
+                thread.start()
 
     def _refuse(self, client: socket.socket, why: str, *, mismatch: bool = False) -> None:
         with self._lock:
@@ -302,6 +332,9 @@ class ModelProxy:
             if (why := check_model(body[:length], model=self.model)) is not None:
                 self._refuse(client, why, mismatch=True)
                 return
+            with self._lock:
+                if self._closed:
+                    return
             try:
                 upstream = socket.create_connection(self.upstream, timeout=30)
             except OSError as exc:
@@ -309,6 +342,11 @@ class ModelProxy:
                 return
             with upstream:
                 with self._lock:
+                    # the attempt may have closed during the connect: the
+                    # request is then never written, and the server sees a
+                    # connection with nothing on it
+                    if self._closed:
+                        return
                     self._live.add(upstream)
                 try:
                     upstream.settimeout(None)
@@ -335,21 +373,30 @@ class ModelProxy:
             except OSError:
                 pass
             client.close()
+            with self._lock:
+                self._clients.discard(client)
+                self._handlers.discard(threading.current_thread())
 
     def abandon(self) -> int:
-        """Hang up on the model for every request still in flight, and say
-        how many there were. Called when an attempt ends: the agent's death
-        closes its sockets, which `_relay` turns into an upstream close, but
-        the attempt does not depend on that arriving in time. The server
-        sees a client gone and stops generating for it; the next attempt
-        starts against a quiet server."""
+        """Close the attempt and hang up on the model for every request
+        still in flight; say how many there were. The agent's death closes
+        its sockets, which `_relay` turns into an upstream close, but the
+        attempt does not depend on that arriving in time: the server sees
+        a client gone and stops generating for it. Every accepted client is
+        cut too, and the handlers joined, so nothing accepted during the
+        attempt is served or recorded after this returns."""
         with self._lock:
+            self._closed = True
             live = list(self._live)
-        for upstream in live:
+            clients = list(self._clients)
+            handlers = list(self._handlers)
+        for sock in live + clients:
             try:
-                upstream.shutdown(socket.SHUT_RDWR)
+                sock.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
+        for thread in handlers:
+            thread.join(timeout=30)
         return len(live)
 
     def close(self) -> None:

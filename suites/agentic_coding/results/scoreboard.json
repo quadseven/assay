@@ -27,7 +27,7 @@
       "value": "void",
       "measured": "2026-08-31",
       "corpus": "a3e597c9973edced",
-      "caveat": "VOID, not a score. The run produced 3/4 valid at 145s/task on the six-task corpus, but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint. Due a re-run under the contained runner.",
+      "caveat": "VOID, not a score. The run produced 3/4 valid at 145s/task on the FIVE-task corpus (a3e597c9973edced predates vacuous_pass; four attempts were valid, one void), but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint. Due a re-run under the contained runner.",
       "void": "measured before reads were contained: the hidden test was readable to the agent"
     },
     {
