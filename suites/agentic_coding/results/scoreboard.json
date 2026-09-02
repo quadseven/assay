@@ -15,11 +15,11 @@
     {
       "model": "qwen3-coder-next:q8_0",
       "where": "local, Ollama",
-      "value": "5/5",
-      "detail": "36s/task",
-      "measured": "2026-08-31",
-      "corpus": "a3e597c9973edced",
-      "caveat": "five-task corpus; the sixth task (vacuous_pass) postdates this run"
+      "value": "6/6",
+      "detail": "40s/task",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "six-task corpus, re-run the day after the 5/5 five-task result (36s/task); every task solved with existing tests green; the Ollama node was also serving production traffic during the run"
     },
     {
       "model": "Qwen/Qwen3.6-35B-A3B-FP8",
@@ -29,6 +29,24 @@
       "measured": "2026-08-31",
       "corpus": "a3e597c9973edced",
       "caveat": "one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "where": "local, Ollama",
+      "value": "6/6",
+      "detail": "97s/task",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "six-task corpus; all solved, but 2.4x the wall-clock of qwen3-coder-next on the same tasks (40-190s each); reasoning model, so most of the time is spent before the first edit"
+    },
+    {
+      "model": "nemotron-3-super:120b",
+      "where": "local, Ollama",
+      "value": "3/6",
+      "detail": "900s/task (every task hit the cap)",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "all six tasks ran to the 900s cap: three had a correct patch on disk when killed, three never modified a file; the agent never returned on its own. Only task 1 ran on a quiet box: the runner had a defect (fixed the same day) that let a timed-out agent's child live on, so tasks 2-6 shared the server with 1-5 orphaned attempts still generating. Due a clean re-measure at a 300s cap."
     }
   ]
 }

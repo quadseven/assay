@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import shlex
+import signal
 import shutil
 import subprocess
 import sys
@@ -114,10 +115,26 @@ def run_agent(agent: str, cwd: Path, instruction: str, *, timeout: int, env: dic
         instruction,
     ]
     merged = {**os.environ, **env}
+    # The agent is a wrapper script that execs the real CLI as a child. On
+    # timeout `subprocess.run` kills only the wrapper; the child is reparented
+    # to init and keeps calling the model server. Measured 2026-09-02: four
+    # such orphans from one model's timed-out tasks were still generating an
+    # hour later, holding 81 GB resident so the NEXT model could not even load,
+    # and every later task in the sweep was timed against that contention.
+    # Own a session and kill the whole group, so a timeout ends the attempt.
+    proc = subprocess.Popen(
+        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=merged, start_new_session=True,
+    )
     try:
-        proc = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=merged)
-        return True, (proc.stdout or proc.stderr)[-1200:]
+        out, err = proc.communicate(timeout=timeout)
+        return True, (out or err)[-1200:]
     except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.communicate()
         return False, f"TIMEOUT after {timeout}s"
 
 

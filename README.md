@@ -16,12 +16,14 @@ blank cell means "not run", never "not good".
 |---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
 | `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
+| `gpt-oss:120b` | local, Ollama | 6/6 · 97s/task | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
+| `nemotron-3-super:120b` | local, Ollama | 3/6 · 900s/task (every task hit the cap) | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
-| `qwen3-coder-next:q8_0` | local, Ollama | 5/5 · 36s/task | -- | -- |
+| `qwen3-coder-next:q8_0` | local, Ollama | 6/6 · 40s/task | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
@@ -46,14 +48,25 @@ round trips deep.
 
 Picking a local coding model on tok/s would have picked the wrong one here.
 
-**Both boxes together can now serve a model neither can hold alone.**
-`DeepSeek-V4-Flash-0731` (304B MoE, 167 GB at NVFP4) runs tensor-parallel
-across the two GB10 nodes with tonyd2wild's community DSpark recipe (a
-patched vLLM with MXFP4 MoE kernels and speculative decoding) and, with
-thinking off, is the first local model to clear the six-task
-corpus at 5/6 while decoding as fast as the 35B model above. The price is
-the whole fleet: nothing else can be served while it is up, and each task
-takes about twice as long as `qwen3-coder-next` did on the five-task corpus.
+**Both boxes together can now serve a model neither can hold alone -- and it
+is still not the best coding model here.** `DeepSeek-V4-Flash-0731` (304B MoE,
+167 GB at NVFP4) runs tensor-parallel across the two GB10 nodes with
+tonyd2wild's community DSpark recipe (a patched vLLM with MXFP4 MoE kernels and
+speculative decoding) and, with thinking off, scores 5/6 at 79 s/task. The
+price is the whole fleet: nothing else can be served while it is up. On the
+same six tasks the 85 GB `qwen3-coder-next:q8_0` on ONE node scores 6/6 at
+40 s/task, and `gpt-oss:120b` also clears 6/6 at 97 s. The biggest model is
+not the best one, and the two that solve everything mean the corpus is
+saturated at the top: the next useful signal needs harder tasks or a public
+anchor, not another candidate.
+
+**A benchmark can measure its own harness.** One 120B model timed out on all
+six tasks. Only the first of those was a clean measurement: the runner's
+timeout killed the agent wrapper and left the real CLI generating, so tasks
+two through six shared the server with one to five orphaned attempts. The row
+carries that caveat, the runner now kills the whole process group, and the
+model is queued for a clean re-run. If later tasks in a sweep look slower than
+the first, suspect the harness before the model.
 
 ### Adding a model to the scoreboard
 
@@ -88,7 +101,7 @@ model that measured **4x slower** on the work that actually mattered.
 | `agentic_coding` | SWE-bench Verified / Aider polyglot are the public comparables | **not run**, so no number is claimed |
 
 The agentic-coding corpus is deliberately private-workload-shaped rather than
-public: four of its five tasks encode a rule or incident from the operator's
+public: five of its six tasks encode a rule or incident from the operator's
 own systems, because a model that tops a generic coding benchmark has not been
 measured on the work it would actually be given. That is a real limitation as
 well as the point -- these scores are not comparable to anyone else's, and a
@@ -187,7 +200,7 @@ non-zero if the corpus is missing rather than silently scoring nothing.
 [`suites/`](suites/) and owns its own corpus, runners, graders and results.
 
 - [`suites/agentic_coding/`](suites/agentic_coding/) -- can a model be trusted
-  to work a real backlog ticket unattended? Five tasks seeded from this
+  to work a real backlog ticket unattended? Six tasks seeded from this
   operator's own recorded failures, each scored on three axes at once, with a
   hidden test the model never sees. This is where the scoreboard's coding
   column comes from.
