@@ -40,7 +40,7 @@ dev = [
 # config file. Both require the modules to be importable by bare name from
 # the suite directory, so pytest is pointed at the same directories rather
 # than the modules being repackaged.
-pythonpath = ["suites/nutrition", "suites/nutrition/scripts", "suites/spark_serving", "suites/agentic_coding"]
+pythonpath = ["suites/nutrition", "suites/nutrition/scripts", "suites/spark_serving", "suites/agentic_coding", "tools"]
 testpaths = ["tests"]
 addopts = "-q"
 

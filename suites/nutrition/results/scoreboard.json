@@ -1,0 +1,12 @@
+{
+  "suite": "nutrition",
+  "column": "Nutrition (mean MAPE)",
+  "note": "lower is better; NutriBench macro extraction",
+  "measurements": [
+    {"model": "mistral-small:24b", "where": "local, Ollama", "value": "35%", "detail": "15.6% energy with a scratchpad", "measured": "2026-08", "caveat": "scratchpad figure is 12 of 30 rows"},
+    {"model": "qwen2.5:32b", "where": "local, Ollama", "value": "53%", "detail": "", "measured": "2026-08", "caveat": "30 rows"},
+    {"model": "llama3.2:3b", "where": "local, Ollama", "value": "~53%", "detail": "", "measured": "2026-08", "caveat": "5 rows only"},
+    {"model": "poolside/laguna-xs.2", "where": "cloud", "value": "30.8%", "detail": "", "measured": "2026-08", "caveat": "30 rows"},
+    {"model": "poolside/laguna-m.1", "where": "cloud", "value": "32.5%", "detail": "17.7% energy", "measured": "2026-08", "caveat": "30 rows; model since retired"}
+  ]
+}

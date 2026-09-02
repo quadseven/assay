@@ -10,25 +10,29 @@ Every number below was measured here, on this hardware, by the suite named in
 its row. **Vendor and aggregator claims are never recorded as results**, so a
 blank cell means "not run", never "not good".
 
-| Model | Where it runs | Agentic coding | Serving contracts | Decode tok/s | Nutrition (mean MAPE) |
-|---|---|---|---|---|---|
-| `qwen3-coder-next:q8_0` | local, Ollama | **5/5 @ 36s** | -- | -- | -- |
-| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid @ 145s | 3/3 | **64.8** | -- |
-| `Qwen3.8-27B-NVFP4` | local, vLLM | -- | 3/3 | 20.3 | -- |
-| `mistral-small:24b` | local, Ollama | -- | -- | -- | **35%** (15.6% with a scratchpad) |
-| `qwen2.5:32b` | local, Ollama | -- | -- | -- | 53% |
-| `llama3.2:3b` | local, Ollama | -- | -- | -- | ~53% |
-| poolside `laguna-xs.2` | cloud | -- | -- | -- | 30.8% |
-| poolside `laguna-m.1` | cloud | -- | -- | -- | 32.5% |
+<!-- scoreboard:begin -->
 
-**Agentic coding** is the qualify rate over five tasks, each scored on three
-axes at once -- the fix works, nothing else broke, and nothing outside the
-allowed files was touched. A run counts only if all three hold. Mean wall-clock
-per task follows.
+| Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | Serving contracts / decode |
+|---|---|---|---|---|
+| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
+| `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
+| `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
+| `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
+| `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
+| `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
+| `qwen3-coder-next:q8_0` | local, Ollama | 5/5 · 36s/task | -- | -- |
+| `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
-**Serving contracts** is how many of `json_object`, `tool_calling` and `vision`
-a served model actually holds, which is what the consumers on this fleet
-require.
+`--` means **not run**, never *not good*. Every number was measured
+on this hardware by the suite in its column; vendor and aggregator
+claims are never recorded as results. Each measurement's date and
+caveat live in that suite's `results/scoreboard.json`.
+
+- **Agentic coding** -- qualify rate over the task corpus, then mean wall-clock per task
+- **Nutrition (mean MAPE)** -- lower is better; NutriBench macro extraction
+- **Serving contracts / decode** -- contracts held out of json_object, tool_calling, vision; then decode tok/s
+
+<!-- scoreboard:end -->
 
 ### The one result to take away
 
@@ -40,6 +44,30 @@ a tok/s benchmark counts that as output, an agent counts it as latency several
 round trips deep.
 
 Picking a local coding model on tok/s would have picked the wrong one here.
+
+### Adding a model to the scoreboard
+
+The table above is **generated**, so it cannot drift away from the suites:
+
+```bash
+# 1. measure it -- the suite decides what the number means
+cd suites/agentic_coding && python3 runner.py --agent '<agent>' --label '<model>'
+
+# 2. record what you stand behind, with its date and caveat
+$EDITOR suites/agentic_coding/results/scoreboard.json
+
+# 3. regenerate; `--check` is what CI runs
+python3 tools/scoreboard.py --write
+```
+
+The raw run archive stays gitignored -- it is large, per-run, and full of raw
+agent output. What gets published is the curated `results/scoreboard.json` per
+suite: measurements someone stands behind, each carrying its **date** and its
+**caveat**.
+
+Both fields are mandatory and `tests/test_scoreboard.py` enforces them. A number
+without its caveat is how "3x faster at decode" became a recommendation for a
+model that measured **4x slower** on the work that actually mattered.
 
 ### Public benchmarks
 
@@ -163,6 +191,11 @@ non-zero if the corpus is missing rather than silently scoring nothing.
   implementation.
 
 [`suites/README.md`](suites/README.md) describes how to add one.
+
+## Credits
+
+The nutrition suite -- the NutriBench macro-extraction study this repo was
+first built around -- exists because of [@ccqw](https://github.com/ccqw).
 
 ## License
 

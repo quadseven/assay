@@ -31,10 +31,17 @@ _ALLOWED_UNDECLARED = {
     "pytest": "declared in [dependency-groups].dev",
 }
 
-# Modules that live in this repo and are imported by bare name.
-_LOCAL = {p.stem for p in (_ROOT / "suites").rglob("*.py")} | {
-    p.stem for p in (_ROOT / "tests").rglob("*.py")
-}
+# Modules that live in this repo and are imported by bare name. `tools/` is
+# included for the same reason as the other two: pyproject puts it on
+# pytest's pythonpath, so `import scoreboard` resolves to this repo. It was
+# absent only because nothing had imported a tools module by name until the
+# scoreboard test did, at which point this guard correctly reported an
+# undeclared third-party dependency that does not exist.
+_LOCAL = (
+    {p.stem for p in (_ROOT / "suites").rglob("*.py")}
+    | {p.stem for p in (_ROOT / "tests").rglob("*.py")}
+    | {p.stem for p in (_ROOT / "tools").rglob("*.py")}
+)
 
 
 def _python_files() -> list[Path]:

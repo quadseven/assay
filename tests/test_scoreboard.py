@@ -1,0 +1,68 @@
+"""The published scoreboard must match the suites' measurements.
+
+Without this the table is a claim about whenever someone last edited it by
+hand. With it, a suite that records a measurement and forgets the README fails
+the build instead of shipping a stale answer to "which model should do X".
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class TestScoreboardIsCurrent(unittest.TestCase):
+    def test_readme_matches_the_generator(self):
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "tools" / "scoreboard.py"), "--check"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+
+class TestMeasurementsAreReadable(unittest.TestCase):
+    """Every published number carries what a reader needs to judge it a month
+    later. A number without its date and caveat is how "3x faster" became a
+    recommendation that measured 4x SLOWER on the work that actually mattered.
+    """
+
+    def _files(self):
+        files = sorted(ROOT.glob("suites/*/results/scoreboard.json"))
+        self.assertGreater(len(files), 0, "no published measurements found")
+        return files
+
+    def test_every_suite_declares_its_column_and_what_it_means(self):
+        for f in self._files():
+            d = json.loads(f.read_text())
+            with self.subTest(suite=f.parent.parent.name):
+                for key in ("suite", "column", "note", "measurements"):
+                    self.assertIn(key, d)
+                self.assertTrue(d["note"].strip(), "an unexplained column is unreadable")
+
+    def test_every_measurement_carries_model_where_value_and_date(self):
+        for f in self._files():
+            for m in json.loads(f.read_text())["measurements"]:
+                with self.subTest(model=m.get("model")):
+                    for key in ("model", "where", "value", "measured"):
+                        self.assertTrue(str(m.get(key, "")).strip(), f"missing {key}")
+
+    def test_a_model_is_one_row_however_many_ways_it_was_reached(self):
+        """Keying the table on (model, where) split one model into two rows
+        with half its results each, which reads as two different models."""
+        sys.path.insert(0, str(ROOT / "tools"))
+        import scoreboard
+
+        table = scoreboard.render(scoreboard.load_suites())
+        models = [line.split("|")[1].strip() for line in table.splitlines() if line.startswith("| `")]
+        self.assertEqual(len(models), len(set(models)), f"duplicate model rows: {models}")
+
+
+if __name__ == "__main__":
+    unittest.main()
