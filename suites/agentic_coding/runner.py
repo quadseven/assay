@@ -123,8 +123,13 @@ def run_agent(agent: str, cwd: Path, instruction: str, *, timeout: int, env: dic
     # and every later task in the sweep was timed against that contention.
     # Own a session and kill the whole group, so a timeout ends the attempt.
     proc = subprocess.Popen(
-        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        env=merged, start_new_session=True,
+        argv,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=merged,
+        start_new_session=True,
     )
     try:
         out, err = proc.communicate(timeout=timeout)
