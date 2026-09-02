@@ -634,6 +634,20 @@ class TestNoShellInterpolation(unittest.TestCase):
                 f"cat /private/etc/zshrc >/dev/null 2>&1 && echo private-etc-readable >> {report}\n"
                 f"cat /Library/Preferences/.GlobalPreferences.plist >/dev/null 2>&1 && echo library-readable >> {report}\n"
                 f"ls /opt/homebrew/etc >/dev/null 2>&1 && echo brew-etc-listable >> {report}\n"
+                # enumeration: with only contents denied, every directory on
+                # the host could still be listed and every file stat-ed, the
+                # hidden test's included (Codex, round 12)
+                f"ls {hidden.parent} >/dev/null 2>&1 && echo hidden-dir-listable >> {report}\n"
+                f"stat {hidden} >/dev/null 2>&1 && echo hidden-statable >> {report}\n"
+                f"stat {unlisted} >/dev/null 2>&1 && echo unlisted-statable >> {report}\n"
+                f"stat {Path.home()} >/dev/null 2>&1 && echo home-statable >> {report}\n"
+                f"ls /Users >/dev/null 2>&1 && echo users-listable >> {report}\n"
+                f"ls /private/tmp >/dev/null 2>&1 && echo tmp-listable >> {report}\n"
+                f"ls /private/etc >/dev/null 2>&1 && echo etc-listable >> {report}\n"
+                # and path resolution still works from inside the box: getcwd
+                # walks the ancestors, which the profile hands back as literals
+                f'[ "$(pwd -P)" = "{work.resolve()}" ] && echo cwd-resolves >> {report}\n'
+                f"python3 -c 'import os; os.getcwd()' 2>/dev/null && echo py-cwd-resolves >> {report}\n"
                 # and the toolchain still starts: git and node both die on a
                 # Homebrew config file they cannot read, which every earlier
                 # box denied along with the directory
@@ -676,8 +690,17 @@ class TestNoShellInterpolation(unittest.TestCase):
                 for tool in ("git", "node", "python3"):
                     if shutil.which(tool) and sys.platform == "darwin":
                         self.assertIn(f"{tool.rstrip('3')}-runs", lines, f"{tool} cannot start in the box")
+                self.assertIn("cwd-resolves", lines, "getcwd fails in the box: the ancestors are not visible")
+                self.assertIn("py-cwd-resolves", lines)
                 for bad in (
                     "hidden-readable",
+                    "hidden-dir-listable",
+                    "hidden-statable",
+                    "unlisted-statable",
+                    "home-statable",
+                    "users-listable",
+                    "tmp-listable",
+                    "etc-listable",
                     "unlisted-readable",
                     "home-readable",
                     "firmlink-readable",
@@ -761,11 +784,11 @@ class TestNoShellInterpolation(unittest.TestCase):
 
         profile = runner.darwin_profile("/x/box", ["/Users/u/.local/bin/claude"], 4242)
         for rule in (
-            "(deny file-read-data)",
+            "(deny file-read*)",
             '(literal "/")',
             '(literal "/Users/u/.local/bin/claude")',
             '(subpath "/x/box")',
-            '(deny file-read-data (subpath "/opt/homebrew/etc")',
+            '(deny file-read* (subpath "/opt/homebrew/etc")',
             "(deny file-write*)",
             "(deny network*)",
             '(allow network-outbound (remote ip "localhost:4242"))',
@@ -781,8 +804,20 @@ class TestNoShellInterpolation(unittest.TestCase):
             self.assertIn(rule, profile)
         self.assertNotIn("(target others)", profile, "measured 2026-09-02: an `others` filter does not bite")
         self.assertNotIn("(deny system-*)", profile, "a syntax error, not a rule")
+        self.assertNotIn("file-read-data", profile, "denying contents alone leaves the host enumerable")
         for root in ("/Users", "/tmp", "/private/tmp", "/private/var/folders"):
             self.assertNotIn(f'(subpath "{root}")', profile)
+        # metadata comes back as literals on the roots' ancestors and the
+        # box's, never a subpath, and never above the CLI under $HOME
+        metadata = profile.partition("(allow file-read-metadata ")[2].partition("(deny file-write*)")[0]
+        self.assertNotIn("subpath", metadata)
+        self.assertIn('(literal "/x")', metadata)
+        self.assertIn('(literal "/private/var")', metadata)
+        self.assertNotIn('"/Users"', metadata)
+        self.assertNotIn('"/Users/u"', metadata)
+        self.assertEqual(
+            runner.ancestors(("/a/b/c", "/a/d")), ["/a", "/a/b"], "proper ancestors, below the root"
+        )
         # the grading box: the same rules and no socket at all
         graded = runner.darwin_profile("/x/box", [], None)
         self.assertIn("(deny network*)", graded)
@@ -1351,6 +1386,108 @@ class TestModelProxy(unittest.TestCase):
         self.assertEqual(written, [], "the request was written upstream after the attempt ended")
         self.assertEqual(self.model.requests, [])
         self.assertEqual(client.recv(65536), b"")
+
+    def test_a_handler_that_outlives_the_join_cannot_write_into_the_next_attempt(self):
+        """`end_attempt` joins its handlers for 30 s, and the upstream
+        connect can block for 30 s: a handler still in the connect when the
+        join gave up would, on the old `_closed` flag alone, find the NEXT
+        `begin_attempt` had reopened it and write its request into that
+        attempt's generation (Codex, round 12). Three things must hold:
+        the join that gave up is on record, the next attempt refuses to
+        begin while the handler lives, and even a reopen (the old bug's
+        shape, forced here) leaves the handler refused by its token."""
+        import threading
+        from unittest import mock
+
+        import runner
+
+        connecting = threading.Event()
+        proceed = threading.Event()
+        real = runner.socket.create_connection
+        written: list[bytes] = []
+
+        class Spy:
+            def __init__(self, sock):
+                self._sock = sock
+
+            def sendall(self, data):
+                written.append(data)
+                return self._sock.sendall(data)
+
+            def __getattr__(self, name):
+                return getattr(self._sock, name)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self._sock.close()
+
+        def stuck_connect(address, *args, **kwargs):
+            if address != ("127.0.0.1", self.model.port):
+                return real(address, *args, **kwargs)
+            connecting.set()
+            proceed.wait(10)
+            return Spy(real(address, *args, **kwargs))
+
+        body = b'{"model":"m"}'
+        self.proxy.JOIN_S = 0.2
+        with mock.patch.object(runner.socket, "create_connection", stuck_connect):
+            client = socket.create_connection(("127.0.0.1", self.proxy.port), timeout=5)
+            client.sendall(
+                b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body)
+            )
+            self.assertTrue(connecting.wait(5), "the handler never got to the connect")
+            self.assertEqual(self.proxy.end_attempt(), 0)
+            self.assertEqual(len(self.proxy.lingering), 1, "a join that gave up must be on record")
+            self.assertIn("still alive 0.2s after it ended", self.proxy.lingering[0])
+            with self.assertRaises(runner.ProxyBusy) as refused:
+                self.proxy.begin_attempt()
+            self.assertIn("1 handler(s) from attempt 1 are still alive", str(refused.exception))
+            # the shape of the old bug: a next attempt opened over the live
+            # handler (what `_open` does once past the alive check); the
+            # flag says open, the handler's token says not its attempt
+            with self.proxy._lock:
+                self.proxy._attempt += 1
+                self.proxy._closed = False
+            proceed.set()
+            handler = next(iter(self.proxy._handlers), None)
+            if handler is not None:
+                handler.join(5)
+            self.assertEqual(written, [], "the request was written into a later attempt")
+            self.assertEqual(self.model.requests, [])
+            with self.proxy._lock:
+                self.proxy._closed = True
+        # with the handler gone, the next attempt begins and is served
+        self.proxy.begin_attempt()
+        self.addCleanup(self.proxy.end_attempt)
+        got = raw_http(
+            self.proxy.port,
+            b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body),
+        )
+        self.assertEqual(got, self.model.response)
+        self.assertEqual(len(self.model.requests), 1)
+
+    def test_a_lingering_handler_voids_the_attempt_it_belonged_to(self):
+        """The attempt whose handler outlived the join has an incomplete
+        record: a refusal could still land after it was graded. Void, and
+        the reason names the harness, not the model."""
+        import grade as g
+
+        run = g.PytestRun(passed=1, failed=0, parsed=True)
+        outcome = g.grade(
+            task="t",
+            model="m",
+            before={"a.py": "x"},
+            after={"a.py": "y"},
+            allowed={"a.py"},
+            hidden=run,
+            existing=run,
+            harness=["1 handler(s) of attempt 3 still alive 30.0s after it ended"],
+        )
+        self.assertFalse(outcome.contained)
+        self.assertFalse(outcome.qualifies)
+        self.assertIn("attempt void: harness: 1 handler(s) of attempt 3", outcome.detail)
 
     def test_a_unix_socket_proxy_refuses_between_attempts_and_serves_the_next(self):
         """The Unix socket is opened once per sweep, so between attempts the

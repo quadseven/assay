@@ -177,6 +177,11 @@ while True:
 """
 
 
+class ProxyBusy(RuntimeError):
+    """A handler from the last attempt is still alive when the next one
+    wants to begin; the server is not quiet, so the number is not taken."""
+
+
 class ModelProxy:
     """The one way out of the box: an HTTP proxy to the model endpoint that
     forwards inference requests for the model under test and refuses
@@ -202,6 +207,12 @@ class ModelProxy:
     namespace (RELAY, on RELAY_PORT) joins the two; the agent reaches
     `{endpoint_host}:{endpoint_port}` on both."""
 
+    # how long an attempt waits for its handlers to finish after every
+    # socket they hold is shut; longer than any single blocking call in
+    # `_handle` (the upstream connect is bounded at 30 s), so a handler
+    # still alive after it is stuck, not slow
+    JOIN_S = 30.0
+
     def __init__(self, host: str, port: int, *, model: str) -> None:
         self.upstream = (host, port)
         self.model = model
@@ -218,6 +229,16 @@ class ModelProxy:
         self._clients: set[socket.socket] = set()
         self._handlers: set[threading.Thread] = set()
         self._closed = True
+        # Which attempt a handler belongs to. `_closed` alone is a flag
+        # the next `begin_attempt` flips back: a handler that outlived the
+        # join (a connect that hangs up to its 30 s timeout, joined for 30
+        # s) would read it open again and write its request into the NEXT
+        # attempt's generation (Codex, round 12). So each attempt is a new
+        # number, a handler carries the one it was accepted under and is
+        # refused once that is no longer current, and an attempt does not
+        # begin at all while a handler from the last one is alive.
+        self._attempt = 0
+        self.lingering: list[str] = []
         self.server: socket.socket | None = None
         self.socket_path: str | None = None
         self.port: int = RELAY_PORT
@@ -242,6 +263,13 @@ class ModelProxy:
 
     def _open(self) -> None:
         with self._lock:
+            alive = [t for t in self._handlers if t.is_alive()]
+            if alive:
+                raise ProxyBusy(
+                    f"{len(alive)} handler(s) from attempt {self._attempt} are still alive; "
+                    "the next attempt cannot start against a server they may still be talking to"
+                )
+            self._attempt += 1
             self._closed = False
 
     def begin_attempt(self) -> None:
@@ -289,7 +317,7 @@ class ModelProxy:
                     client.close()
                     continue
                 self._clients.add(client)
-                thread = threading.Thread(target=self._handle, args=(client,), daemon=True)
+                thread = threading.Thread(target=self._handle, args=(client, self._attempt), daemon=True)
                 self._handlers.add(thread)
                 thread.start()
 
@@ -305,7 +333,13 @@ class ModelProxy:
         except OSError:
             pass
 
-    def _handle(self, client: socket.socket) -> None:
+    def _current(self, attempt: int) -> bool:
+        """Under the lock: is the attempt this handler was accepted under
+        still the open one? False once it ended, and still false if a later
+        one has begun."""
+        return not self._closed and self._attempt == attempt
+
+    def _handle(self, client: socket.socket, attempt: int) -> None:
         try:
             client.settimeout(120)
             head = b""
@@ -333,7 +367,7 @@ class ModelProxy:
                 self._refuse(client, why, mismatch=True)
                 return
             with self._lock:
-                if self._closed:
+                if not self._current(attempt):
                     return
             try:
                 upstream = socket.create_connection(self.upstream, timeout=30)
@@ -342,10 +376,10 @@ class ModelProxy:
                 return
             with upstream:
                 with self._lock:
-                    # the attempt may have closed during the connect: the
-                    # request is then never written, and the server sees a
-                    # connection with nothing on it
-                    if self._closed:
+                    # the attempt may have closed during the connect, and
+                    # the next one begun: the request is then never written,
+                    # and the server sees a connection with nothing on it
+                    if not self._current(attempt):
                         return
                     self._live.add(upstream)
                 try:
@@ -387,6 +421,7 @@ class ModelProxy:
         attempt is served or recorded after this returns."""
         with self._lock:
             self._closed = True
+            attempt = self._attempt
             live = list(self._live)
             clients = list(self._clients)
             handlers = list(self._handlers)
@@ -396,7 +431,14 @@ class ModelProxy:
             except OSError:
                 pass
         for thread in handlers:
-            thread.join(timeout=30)
+            thread.join(timeout=self.JOIN_S)
+        if stuck := [t for t in handlers if t.is_alive()]:
+            # a join with a deadline is not a join: the record of this
+            # attempt is incomplete while the thread lives, and its
+            # `_current` check is what keeps it out of the next one
+            self.lingering.append(
+                f"{len(stuck)} handler(s) of attempt {attempt} still alive {self.JOIN_S}s after it ended"
+            )
         return len(live)
 
     def close(self) -> None:
@@ -506,18 +548,52 @@ DARWIN_DENIES = (
 )
 
 
+# Symlinks at the top of the volume that the box's own path runs through
+# (`/var/folders/...`): following one is a metadata read of the link itself,
+# which shows the link's target and nothing under it (`ls /tmp` in the box
+# prints `/tmp`; `ls /private/tmp` is refused).
+DARWIN_LINKS = ("/etc", "/tmp", "/var")
+
+
+def ancestors(paths: tuple[str, ...]) -> list[str]:
+    """Every proper ancestor of each path, below `/`."""
+    found: set[str] = set()
+    for p in paths:
+        parent = Path(p).parent
+        while str(parent) != "/":
+            found.add(str(parent))
+            parent = parent.parent
+    return sorted(found)
+
+
 def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
     """`port` is the model proxy; None is a box with no network at all,
-    which is what the grading box gets."""
-    allow = "".join(f'(subpath "{p}")' for p in (*SYSTEM_READS, root))
+    which is what the grading box gets.
+
+    Reads are denied wholesale, contents AND metadata: with only
+    `file-read-data` denied (rounds 9-12) the agent could stat and list
+    every directory on the host -- $HOME, its dotfiles, every checkout, the
+    hidden test next to the task -- and enumerate its way to what it
+    could not open (Codex, assay#6 round 12). Metadata comes back only as
+    literals: the ancestors of the toolchain roots and of the box, because
+    `getcwd(3)` walks up to `/` and `realpath(3)` walks the executable's
+    path (measured 2026-09-02: without them `pwd`, python and Homebrew's
+    shims all fail with EPERM), and the top-level symlinks the box's own
+    path runs through. The CLI under $HOME needs nothing above itself: a
+    literal file opens without its ancestors being visible, so $HOME stays
+    un-stat-able."""
+    roots = (*SYSTEM_READS, root)
+    allow = "".join(f'(subpath "{p}")' for p in roots)
     allow += "".join(f'(literal "{p}")' for p in reads)
     deny_again = "".join(f'(subpath "{p}")' for p in SYSTEM_READS_EXCEPT)
     files_again = "".join(f'(literal "{p}")' for p in SYSTEM_READS_FILES)
+    metadata = "".join(f'(literal "{p}")' for p in sorted({*ancestors(roots), *DARWIN_LINKS}))
     network = f'(allow network-outbound (remote ip "localhost:{port}"))' if port else ""
     return (
         "(version 1)(allow default)"
-        f'(deny file-read-data)(allow file-read-data (literal "/"){allow})(deny file-read-data {deny_again})'
-        f"(allow file-read-data {files_again})"
+        f'(deny file-read*)(allow file-read* (literal "/"){allow})(deny file-read* {deny_again})'
+        f"(allow file-read* {files_again})"
+        f"(allow file-read-metadata {metadata})"
         f'(deny file-write*)(allow file-write* (subpath "{root}")(subpath "/dev"))'
         f"(deny network*){network}" + "".join(DARWIN_DENIES)
     )
@@ -572,9 +648,10 @@ def containment(box: Path, *, reads: list[str], proxy: ModelProxy | None) -> lis
     under this suite readable to the agent being graded on them, and every
     credential in $HOME readable to a process with the network.
 
-    macOS: sandbox-exec, last matching rule wins; `file-read-data` is denied
-    rather than `file-read*` so path lookup (metadata) still works, and the
-    root directory itself is allowed because dyld reads it. Everything that
+    macOS: sandbox-exec, last matching rule wins; `file-read*` is denied,
+    contents and metadata both, and path lookup is given back as literals
+    on the roots' ancestors (darwin_profile); the root directory itself is
+    allowed because dyld reads it. Everything that
     is neither a file nor a socket -- Mach services (the Keychain among
     them: `security find-generic-password` exits 44 inside, 0 outside),
     signals and process info beyond the sandbox, Apple Events, IOKit, POSIX
@@ -1038,6 +1115,7 @@ def attempt(
 
         before = snapshot(work)
         refused_before = len(proxy.refused)
+        lingering_before = len(proxy.lingering)
         proxy.begin_attempt()
         started = time.monotonic()
         agent_exit, tail = run_agent(
@@ -1065,6 +1143,9 @@ def attempt(
         # included: an agent poking the model server's management API is
         # a finding that voids the attempt, not noise
         refused = proxy.refused[refused_before:]
+        # a handler of this attempt still alive after the join: its record
+        # is not complete, so there is no number to take from it
+        lingering = proxy.lingering[lingering_before:]
         outcome = grade(
             task=task["name"],
             model=label,
@@ -1075,6 +1156,7 @@ def attempt(
             existing=existing,
             refused=refused,
             tampered=tampered,
+            harness=lingering,
         )
         evidence = {
             "elapsed_s": round(elapsed, 1),
@@ -1087,6 +1169,7 @@ def attempt(
             "tampered": tampered,
             "generations_abandoned": abandoned,
             "orphans_killed": orphans,
+            "handlers_lingering": lingering,
         }
         return outcome, evidence
 
@@ -1148,9 +1231,17 @@ def sweep(args, tasks: list[dict], *, env: dict, proxy: ModelProxy, fingerprint:
     grader_preflight()
     results = []
     for task in tasks:
-        outcome, evidence = attempt(
-            task, agent=args.agent, label=args.label, timeout=args.timeout, env=env, proxy=proxy
-        )
+        try:
+            outcome, evidence = attempt(
+                task, agent=args.agent, label=args.label, timeout=args.timeout, env=env, proxy=proxy
+            )
+        except ProxyBusy as exc:
+            print(
+                f"FATAL: {exc}; '{task['name']}' was not attempted and every later number "
+                "would be timed against a server that is not quiet",
+                file=sys.stderr,
+            )
+            return 3
         if proxy.mismatched:
             print(
                 f"FATAL: {proxy.mismatched[0]}; every number in this run would be mislabeled", file=sys.stderr

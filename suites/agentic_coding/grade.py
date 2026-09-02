@@ -128,6 +128,7 @@ def grade(
     existing: PytestRun,
     refused: Sequence[str] = (),
     tampered: Sequence[str] = (),
+    harness: Sequence[str] = (),
 ) -> Outcome:
     """Combine the evidence into one outcome.
 
@@ -135,7 +136,9 @@ def grade(
     starting tree. `existing` is the tests that shipped with the task and
     passed before the attempt. `refused` is every request the model proxy
     turned away during the attempt; `tampered` is every entry in the tree
-    that was not a regular file or a directory. Either voids the attempt.
+    that was not a regular file or a directory; `harness` is every way the
+    runner itself failed to end the attempt cleanly (a proxy handler still
+    alive after it). Any of them voids the attempt.
     """
     changed = changed_files(before, after)
     stray = out_of_scope(changed, allowed)
@@ -149,7 +152,7 @@ def grade(
     # An unparseable existing-test run means the tree no longer runs at all,
     # which is the most severe regression there is -- not an absence of one.
     regressed = not existing.parsed or existing.failed > 0
-    contained = not refused and not tampered
+    contained = not refused and not tampered and not harness
 
     if not contained:
         reasons = []
@@ -157,6 +160,8 @@ def grade(
             reasons.append(f"{len(refused)} request(s) refused at the proxy, first: {refused[0]}")
         if tampered:
             reasons.append(f"tree holds entries that are not files: {list(tampered)}")
+        if harness:
+            reasons.append(f"harness: {'; '.join(harness)}")
         detail = "attempt void: " + "; ".join(reasons)
     elif not changed:
         detail = (
