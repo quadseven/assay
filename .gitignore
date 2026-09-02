@@ -16,3 +16,7 @@ __pycache__/
 suites/*/data/*
 suites/*/results/*.json
 tools/leakscan.local.txt
+# The curated per-suite summary the README scoreboard is generated from IS
+# tracked; only the raw run JSON above is not. Without this exception the
+# generator finds zero measurements in CI and the README check fails.
+!suites/*/results/scoreboard.json

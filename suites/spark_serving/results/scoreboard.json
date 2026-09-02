@@ -1,0 +1,23 @@
+{
+  "suite": "spark_serving",
+  "column": "Serving contracts / decode",
+  "note": "contracts held out of json_object, tool_calling, vision; then decode tok/s",
+  "measurements": [
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+      "where": "local, vLLM",
+      "value": "3/3",
+      "detail": "64.8 tok/s",
+      "measured": "2026-08-31",
+      "caveat": "+MTP; 3B active of 35B total"
+    },
+    {
+      "model": "unsloth/Qwen3.8-27B-NVFP4",
+      "where": "local, vLLM",
+      "value": "3/3",
+      "detail": "20.3 tok/s",
+      "measured": "2026-08-31",
+      "caveat": "27B dense; the incumbent this replaced"
+    }
+  ]
+}

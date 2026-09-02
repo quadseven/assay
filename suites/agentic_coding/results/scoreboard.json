@@ -1,0 +1,25 @@
+{
+  "suite": "agentic_coding",
+  "column": "Agentic coding",
+  "note": "qualify rate over the task corpus, then mean wall-clock per task",
+  "measurements": [
+    {
+      "model": "qwen3-coder-next:q8_0",
+      "where": "local, Ollama",
+      "value": "5/5",
+      "detail": "36s/task",
+      "measured": "2026-08-31",
+      "corpus": "a3e597c9973edced",
+      "caveat": "five-task corpus; the sixth task (vacuous_pass) postdates this run"
+    },
+    {
+      "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+      "where": "local, vLLM, via the Anthropic bridge",
+      "value": "3/4 valid",
+      "detail": "145s/task",
+      "measured": "2026-08-31",
+      "corpus": "a3e597c9973edced",
+      "caveat": "one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint"
+    }
+  ]
+}
