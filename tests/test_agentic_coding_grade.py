@@ -158,6 +158,53 @@ class TestNoShellInterpolation(unittest.TestCase):
             # argv means the shell never ran, so nothing was created.
             self.assertEqual(sorted(p.name for p in work.iterdir()), [])
 
+    def test_an_interrupt_kills_the_agents_whole_group_before_propagating(self):
+        """The timeout path killed the process group; a KeyboardInterrupt
+        raised out of communicate() did not, and the detached child kept
+        generating against the server -- the orphan the timeout fix was for,
+        reachable by Ctrl-C instead. The agent here is a shell that spawns a
+        grandchild and records its pid; after the interrupt that pid must be
+        gone and the exception must still reach the caller."""
+        import os
+        import signal
+        import time
+        from unittest import mock
+
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            agent = f"sh -c 'sleep 30 & echo $! > {work}/child.pid; wait'"
+            real = subprocess.Popen.communicate
+            calls = []
+
+            def interrupted(self, *args, **kwargs):
+                # the first communicate is the wait that Ctrl-C lands in; the
+                # reap after the kill must still be the real one
+                if calls:
+                    return real(self, *args, **kwargs)
+                calls.append(1)
+                deadline = time.time() + 5
+                while not (work / "child.pid").exists() and time.time() < deadline:
+                    time.sleep(0.05)
+                raise KeyboardInterrupt
+
+            with mock.patch.object(subprocess.Popen, "communicate", interrupted):
+                with self.assertRaises(KeyboardInterrupt):
+                    runner.run_agent(agent, work, "x", timeout=30, env={})
+            self.assertEqual(len(calls), 1)
+            child = int((work / "child.pid").read_text().strip())
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+            else:
+                os.kill(child, signal.SIGKILL)
+                self.fail(f"grandchild {child} survived the interrupt")
+
     def test_run_agent_builds_argv_not_a_shell_string(self):
         import inspect
 

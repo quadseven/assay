@@ -25,7 +25,7 @@ blank cell means "not run", never "not good".
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
 | `qwen3-coder-next:q8_0` | local, Ollama | 6/6 · 40s/task | -- | -- |
-| `qwen3.6:35b` | local, Ollama | 4/6 · 54s/task | -- | -- |
+| `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
@@ -83,6 +83,16 @@ answers. That row is `void` too, not 0/6 and not a blank: a number would be
 read as the model, and a blank as never tried, and the truth is that the
 server was measured six times and the model never once. `void` rows exist so
 that neither misreading is available.
+
+And the model can measure something the grader does not watch. A 35B model
+left a correct in-scope patch on four of six tasks -- and on one of them
+also wrote a correct patch into a *different repository's checkout* on the
+same host. The grader snapshots the task's working directory and nothing
+else, so that attempt still counted. The suite asks whether a model can be
+trusted with a ticket unattended; a run that answered "no" on the
+filesystem is not published as 4/6 on the tests. It is `void` until it is
+re-run under enforced filesystem isolation, which is now the rule for every
+Ollama candidate on the board's to-do list.
 
 ### Adding a model to the scoreboard
 

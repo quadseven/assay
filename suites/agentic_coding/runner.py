@@ -134,13 +134,24 @@ def run_agent(agent: str, cwd: Path, instruction: str, *, timeout: int, env: dic
     try:
         out, err = proc.communicate(timeout=timeout)
         return True, (out or err)[-1200:]
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        proc.communicate()
-        return False, f"TIMEOUT after {timeout}s"
+    except BaseException as exc:
+        # Every exceptional exit, not only the timeout: the new session means
+        # a Ctrl-C at the terminal never reaches the agent's group, so a
+        # KeyboardInterrupt that left this function without the killpg would
+        # orphan the same expensive generation the timeout path was written
+        # to end. Kill, reap, then decide what the exit means.
+        _kill_group(proc)
+        if isinstance(exc, subprocess.TimeoutExpired):
+            return False, f"TIMEOUT after {timeout}s"
+        raise
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.communicate()
 
 
 def attempt(task: dict, *, agent: str, label: str, timeout: int, env: dict) -> tuple[Outcome, dict]:
