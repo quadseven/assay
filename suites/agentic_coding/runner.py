@@ -24,10 +24,10 @@ Usage:
       --env 'CLAUDE_OR_TARGET_HOST={endpoint_host}' --env 'CLAUDE_OR_TARGET_PORT={endpoint_port}'
 
 The agent runs contained: it can write only under its box, read only the
-system toolchain and the box, reach only the runner's forwarder to
---endpoint, and sees an environment built from an allowlist. See
-`containment` for what that means on each platform and what it does not
-cover.
+system toolchain and the box, reach only the runner's inference proxy to
+--endpoint (which forwards inference requests for the labeled model and
+refuses everything else), and sees an environment built from an allowlist.
+See `containment` and `ModelProxy` for what that means on each platform.
 """
 
 from __future__ import annotations
@@ -102,71 +102,263 @@ def toolchain_files(agent: str) -> list[str]:
     return files
 
 
-class Forwarder:
-    """A loopback listener that relays byte-for-byte to the model endpoint.
+# What a coding agent needs from a model server, and nothing else. Claude
+# Code sends `POST /v1/messages` (with `?beta=true`), `POST
+# /v1/messages/count_tokens`, and one fire-and-forget `HEAD /api/hello`
+# preconnect (measured 2026-09-02 against the CLI's bundle). Everything else
+# an Ollama or vLLM server answers -- /api/delete, /api/pull, /api/create,
+# /api/push, /api/copy, /v1/models -- is management of a shared server that
+# an agent being benchmarked has no business reaching.
+ALLOWED_REQUESTS = frozenset(
+    {("POST", "/v1/messages"), ("POST", "/v1/messages/count_tokens"), ("HEAD", "/api/hello")}
+)
+MAX_HEAD = 64 * 1024
+MAX_BODY = 64 * 1024 * 1024
+# Inside a Linux network namespace the agent talks to a relay on this loopback
+# port; the namespace is fresh, so the number cannot collide with anything.
+RELAY_PORT = 47111
+RELAY = """
+import socket, sys, threading
+path, port = sys.argv[1], int(sys.argv[2])
+def pump(a, b):
+    try:
+        while d := a.recv(65536):
+            b.sendall(d)
+    except OSError:
+        pass
+    finally:
+        for s in (a, b):
+            try:
+                s.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+srv = socket.create_server(("127.0.0.1", port))
+while True:
+    c, _ = srv.accept()
+    u = socket.socket(socket.AF_UNIX)
+    try:
+        u.connect(path)
+    except OSError:
+        c.close()
+        continue
+    threading.Thread(target=pump, args=(c, u), daemon=True).start()
+    threading.Thread(target=pump, args=(u, c), daemon=True).start()
+"""
 
-    sandbox-exec cannot name a remote host: `(remote ip ...)` takes `*` or
-    `localhost` plus a port and nothing else (measured 2026-09-02: "host
-    must be * or localhost in network address"). So the only way to say
-    "this endpoint and no other" on macOS is "this loopback port and no
-    other", and the runner holds that port itself. The agent reaches the
-    model through `{endpoint_host}:{endpoint_port}` in its --env values.
-    """
 
-    def __init__(self, host: str, port: int) -> None:
+class ModelProxy:
+    """The one way out of the box: an HTTP proxy to the model endpoint that
+    forwards inference requests for the model under test and refuses
+    everything else with a 403 it remembers.
+
+    The first version relayed bytes. Restricting the ADDRESS an agent can
+    reach is not restricting what it can do there: the same port that serves
+    `/v1/messages` on an Ollama host serves `/api/delete` (Codex, round six).
+    So each connection carries exactly one request: the head is read and
+    checked (method and path against ALLOWED_REQUESTS; no Transfer-Encoding
+    or Upgrade, so the body is a Content-Length and nothing can follow it),
+    the body is read whole and its `model` compared to the one the results
+    are labeled with, and only then is the request written upstream with
+    `Connection: close`, after which the response is relayed until the
+    server hangs up.
+
+    sandbox-exec cannot name a remote host -- `(remote ip ...)` takes `*` or
+    `localhost` plus a port (measured 2026-09-02: "host must be * or
+    localhost in network address") -- so on macOS the proxy listens on a
+    loopback port and the profile allows that port. On Linux the box has its
+    own network namespace with nothing in it but loopback, so the proxy
+    listens on a Unix socket bound into the box and a relay inside the
+    namespace (RELAY, on RELAY_PORT) joins the two; the agent reaches
+    `{endpoint_host}:{endpoint_port}` on both."""
+
+    def __init__(self, host: str, port: int, *, model: str) -> None:
         self.upstream = (host, port)
+        self.model = model
+        self.refused: list[str] = []
+        self.mismatched: list[str] = []
+        self._lock = threading.Lock()
+        self.server: socket.socket | None = None
+        self.socket_path: str | None = None
+        self.port: int = RELAY_PORT
+
+    def listen_tcp(self) -> None:
         self.server = socket.create_server(("127.0.0.1", 0))
         self.port = self.server.getsockname()[1]
         threading.Thread(target=self._serve, daemon=True).start()
 
+    def listen_unix(self, path: Path) -> None:
+        self.server = socket.socket(socket.AF_UNIX)
+        self.server.bind(str(path))
+        self.server.listen()
+        self.socket_path = str(path)
+        threading.Thread(target=self._serve, daemon=True).start()
+
     def _serve(self) -> None:
+        assert self.server is not None
         while True:
             try:
                 client, _ = self.server.accept()
             except OSError:
                 return
+            threading.Thread(target=self._handle, args=(client,), daemon=True).start()
+
+    def _refuse(self, client: socket.socket, why: str, *, mismatch: bool = False) -> None:
+        with self._lock:
+            (self.mismatched if mismatch else self.refused).append(why)
+        body = why.encode()
+        try:
+            client.sendall(
+                b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Type: text/plain\r\n"
+                b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body
+            )
+        except OSError:
+            pass
+
+    def _handle(self, client: socket.socket) -> None:
+        try:
+            client.settimeout(120)
+            head = b""
+            while b"\r\n\r\n" not in head:
+                chunk = client.recv(65536)
+                if not chunk or len(head) + len(chunk) > MAX_HEAD:
+                    return
+                head += chunk
+            head, _, rest = head.partition(b"\r\n\r\n")
+            checked = check_request(head, model=self.model)
+            if isinstance(checked, str):
+                self._refuse(client, checked, mismatch=False)
+                return
+            request_line, headers, length = checked
+            if length > MAX_BODY:
+                self._refuse(client, f"body of {length} bytes exceeds {MAX_BODY}")
+                return
+            body = rest
+            while len(body) < length:
+                chunk = client.recv(min(65536, length - len(body)))
+                if not chunk:
+                    return
+                body += chunk
+            if (why := check_model(body[:length], model=self.model)) is not None:
+                self._refuse(client, why, mismatch=True)
+                return
             try:
                 upstream = socket.create_connection(self.upstream, timeout=30)
-            except OSError:
-                client.close()
-                continue
-            upstream.settimeout(None)
-            for a, b in ((client, upstream), (upstream, client)):
-                threading.Thread(target=self._pump, args=(a, b), daemon=True).start()
-
-    @staticmethod
-    def _pump(src: socket.socket, dst: socket.socket) -> None:
-        try:
-            while data := src.recv(65536):
-                dst.sendall(data)
+            except OSError as exc:
+                self._refuse(client, f"the model endpoint refused the connection: {exc}")
+                return
+            with upstream:
+                upstream.settimeout(None)
+                client.settimeout(None)
+                upstream.sendall(request_line + b"\r\n" + headers + b"\r\n\r\n" + body[:length])
+                upstream.shutdown(socket.SHUT_WR)
+                while data := upstream.recv(65536):
+                    client.sendall(data)
         except OSError:
             pass
         finally:
-            for s in (src, dst):
-                try:
-                    s.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            client.close()
 
     def close(self) -> None:
-        self.server.close()
+        if self.server is not None:
+            self.server.close()
+        if self.socket_path:
+            Path(self.socket_path).unlink(missing_ok=True)
 
 
-def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
+def check_request(head: bytes, *, model: str) -> tuple[bytes, bytes, int] | str:
+    """(request line, headers to forward, body length), or the reason this
+    request does not go upstream. Hop-by-hop headers are dropped and the
+    connection is closed after one request, so nothing can be smuggled
+    behind an allowed one."""
+    lines = head.split(b"\r\n")
+    parts = lines[0].split(b" ")
+    if len(parts) != 3 or not parts[2].startswith(b"HTTP/1."):
+        return f"not an HTTP/1 request line: {lines[0][:80]!r}"
+    method, target = parts[0].decode(errors="replace"), parts[1].decode(errors="replace")
+    path = target.partition("?")[0]
+    if (method, path) not in ALLOWED_REQUESTS:
+        return f"{method} {path} is not an inference request"
+    keep: list[bytes] = []
+    length = 0
+    for line in lines[1:]:
+        name, _, value = line.partition(b":")
+        name = name.strip().lower()
+        if name in (b"transfer-encoding", b"upgrade"):
+            return f"{name.decode()} is not allowed on an inference request"
+        if name in (b"connection", b"keep-alive", b"proxy-connection", b"te", b"trailer"):
+            continue
+        if name == b"content-length":
+            try:
+                length = int(value.strip())
+            except ValueError:
+                return f"unreadable Content-Length {value.strip()[:40]!r}"
+            if length < 0:
+                return f"negative Content-Length {length}"
+        keep.append(line)
+    keep.append(b"Connection: close")
+    return lines[0], b"\r\n".join(keep), length
+
+
+def check_model(body: bytes, *, model: str) -> str | None:
+    """None when the body names the model the results are labeled with.
+    A run that measured one model under another's name is worse than no
+    number: the sweep stops on the first mismatch."""
+    if not body:
+        return None
+    try:
+        asked = json.loads(body).get("model")
+    except (ValueError, AttributeError):
+        return "the request body is not a JSON object"
+    if asked != model:
+        return f"the agent asked for model {asked!r} but the results are labeled {model!r}"
+    return None
+
+
+# Host interfaces that are not files or sockets, denied by name because the
+# profile starts from `(allow default)` (measured 2026-09-02, Darwin 25: Claude
+# Code completes a task with every one of these in place). Mach lookups cover
+# the Keychain, the pasteboard, launchd and every XPC service; `signal` is
+# allowed only within the sandbox, so the agent can end its own children but
+# not this runner; process-info the same, so it cannot enumerate the host's
+# processes; Apple Events, IOKit, POSIX IPC, NVRAM, kext and scheduling
+# controls, job creation and LaunchServices are simply denied.
+DARWIN_DENIES = (
+    "(deny mach-lookup)",
+    "(deny mach-priv*)",
+    "(deny signal)(allow signal (target same-sandbox))",
+    "(deny process-info*)(allow process-info* (target same-sandbox))",
+    "(deny appleevent-send)",
+    "(deny iokit*)",
+    "(deny ipc-posix*)",
+    "(deny nvram*)",
+    "(deny system-socket)(deny system-audit)(deny system-fsctl)(deny system-kext*)",
+    "(deny system-privilege)(deny system-sched)(deny system-set-time)(deny system-swap)",
+    "(deny job-creation)",
+    "(deny lsopen)",
+    "(deny distributed-notification-post)",
+)
+
+
+def darwin_profile(root: str, reads: list[str], port: int) -> str:
     allow = "".join(f'(subpath "{p}")' for p in (*SYSTEM_READS, root))
     allow += "".join(f'(literal "{p}")' for p in reads)
     deny_again = "".join(f'(subpath "{p}")' for p in SYSTEM_READS_EXCEPT)
-    net = f'(allow network-outbound (remote ip "localhost:{port}"))' if port else ""
     return (
         "(version 1)(allow default)"
         f'(deny file-read-data)(allow file-read-data (literal "/"){allow})(deny file-read-data {deny_again})'
         f'(deny file-write*)(allow file-write* (subpath "{root}")(subpath "/dev"))'
-        f"(deny network*){net}"
-        '(deny mach-lookup (global-name "com.apple.SecurityServer"))'
+        f'(deny network*)(allow network-outbound (remote ip "localhost:{port}"))' + "".join(DARWIN_DENIES)
     )
 
 
-def bwrap_argv(root: str, reads: list[str]) -> list[str]:
+def bwrap_argv(root: str, reads: list[str], socket_path: str) -> list[str]:
+    """bubblewrap with the toolchain roots read-only, the box read-write, the
+    proxy's Unix socket bound in, a fresh network namespace (loopback only),
+    and the relay started on RELAY_PORT ahead of the agent."""
     binds = [a for p in LINUX_READS if os.path.exists(p) for a in ("--ro-bind", p, p)]
     binds += [a for p in reads if not p.startswith(LINUX_READS) for a in ("--ro-bind", p, p)]
     return [
@@ -181,17 +373,26 @@ def bwrap_argv(root: str, reads: list[str]) -> list[str]:
         "--bind",
         root,
         root,
+        "--bind",
+        socket_path,
+        socket_path,
         "--unshare-pid",
+        "--unshare-net",
         "--die-with-parent",
         "--",
+        "sh",
+        "-c",
+        'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"',
+        RELAY,
+        socket_path,
+        str(RELAY_PORT),
     ]
 
 
-def containment(box: Path, *, reads: list[str], port: int | None) -> tuple[list[str], bool]:
+def containment(box: Path, *, reads: list[str], proxy: ModelProxy) -> list[str]:
     """The argv prefix under which a process can write only under `box` and
     /dev, read only the system toolchain roots, the files in `reads`, and
-    the box, and (macOS) open a socket only to 127.0.0.1:`port`. Returns
-    (prefix, egress_restricted).
+    the box, and open a socket only to the model proxy.
 
     Allowlists throughout, because the first version was a denylist: it
     made three checkout roots read-only and left the rest of the host open,
@@ -202,22 +403,22 @@ def containment(box: Path, *, reads: list[str], port: int | None) -> tuple[list[
 
     macOS: sandbox-exec, last matching rule wins; `file-read-data` is denied
     rather than `file-read*` so path lookup (metadata) still works, and the
-    root directory itself is allowed because dyld reads it. The Keychain is
-    a Mach service, not a file, so its lookup is denied too: otherwise
-    `security find-generic-password` hands the agent the host's own login
-    (measured 2026-09-02: exit 0 outside the profile, 44 inside).
-    Linux: bubblewrap with the toolchain roots bound read-only, the box
-    bound read-write, and NOTHING else present; the network is not
-    restricted (bwrap can only remove it entirely, and the model is on it).
-    Any other host, or a missing tool, is a refusal.
+    root directory itself is allowed because dyld reads it. Everything that
+    is neither a file nor a socket -- Mach services (the Keychain among
+    them: `security find-generic-password` exits 44 inside, 0 outside),
+    signals and process info beyond the sandbox, Apple Events, IOKit, POSIX
+    IPC -- is denied by name in DARWIN_DENIES.
+    Linux: bubblewrap with the toolchain roots bound read-only, the box and
+    the proxy's socket bound, a fresh pid and network namespace, and NOTHING
+    else present. Any other host, or a missing tool, is a refusal.
     """
     root = str(box.resolve())
-    if sys.platform == "darwin" and shutil.which("sandbox-exec"):
-        return ["sandbox-exec", "-p", darwin_profile(root, reads, port)], True
-    if sys.platform.startswith("linux") and shutil.which("bwrap"):
-        return bwrap_argv(root, reads), False
+    if sys.platform == "darwin" and shutil.which("sandbox-exec") and proxy.socket_path is None:
+        return ["sandbox-exec", "-p", darwin_profile(root, reads, proxy.port)]
+    if sys.platform.startswith("linux") and shutil.which("bwrap") and proxy.socket_path:
+        return bwrap_argv(root, reads, proxy.socket_path)
     raise SystemExit(
-        f"no filesystem containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
+        f"no containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
         "refusing to run an agent that could write outside its task directory"
     )
 
@@ -247,38 +448,49 @@ def child_env(box: Path, env: dict[str, str], *, port: int | None) -> dict[str, 
 PROBE = """
 touch "$1" || exit 1
 touch "$2" 2>/dev/null; touch "$3" 2>/dev/null
-cat "$4" >/dev/null 2>&1 && exit 2
-cat "$5" >/dev/null 2>&1 && exit 3
-env | grep -q "$6" && exit 4
-if [ -n "$7" ]; then (exec 3<>"/dev/tcp/127.0.0.1/$7") 2>/dev/null && exit 5; fi
-if [ -n "$8" ]; then (exec 3<>"/dev/tcp/127.0.0.1/$8") 2>/dev/null || exit 6; fi
+cat "$4" >/dev/null 2>&1 && exit 62
+cat "$5" >/dev/null 2>&1 && exit 63
+env | grep -q "$6" && exit 64
+if [ -n "$7" ]; then (exec 3<>"/dev/tcp/127.0.0.1/$7") 2>/dev/null && exit 65; fi
+i=0
+until (exec 3<>"/dev/tcp/127.0.0.1/$8") 2>/dev/null; do
+  i=$((i + 1)); [ "$i" -ge 50 ] && exit 66; sleep 0.1
+done
+kill -0 "$9" 2>/dev/null && exit 67
+if [ "$(uname)" = Darwin ]; then pbpaste >/dev/null 2>&1 && exit 68; fi
 exit 0
 """
+# Exit codes a wrapper that failed to start is unlikely to produce; a probe
+# verdict also requires the probe's own in-box write to have landed.
 PROBE_FAILURES = {
-    2: "the hidden test under this suite is readable from inside the box",
-    3: "a file in the home directory is readable from inside the box",
-    4: "a variable from this process's environment reached the agent's",
-    5: "a loopback port other than the model forwarder accepts connections from inside the box",
-    6: "the model forwarder is not reachable from inside the box",
+    62: "the hidden test under this suite is readable from inside the box",
+    63: "a file in the home directory is readable from inside the box",
+    64: "a variable from this process's environment reached the agent's",
+    65: "a loopback port other than the model proxy accepts connections from inside the box",
+    66: "the model proxy is not reachable from inside the box",
+    67: "a signal from inside the box can reach this runner",
+    68: "the pasteboard, a Mach service, answers from inside the box",
 }
 
 
-def contain(box: Path, argv: list[str], *, agent: str, port: int | None) -> list[str]:
-    """`argv` wrapped for the box, and PROVED before it is returned: the wrapper runs a shell once that must
-    write inside the box (a wrapper that exits nonzero here, as bubblewrap
-    does for a bind it cannot make, would otherwise be reported as the
-    agent's own failure), must not write beside it, must not read a hidden
-    test or a fresh secret in $HOME, must not see a token from this
-    process's environment, and on macOS must reach only the forwarder's
-    loopback port. A prefix that cannot show all of it is refused with the
-    agent never started."""
-    prefix, egress = containment(box, reads=toolchain_files(agent), port=port)
+def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy) -> list[str]:
+    """`argv` wrapped for the box, and PROVED before it is returned: the
+    wrapper runs a shell once that must write inside the box (a wrapper
+    that exits nonzero here, as bubblewrap does for a bind it cannot make,
+    would otherwise be reported as the agent's own failure), must not write
+    beside it, must not read a hidden test or a fresh secret in $HOME, must
+    not see a token from this process's environment, must reach the model
+    proxy and no other loopback port, must not be able to signal this
+    runner, and on macOS must not reach the pasteboard (which stands for
+    every Mach service, the Keychain included). A prefix that cannot show
+    all of it is refused with the agent never started."""
+    prefix = containment(box, reads=toolchain_files(agent), proxy=proxy)
     token = uuid.uuid4().hex
     # the token is in THIS process's environment while the agent's is built:
     # an allowlist that has regressed to a copy of os.environ carries it in
     os.environ[f"ASSAY_PROBE_{token[:8]}"] = token
     try:
-        env = child_env(box, {}, port=port)
+        env = child_env(box, {}, port=proxy.port)
     finally:
         del os.environ[f"ASSAY_PROBE_{token[:8]}"]
     inside = box / f".containment-probe-{token}"
@@ -303,8 +515,9 @@ def contain(box: Path, argv: list[str], *, agent: str, port: int | None) -> list
                 str(hidden),
                 str(secret),
                 token,
-                str(decoy.getsockname()[1]) if egress else "",
-                str(port or ""),
+                str(decoy.getsockname()[1]),
+                str(proxy.port),
+                str(os.getpid()),
             ],
             capture_output=True,
             text=True,
@@ -319,7 +532,7 @@ def contain(box: Path, argv: list[str], *, agent: str, port: int | None) -> list
     leaked = [p for p in outside if p.exists()]
     for p in leaked:
         p.unlink()
-    if probe.returncode in PROBE_FAILURES:
+    if landed and probe.returncode in PROBE_FAILURES:
         raise SystemExit(
             f"containment is porous: {PROBE_FAILURES[probe.returncode]}; refusing to run the agent"
         )
@@ -392,12 +605,12 @@ def run_agent(
     timeout: int,
     env: dict,
     box: Path | None = None,
-    port: int | None = None,
+    proxy: ModelProxy,
 ) -> tuple[int | None, str]:
     """Shell out to the agent, contained to `box` (default: `cwd`), which
     also holds its throwaway HOME, Claude config dir and TMPDIR so the CLI
-    needs nothing in the real $HOME. `port` is the runner's forwarder to
-    the model, the one address the agent may open. Returns (exit code, tail
+    needs nothing in the real $HOME. `proxy` is the runner's way to the
+    model, the one thing the agent may open. Returns (exit code, tail
     of its output); the exit code is None on timeout.
 
     A timeout is NOT an error to swallow: it is recorded and the attempt is
@@ -427,9 +640,9 @@ def run_agent(
             instruction,
         ],
         agent=agent,
-        port=port,
+        proxy=proxy,
     )
-    merged = child_env(box, env, port=port)
+    merged = child_env(box, env, port=proxy.port)
     # The agent is a wrapper script that execs the real CLI as a child. On
     # timeout `subprocess.run` kills only the wrapper; the child is reparented
     # to init and keeps calling the model server. Measured 2026-09-02: four
@@ -470,7 +683,7 @@ def _kill_group(proc: subprocess.Popen) -> None:
 
 
 def attempt(
-    task: dict, *, agent: str, label: str, timeout: int, env: dict, port: int
+    task: dict, *, agent: str, label: str, timeout: int, env: dict, proxy: ModelProxy
 ) -> tuple[Outcome, dict]:
     with tempfile.TemporaryDirectory() as tmp:
         # Everything the agent may write lives under this box: the task copy
@@ -486,9 +699,10 @@ def attempt(
                 shutil.copy2(f, work / f.name)
 
         before = snapshot(work)
+        refused_before = len(proxy.refused)
         started = time.monotonic()
         agent_exit, tail = run_agent(
-            agent, work, task["instruction"], timeout=timeout, env=env, box=box, port=port
+            agent, work, task["instruction"], timeout=timeout, env=env, box=box, proxy=proxy
         )
         elapsed = time.monotonic() - started
         after = snapshot(work)
@@ -513,6 +727,9 @@ def attempt(
             "existing": asdict(existing),
             "hidden": asdict(hidden),
             "agent_tail": tail,
+            # every request the proxy refused this attempt: an agent poking
+            # the model server's management API is a finding, not noise
+            "proxy_refused": proxy.refused[refused_before:],
         }
         return outcome, evidence
 
@@ -527,13 +744,18 @@ def main() -> int:
         "--endpoint",
         required=True,
         metavar="HOST:PORT",
-        help="the model server; the ONE address the agent may open, reached through a loopback forwarder this runner holds",
+        help="the model server; the ONE address the agent may open, through an inference-only proxy this runner holds",
+    )
+    ap.add_argument(
+        "--endpoint-model",
+        default=None,
+        help="the model name the agent sends on the wire, when it differs from --label; any other name stops the sweep",
     )
     ap.add_argument(
         "--env",
         action="append",
         default=[],
-        help="KEY=VALUE passed to the agent; {endpoint_host} and {endpoint_port} expand to the forwarder",
+        help="KEY=VALUE passed to the agent; {endpoint_host} and {endpoint_port} expand to the proxy",
     )
     ap.add_argument("--out", default="")
     args = ap.parse_args()
@@ -549,14 +771,30 @@ def main() -> int:
         return 2
 
     fingerprint = corpus_fingerprint()
-    forward = Forwarder(host, int(port))
-    print(f"corpus {fingerprint}\nforwarding 127.0.0.1:{forward.port} -> {args.endpoint}\n")
+    proxy = ModelProxy(host, int(port), model=args.endpoint_model or args.label)
+    with tempfile.TemporaryDirectory() as proxy_dir:
+        if sys.platform == "darwin":
+            proxy.listen_tcp()
+        else:
+            proxy.listen_unix(Path(proxy_dir) / "model.sock")
+        print(f"corpus {fingerprint}\nproxying inference for {proxy.model} -> {args.endpoint}\n")
+        try:
+            return sweep(args, tasks, env=env, proxy=proxy, fingerprint=fingerprint)
+        finally:
+            proxy.close()
 
+
+def sweep(args, tasks: list[dict], *, env: dict, proxy: ModelProxy, fingerprint: str) -> int:
     results = []
     for task in tasks:
         outcome, evidence = attempt(
-            task, agent=args.agent, label=args.label, timeout=args.timeout, env=env, port=forward.port
+            task, agent=args.agent, label=args.label, timeout=args.timeout, env=env, proxy=proxy
         )
+        if proxy.mismatched:
+            print(
+                f"FATAL: {proxy.mismatched[0]}; every number in this run would be mislabeled", file=sys.stderr
+            )
+            return 3
         moved = corpus_fingerprint()
         if moved != fingerprint:
             print(
@@ -568,6 +806,8 @@ def main() -> int:
             return 3
         mark = "QUALIFY" if outcome.qualifies else "no"
         ended = "" if evidence["agent_exit"] == 0 else f"  agent exit={evidence['agent_exit']}"
+        if evidence["proxy_refused"]:
+            ended += f"  proxy refused {len(evidence['proxy_refused'])}: {evidence['proxy_refused'][0]}"
         print(
             f"{mark:8} {outcome.task:24} solved={outcome.solved!s:5} "
             f"scope={outcome.in_scope!s:5} regressed={outcome.regressed!s:5} "

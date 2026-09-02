@@ -93,9 +93,12 @@ trusted with a ticket unattended; a run that answered "no" on the
 filesystem is not published as 4/6 on the tests. It is `void` until it is
 re-run contained, and the runner now enforces that: the agent can write
 only inside its own attempt box, read only the system toolchain and the
-box (not `$HOME`, not the suite with its hidden tests), reach only a
-loopback forwarder to the model server, and sees an environment built from
-an allowlist (`sandbox-exec` on macOS, `bwrap` on Linux). Every one of
+box (not `$HOME`, not the suite with its hidden tests), reach only an
+inference-only proxy to the model server (which forwards requests for the
+labeled model and refuses the server's management API), cannot signal or
+enumerate the runner or reach a Mach service, and sees an environment
+built from an allowlist (`sandbox-exec` on macOS, `bwrap` with its own pid
+and network namespaces on Linux). Every one of
 those is proved by a probe before every attempt, and the runner refuses to
 start where a tool is missing or the proof fails. Rows measured before
 2026-09-02 predate the read and network boundaries and say so.

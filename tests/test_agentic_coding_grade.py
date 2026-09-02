@@ -20,6 +20,71 @@ from unittest import mock
 
 from grade import Outcome, PytestRun, changed_files, grade, out_of_scope, parse_pytest
 
+
+class StubModel:
+    """A model server that records every request it is handed and answers
+    each with a fixed streamed response. What the proxy lets through is
+    read here; what it refuses never arrives."""
+
+    def __init__(self, response: bytes = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"):
+        self.server = socket.create_server(("127.0.0.1", 0))
+        self.port = self.server.getsockname()[1]
+        self.requests: list[bytes] = []
+        self.response = response
+        import threading
+
+        threading.Thread(target=self._serve, daemon=True).start()
+
+    def _serve(self):
+        import time
+
+        while True:
+            try:
+                conn, _ = self.server.accept()
+            except OSError:
+                return
+            with conn:
+                conn.settimeout(5)
+                got = b""
+                try:
+                    while chunk := conn.recv(65536):
+                        got += chunk
+                except OSError:
+                    pass
+                self.requests.append(got)
+                # three writes with a pause: a response that streams
+                for piece in (self.response[:8], self.response[8:16], self.response[16:]):
+                    conn.sendall(piece)
+                    time.sleep(0.02)
+
+    def close(self):
+        self.server.close()
+
+
+def live_proxy(tmp: str, upstream_port: int = 1, model: str = "m"):
+    """A ModelProxy listening the way the runner listens on this platform."""
+    import runner
+
+    proxy = runner.ModelProxy("127.0.0.1", upstream_port, model=model)
+    if sys.platform == "darwin":
+        proxy.listen_tcp()
+    else:
+        proxy.listen_unix(Path(tmp) / "model.sock")
+    return proxy
+
+
+def raw_http(port: int, request: bytes, *, timeout: float = 5) -> bytes:
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as c:
+        c.sendall(request)
+        got = b""
+        try:
+            while chunk := c.recv(65536):
+                got += chunk
+        except OSError:
+            pass
+        return got
+
+
 TASKS = Path(__file__).resolve().parent.parent / "suites" / "agentic_coding" / "tasks"
 
 
@@ -161,7 +226,15 @@ class TestNoShellInterpolation(unittest.TestCase):
             # containment is a separate invariant with its own tests; the CI
             # runners have no sandbox tool, and this test is about the shell
             with mock.patch.object(runner, "contain", lambda box, argv, **kw: argv):
-                rc, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={}, box=box)
+                rc, _tail = runner.run_agent(
+                    "printf %s",
+                    work,
+                    hostile,
+                    timeout=30,
+                    env={},
+                    box=box,
+                    proxy=runner.ModelProxy("127.0.0.1", 1, model="m"),
+                )
             self.assertEqual(rc, 0)
             # argv means the shell never ran, so nothing was created.
             self.assertEqual(sorted(p.name for p in work.iterdir()), [])
@@ -202,7 +275,15 @@ class TestNoShellInterpolation(unittest.TestCase):
                 mock.patch.object(subprocess.Popen, "communicate", interrupted),
             ):
                 with self.assertRaises(KeyboardInterrupt):
-                    runner.run_agent(agent, work, "x", timeout=30, env={}, box=Path(tmp))
+                    runner.run_agent(
+                        agent,
+                        work,
+                        "x",
+                        timeout=30,
+                        env={},
+                        box=Path(tmp),
+                        proxy=runner.ModelProxy("127.0.0.1", 1, model="m"),
+                    )
             self.assertEqual(len(calls), 1)
             child = int((work / "child.pid").read_text().strip())
             deadline = time.time() + 5
@@ -244,7 +325,11 @@ class TestNoShellInterpolation(unittest.TestCase):
                 f"sh -c 'echo patched > {checkout}/sync.py; echo mine > {checkout}/new.py; "
                 f"echo patched > {work}/pkg.py'"
             )
-            rc, _tail = runner.run_agent(agent, work, "x", timeout=30, env={}, box=box)
+            proxy = live_proxy(tmp)
+            try:
+                rc, _tail = runner.run_agent(agent, work, "x", timeout=30, env={}, box=box, proxy=proxy)
+            finally:
+                proxy.close()
             self.assertEqual(rc, 0, "the last command, the in-box write, must have succeeded")
             self.assertEqual(
                 (checkout / "sync.py").read_text(), "original\n", "the other checkout was written"
@@ -261,14 +346,17 @@ class TestNoShellInterpolation(unittest.TestCase):
         shutil.which("sandbox-exec") or shutil.which("bwrap"),
         "no containment tool here; the runner refuses to start on such a host (tested above)",
     )
-    def test_the_agent_can_read_and_reach_only_its_box_and_the_forwarder(self):
+    def test_the_agent_can_read_and_reach_only_its_box_and_the_models_inference_api(self):
         """A write-only boundary left the hidden tests readable to the agent
         being graded on them, every credential in $HOME readable to a process
-        with the network, and the Keychain one `security` call away. The
-        agent here is a shell that tries each of those and reports what it
-        got; the report is read from the box afterwards. The model server is
-        a listener this test owns, behind the runner's forwarder: the one
-        connection that must succeed, and the one that must be relayed."""
+        with the network, and the Keychain one `security` call away; a raw
+        relay then left the model server's management API (`/api/delete` on
+        an Ollama host) one connection away, and `(allow default)` left this
+        runner one `kill` away. The agent here is a shell that tries each of
+        those and reports what it got; the report is read from the box
+        afterwards. The model server is a listener this test owns, behind
+        the runner's proxy: an inference request must arrive there and be
+        answered; a management request must be refused at the proxy."""
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -278,21 +366,32 @@ class TestNoShellInterpolation(unittest.TestCase):
             work = box / "work"
             work.mkdir(parents=True)
             hidden = next(runner.TASKS.glob("*/hidden_test.py"))
-            model = socket.create_server(("127.0.0.1", 0))
+            model = StubModel()
             decoy = socket.create_server(("127.0.0.1", 0))
-            forward = runner.Forwarder("127.0.0.1", model.getsockname()[1])
+            proxy = live_proxy(tmp, model.port)
             report = work / "report"
-            agent = (
-                "bash -c '"
-                f"cat {hidden} >/dev/null 2>&1 && echo hidden-readable >> {report}; "
-                f"cat {secret} >/dev/null 2>&1 && echo secret-readable >> {report}; "
-                f"cat {Path.home()}/.zshrc >/dev/null 2>&1 && echo home-readable >> {report}; "
-                f"env | grep -q ASSAY_TEST_SENTINEL && echo env-leaked >> {report}; "
-                f'[ -n "$SSH_AUTH_SOCK" ] && echo agent-socket-leaked >> {report}; '
-                f"(exec 3<>/dev/tcp/127.0.0.1/{decoy.getsockname()[1]}) 2>/dev/null && echo decoy-reachable >> {report}; "
-                f"(exec 3<>/dev/tcp/127.0.0.1/{forward.port} && echo hello >&3) 2>/dev/null && echo model-reachable >> {report}; "
-                f"echo $HOME >> {report}; echo done >> {report}'"
+            body = '{"model":"m"}'
+            # the script lives in the box: it is the one place the agent may
+            # read that this test can also write
+            script = work / "agent.sh"
+            script.write_text(
+                f"cat {hidden} >/dev/null 2>&1 && echo hidden-readable >> {report}\n"
+                f"cat {secret} >/dev/null 2>&1 && echo secret-readable >> {report}\n"
+                f"cat {Path.home()}/.zshrc >/dev/null 2>&1 && echo home-readable >> {report}\n"
+                f"env | grep -q ASSAY_TEST_SENTINEL && echo env-leaked >> {report}\n"
+                f'[ -n "$SSH_AUTH_SOCK" ] && echo agent-socket-leaked >> {report}\n'
+                f"(exec 3<>/dev/tcp/127.0.0.1/{decoy.getsockname()[1]}) 2>/dev/null && echo decoy-reachable >> {report}\n"
+                "(exec 3<>/dev/tcp/127.0.0.1/$MODEL_PORT && "
+                f"printf 'POST /v1/messages?beta=true HTTP/1.1\\r\\nHost: x\\r\\nContent-Length: {len(body)}\\r\\n\\r\\n{body}' >&3 && "
+                f'read -r s <&3 && echo "infer:$s" >> {report}) 2>/dev/null\n'
+                "(exec 4<>/dev/tcp/127.0.0.1/$MODEL_PORT && "
+                "printf 'DELETE /api/delete HTTP/1.1\\r\\nHost: x\\r\\nContent-Length: 0\\r\\n\\r\\n' >&4 && "
+                f'read -r s <&4 && echo "manage:$s" >> {report}) 2>/dev/null\n'
+                f"kill -0 {os.getpid()} 2>/dev/null && echo runner-signalable >> {report}\n"
+                f"pbpaste >/dev/null 2>&1 && echo pasteboard-reachable >> {report}\n"
+                f"echo $HOME >> {report}\necho done >> {report}\n"
             )
+            agent = f"bash {script}"
             try:
                 with mock.patch.dict(
                     os.environ, {"ASSAY_TEST_SENTINEL": "s3cret", "SSH_AUTH_SOCK": "/nowhere"}
@@ -304,12 +403,13 @@ class TestNoShellInterpolation(unittest.TestCase):
                         timeout=30,
                         env={"MODEL_PORT": "{endpoint_port}"},
                         box=box,
-                        port=forward.port,
+                        proxy=proxy,
                     )
-                self.assertEqual(rc, 0)
+                self.assertEqual(rc, 0, _tail)
                 lines = report.read_text().splitlines()
                 self.assertEqual(lines[-1], "done", lines)
-                self.assertIn("model-reachable", lines, "the one allowed connection must work")
+                self.assertIn("infer:HTTP/1.1 200 OK", lines, "the one allowed request must be answered")
+                self.assertIn("manage:HTTP/1.1 403 Forbidden", lines, "a management request must be refused")
                 self.assertEqual(lines[-2], str((box / "home").resolve()), "HOME must be inside the box")
                 for bad in (
                     "hidden-readable",
@@ -317,24 +417,26 @@ class TestNoShellInterpolation(unittest.TestCase):
                     "home-readable",
                     "env-leaked",
                     "agent-socket-leaked",
+                    "decoy-reachable",
+                    "runner-signalable",
                 ):
                     self.assertNotIn(bad, lines)
                 if sys.platform == "darwin":
-                    self.assertNotIn(
-                        "decoy-reachable", lines, "a port other than the forwarder was reachable"
-                    )
-                # the forwarder relayed the agent's bytes to the model listener;
-                # the runner's own preflight connected first, and sent nothing
-                model.settimeout(5)
-                received = b""
-                while b"hello" not in received:
-                    conn, _ = model.accept()
-                    conn.settimeout(5)
-                    received += conn.recv(64)
-                    conn.close()
-                self.assertEqual(received, b"hello\n")
+                    outside = subprocess.run(["pbpaste"], capture_output=True).returncode == 0
+                    if outside:
+                        self.assertNotIn(
+                            "pasteboard-reachable", lines, "a Mach service answered inside the box"
+                        )
+                # the proxy carried exactly the inference request, as one
+                # closed-after-use request, and nothing else
+                self.assertEqual(len(model.requests), 1, model.requests)
+                self.assertTrue(model.requests[0].startswith(b"POST /v1/messages?beta=true HTTP/1.1\r\n"))
+                self.assertIn(b"Connection: close\r\n", model.requests[0])
+                self.assertTrue(model.requests[0].endswith(body.encode()))
+                self.assertEqual([r for r in proxy.refused if "/api/delete" in r], proxy.refused)
+                self.assertEqual(len(proxy.refused), 1)
             finally:
-                forward.close()
+                proxy.close()
                 model.close()
                 decoy.close()
 
@@ -397,25 +499,43 @@ class TestNoShellInterpolation(unittest.TestCase):
             "(deny file-write*)",
             "(deny network*)",
             '(allow network-outbound (remote ip "localhost:4242"))',
-            '(deny mach-lookup (global-name "com.apple.SecurityServer"))',
+            "(deny mach-lookup)",
+            "(deny mach-priv*)",
+            "(deny signal)(allow signal (target same-sandbox))",
+            "(deny process-info*)(allow process-info* (target same-sandbox))",
+            "(deny appleevent-send)",
+            "(deny iokit*)",
+            "(deny ipc-posix*)",
+            "(deny job-creation)",
         ):
             self.assertIn(rule, profile)
-        self.assertNotIn("network-outbound", runner.darwin_profile("/x/box", [], None))
+        self.assertNotIn("(target others)", profile, "measured 2026-09-02: an `others` filter does not bite")
+        self.assertNotIn("(deny system-*)", profile, "a syntax error, not a rule")
         for root in ("/Users", "/tmp", "/private/tmp", "/private/var/folders"):
             self.assertNotIn(f'(subpath "{root}")', profile)
 
     def test_the_linux_prefix_binds_only_the_toolchain_and_the_box(self):
         import runner
 
-        argv = runner.bwrap_argv("/x/box", ["/home/u/.local/bin/claude", "/usr/bin/node"])
+        argv = runner.bwrap_argv(
+            "/x/box", ["/home/u/.local/bin/claude", "/usr/bin/node"], "/run/p/model.sock"
+        )
         triples = [tuple(argv[i : i + 3]) for i in range(len(argv) - 2)]
         self.assertEqual(argv[0], "bwrap")
         self.assertIn(("--bind", "/x/box", "/x/box"), triples)
+        self.assertIn(("--bind", "/run/p/model.sock", "/run/p/model.sock"), triples)
         self.assertIn(("--ro-bind", "/home/u/.local/bin/claude", "/home/u/.local/bin/claude"), triples)
         self.assertNotIn(("--ro-bind", "/usr/bin/node", "/usr/bin/node"), triples, "already under /usr")
         self.assertNotIn(("--ro-bind", "/", "/"), triples, "the whole host was bound once; never again")
         self.assertNotIn("/home", argv, "a home directory is never a root")
         self.assertIn("--unshare-pid", argv)
+        self.assertIn("--unshare-net", argv, "the box shares the host's network")
+        # the relay comes up inside the namespace before the agent, and the
+        # agent is exec'd from the remaining argv, never interpolated
+        self.assertEqual(
+            argv[argv.index("--") + 1 :][:3], ["sh", "-c", 'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"']
+        )
+        self.assertEqual(argv[-2:], ["/run/p/model.sock", str(runner.RELAY_PORT)])
 
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
@@ -423,7 +543,9 @@ class TestNoShellInterpolation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(runner.shutil, "which", return_value=None):
                 with self.assertRaises(SystemExit) as ctx:
-                    runner.containment(Path(tmp), reads=[], port=None)
+                    runner.containment(
+                        Path(tmp), reads=[], proxy=runner.ModelProxy("127.0.0.1", 1, model="m")
+                    )
         self.assertIn("refusing", str(ctx.exception))
 
     def test_a_porous_wrapper_is_refused_before_the_agent_runs(self):
@@ -442,11 +564,19 @@ class TestNoShellInterpolation(unittest.TestCase):
             work = box / "work"
             work.mkdir(parents=True)
             with (
-                mock.patch.object(runner, "containment", return_value=([], False)),
+                mock.patch.object(runner, "containment", return_value=[]),
                 mock.patch.object(runner, "HOME", home),
             ):
                 with self.assertRaises(SystemExit) as ctx:
-                    runner.run_agent(f"sh -c 'touch {work}/ran'", work, "x", timeout=30, env={}, box=box)
+                    runner.run_agent(
+                        f"sh -c 'touch {work}/ran'",
+                        work,
+                        "x",
+                        timeout=30,
+                        env={},
+                        box=box,
+                        proxy=runner.ModelProxy("127.0.0.1", 1, model="m"),
+                    )
             self.assertIn("porous", str(ctx.exception))
             self.assertFalse((work / "ran").exists(), "the agent ran anyway")
             self.assertEqual(
@@ -473,9 +603,17 @@ class TestNoShellInterpolation(unittest.TestCase):
             box = Path(tmp) / "box"
             work = box / "work"
             work.mkdir(parents=True)
-            with mock.patch.object(runner, "containment", return_value=(["sh", "-c", "exit 7", "--"], False)):
+            with mock.patch.object(runner, "containment", return_value=["sh", "-c", "exit 7", "--"]):
                 with self.assertRaises(SystemExit) as ctx:
-                    runner.run_agent("sh -c 'true'", work, "x", timeout=30, env={}, box=box)
+                    runner.run_agent(
+                        "sh -c 'true'",
+                        work,
+                        "x",
+                        timeout=30,
+                        env={},
+                        box=box,
+                        proxy=runner.ModelProxy("127.0.0.1", 1, model="m"),
+                    )
         self.assertIn("exit 7", str(ctx.exception))
         self.assertIn("before the agent ran", str(ctx.exception))
 
@@ -494,6 +632,126 @@ class TestNoShellInterpolation(unittest.TestCase):
         )
         self.assertNotIn("shell=True", code)
         self.assertIn("shlex.split", code)
+
+
+class TestModelProxy(unittest.TestCase):
+    """The one way out of the box forwards inference for the labeled model
+    and nothing else. Round six of assay#6: a relay that restricts the
+    ADDRESS an agent can reach does not restrict what it can do there --
+    the port that serves /v1/messages on an Ollama host serves /api/delete."""
+
+    def setUp(self):
+        import runner
+
+        self.model = StubModel()
+        self.proxy = runner.ModelProxy("127.0.0.1", self.model.port, model="m")
+        self.proxy.listen_tcp()
+        self.addCleanup(self.model.close)
+        self.addCleanup(self.proxy.close)
+
+    def request(self, line: str, body: bytes = b"", extra: str = "") -> bytes:
+        head = f"{line} HTTP/1.1\r\nHost: x\r\nContent-Length: {len(body)}\r\n{extra}\r\n".encode()
+        return raw_http(self.proxy.port, head + body)
+
+    def test_an_inference_request_for_the_labeled_model_is_forwarded_and_its_response_streamed(self):
+        got = self.request("POST /v1/messages?beta=true", b'{"model":"m","stream":true}')
+        self.assertEqual(got, self.model.response)
+        self.assertEqual(len(self.model.requests), 1)
+        seen = self.model.requests[0]
+        self.assertTrue(seen.startswith(b"POST /v1/messages?beta=true HTTP/1.1\r\n"), seen)
+        self.assertIn(b"Connection: close\r\n", seen)
+        self.assertTrue(seen.endswith(b'{"model":"m","stream":true}'))
+        self.assertEqual(self.proxy.refused, [])
+
+    def test_the_preconnect_and_count_tokens_are_forwarded(self):
+        self.request("HEAD /api/hello")
+        self.request("POST /v1/messages/count_tokens", b'{"model":"m"}')
+        self.assertEqual(len(self.model.requests), 2)
+        self.assertEqual(self.proxy.refused, [])
+
+    def test_management_requests_are_refused_at_the_proxy_and_remembered(self):
+        for line, body in (
+            ("DELETE /api/delete", b'{"model":"qwen3-coder-next:q8_0"}'),
+            ("POST /api/pull", b'{"model":"evil"}'),
+            ("GET /api/tags", b""),
+            ("POST /v1/messages/../../api/delete", b'{"model":"m"}'),
+        ):
+            with self.subTest(line=line):
+                got = self.request(line, body)
+                self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        self.assertEqual(self.model.requests, [], "a refused request reached the model server")
+        self.assertEqual(len(self.proxy.refused), 4)
+        self.assertIn("DELETE /api/delete is not an inference request", self.proxy.refused[0])
+
+    def test_a_request_for_another_model_is_refused_and_flagged_as_a_mismatch(self):
+        got = self.request("POST /v1/messages", b'{"model":"gpt-oss:120b"}')
+        self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        self.assertEqual(self.model.requests, [])
+        self.assertEqual(len(self.proxy.mismatched), 1)
+        self.assertIn("'gpt-oss:120b'", self.proxy.mismatched[0])
+        self.assertIn("'m'", self.proxy.mismatched[0])
+        self.assertEqual(self.proxy.refused, [], "a mismatch is its own category: it stops the sweep")
+
+    def test_a_chunked_or_upgraded_request_is_refused(self):
+        got = self.request("POST /v1/messages", b'{"model":"m"}', extra="Transfer-Encoding: chunked\r\n")
+        self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        got = self.request(
+            "POST /v1/messages", b'{"model":"m"}', extra="Upgrade: h2c\r\nConnection: Upgrade\r\n"
+        )
+        self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        self.assertEqual(self.model.requests, [])
+
+    def test_a_second_request_on_a_kept_alive_connection_never_reaches_the_model(self):
+        """One request per connection: an allowed request with a management
+        request pipelined behind it is answered once and hung up on."""
+        body = b'{"model":"m"}'
+        first = b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (len(body), body)
+        second = b"DELETE /api/delete HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n"
+        got = raw_http(self.proxy.port, first + second)
+        self.assertEqual(got, self.model.response)
+        self.assertEqual(len(self.model.requests), 1)
+        self.assertTrue(self.model.requests[0].endswith(body))
+        self.assertNotIn(b"/api/delete", self.model.requests[0])
+
+    def test_a_unix_socket_proxy_is_reachable_through_the_in_box_relay(self):
+        """On Linux the box has its own network namespace; the proxy listens
+        on a Unix socket bound in and RELAY joins a loopback port to it from
+        inside. The relay is plain Python and the socket family is the same
+        here, so the pipeline is proved on every platform."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            proxy = runner.ModelProxy("127.0.0.1", self.model.port, model="m")
+            proxy.listen_unix(Path(tmp) / "model.sock")
+            with socket.create_server(("127.0.0.1", 0)) as free:
+                port = free.getsockname()[1]
+            relay = subprocess.Popen([sys.executable, "-c", runner.RELAY, proxy.socket_path, str(port)])
+            try:
+                body = b'{"model":"m"}'
+                request = b"POST /v1/messages HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n%s" % (
+                    len(body),
+                    body,
+                )
+                for _ in range(50):
+                    try:
+                        got = raw_http(port, request)
+                        break
+                    except OSError:
+                        import time
+
+                        time.sleep(0.1)
+                else:
+                    self.fail("the relay never listened")
+                self.assertEqual(got, self.model.response)
+                self.assertEqual(len(self.model.requests), 1)
+                got = raw_http(port, b"DELETE /api/delete HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")
+                self.assertTrue(got.startswith(b"HTTP/1.1 403"), got)
+                self.assertEqual(len(self.model.requests), 1)
+            finally:
+                relay.kill()
+                relay.wait()
+                proxy.close()
+            self.assertFalse(Path(proxy.socket_path).exists(), "the socket file outlived the proxy")
 
 
 class TestCorpusInvariant(unittest.TestCase):

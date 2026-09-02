@@ -59,8 +59,10 @@ numbers meaningful, and it runs in CI.
 ```bash
 # Any Anthropic-speaking agent works; the label is what lands in the result.
 # --endpoint is the model server, the ONE address the agent may open; the
-# agent reaches it through a loopback forwarder the runner holds, whose
-# address the {endpoint_host}/{endpoint_port} placeholders expand to.
+# agent reaches it through an inference-only proxy the runner holds, whose
+# address the {endpoint_host}/{endpoint_port} placeholders expand to. The
+# proxy forwards requests for --label (or --endpoint-model, when the wire
+# name differs) and refuses everything else.
 python3 runner.py --agent 'claude-or <target> qwen3-coder-next:q8_0' \
     --label qwen3-coder-next --out results/qwen3-coder-next.json \
     --endpoint <model-host>:11434 \
@@ -87,34 +89,55 @@ The agent runs **contained**, and every boundary is an allowlist:
   checkout; allowing its directory would have allowed the checkout). Not
   `$HOME`, not `/tmp`, not this suite: the hidden tests live under it, and a
   model that can read the test it is graded on is graded on reading.
-- **Network**: one loopback port, a forwarder the runner holds to
-  `--endpoint`. `sandbox-exec` cannot name a remote host at all (`remote ip`
-  takes `*` or `localhost` and a port), so "this endpoint and no other" is
-  only sayable as "this port and no other", which is why the runner owns
-  the port.
+- **Network**: one proxy the runner holds to `--endpoint`, and it is a
+  protocol boundary, not an address: it forwards `POST /v1/messages`,
+  `POST /v1/messages/count_tokens` and the CLI's `HEAD /api/hello`
+  preconnect (all Claude Code sends, measured 2026-09-02), one request per
+  connection with hop-by-hop headers dropped, no chunked or upgraded
+  bodies, and only when the body names the model the results are labeled
+  with; anything else gets a 403 that is recorded against the attempt, and
+  a request for a different model stops the sweep. The first version
+  relayed bytes, which restricted where the agent could connect and not
+  what it could do there: the port that serves `/v1/messages` on an Ollama
+  host serves `/api/delete`. On macOS the proxy is a loopback port
+  (`sandbox-exec` cannot name a remote host: `remote ip` takes `*` or
+  `localhost` and a port); on Linux the box has its own network namespace
+  with nothing in it but loopback, the proxy listens on a Unix socket bound
+  into the box, and a relay started inside the namespace joins a loopback
+  port to it.
 - **Environment**: `PATH`, locale and terminal variables, the operator's
   `--env`, and the box's own paths on top. No token, no `SSH_AUTH_SOCK`, no
   cloud profile reaches the agent.
-- **Keychain**: denied. It is a Mach service, not a file, and with reads
-  denied the host's own login was still one `security
-  find-generic-password` away (measured 2026-09-02: exit 0 outside the
-  profile, 44 inside).
+- **Everything that is neither a file nor a socket** (macOS): Mach lookups
+  are denied outright -- the Keychain (`security find-generic-password`:
+  exit 0 outside, 44 inside), the pasteboard, launchd, every XPC service --
+  along with Apple Events, IOKit, POSIX IPC, NVRAM, kext and scheduling
+  controls, job creation and LaunchServices. Signals and process
+  information are allowed only within the sandbox: the agent can end its
+  own children and cannot signal or enumerate the runner. Measured
+  2026-09-02 on Darwin 25: Claude Code completes a task under all of it;
+  `(deny signal (target others))` does NOT bite and `(target
+  same-sandbox)` does; `(deny system-*)` is a syntax error, not a rule.
+  On Linux the namespaces do the same work: a fresh pid namespace holds
+  nothing to signal, and a fresh network namespace holds nothing to reach.
 
 Measured 2026-09-02: Claude Code with a fresh `HOME`, `CLAUDE_CONFIG_DIR`
 and `CLAUDE_CODE_TMPDIR` runs, edits and exits 0 under all of it, and skips
 loading the user's skills, which a benchmark should not be measuring anyway.
 `sandbox-exec` on macOS, `bwrap` on Linux (toolchain roots bound read-only,
-the box read-write, nothing else present; the network is not restricted
-there, because bwrap can only remove it and the model is on it); the runner
-refuses to start where neither exists, and where `bwrap` cannot create a
-user namespace (Ubuntu 24.04 restricts it by default) the refusal names
-that rather than the model.
+the box and the proxy socket bound, `--unshare-pid --unshare-net`, nothing
+else present); the runner refuses to start where neither exists, and where
+`bwrap` cannot create a user namespace (Ubuntu 24.04 restricts it by
+default, and both Spark nodes run it, so the Linux path is exercised by
+the unit tests and not yet by a live sweep) the refusal names that rather
+than the model.
 
 The wrapper is proved, not trusted: before every attempt it runs a shell
 that must write inside the box, must not write beside it (temp root,
 `$HOME`), must not read a hidden test or a fresh secret in `$HOME`, must not
-see a token planted in the runner's own environment, and on macOS must
-reach the forwarder's port and no other loopback port. Any of those failing
+see a token planted in the runner's own environment, must reach the proxy
+and no other loopback port, must not be able to signal the runner, and on
+macOS must not reach the pasteboard. Any of those failing
 stops the run with the agent never started -- a `bwrap` that exits because
 a bind is missing used to be read as the model completing with an unchanged
 tree.
