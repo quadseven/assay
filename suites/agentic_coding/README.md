@@ -58,39 +58,75 @@ numbers meaningful, and it runs in CI.
 
 ```bash
 # Any Anthropic-speaking agent works; the label is what lands in the result.
+# --endpoint is the model server, the ONE address the agent may open; the
+# agent reaches it through a loopback forwarder the runner holds, whose
+# address the {endpoint_host}/{endpoint_port} placeholders expand to.
 python3 runner.py --agent 'claude-or <target> qwen3-coder-next:q8_0' \
-    --label qwen3-coder-next --out results/qwen3-coder-next.json
+    --label qwen3-coder-next --out results/qwen3-coder-next.json \
+    --endpoint <model-host>:11434 \
+    --env 'CLAUDE_OR_TARGET_HOST={endpoint_host}' --env 'CLAUDE_OR_TARGET_PORT={endpoint_port}'
 
 # Through a gateway (e.g. to reach a vLLM target over an Anthropic bridge):
-CLAUDE_OR_TARGET_HOST=127.0.0.1 CLAUDE_OR_TARGET_PORT=8899 \
 python3 runner.py --agent 'claude-or <target> spark:warm-any' \
-    --label 'Qwen3.6-35B-A3B' --out results/qwen3.6.json
+    --label 'Qwen3.6-35B-A3B' --out results/qwen3.6.json \
+    --endpoint 127.0.0.1:8899 \
+    --env 'CLAUDE_OR_TARGET_HOST={endpoint_host}' --env 'CLAUDE_OR_TARGET_PORT={endpoint_port}'
 ```
 
 `grade.py` is pure -- dicts in, verdict out -- so a stored result can be
 re-graded later without re-running any model.
 
-The agent runs **contained**, default deny: the only places it can write
-are its attempt box -- the task copy, a throwaway `CLAUDE_CONFIG_DIR`, and
-its own `TMPDIR` -- and `/dev`. Everything else on the host is read-only to
-it, `~/.claude` and `~/.claude.json` included (measured 2026-09-02: Claude
-Code runs, edits and exits 0 that way, and skips loading the user's skills,
-which a benchmark should not be measuring anyway). `sandbox-exec` on macOS,
-`bwrap` on Linux; the runner refuses to start where neither exists. And the
-wrapper is proved, not trusted: before every attempt it runs a shell that
-writes inside the box (must land) and beside it, in the temp root and in
-`$HOME` (must not), and a wrapper that fails either way stops the run with
-the agent never started -- a `bwrap` that exits because a bind is missing
-used to be read as the model completing with an unchanged tree.
+The agent runs **contained**, and every boundary is an allowlist:
 
-Why default deny rather than a list of protected roots: a model working its
-`/tmp` copy of a task once wrote a correct patch into a different
-repository's checkout on the same host, and the grader -- which snapshots
-the task directory and nothing else -- counted the attempt. The first fix
-made three known checkout roots read-only, which protects exactly the
-places the operator thought of. That row is void, and this is what makes
-the next one not be. It is filesystem containment only: the agent still
-has the network, the environment, and can read whatever the user can read.
+- **Writes**: its attempt box -- the task copy, a throwaway `HOME`,
+  `CLAUDE_CONFIG_DIR` and `TMPDIR` -- and `/dev`. Nothing else.
+- **Reads**: the system toolchain roots (`/usr`, `/System`, `/Library`,
+  `/opt/homebrew` and the like, minus their service configuration), the
+  box, and the agent's own executables resolved file by file through their
+  symlink chains (`claude-or` on the sweep host is a link into a repository
+  checkout; allowing its directory would have allowed the checkout). Not
+  `$HOME`, not `/tmp`, not this suite: the hidden tests live under it, and a
+  model that can read the test it is graded on is graded on reading.
+- **Network**: one loopback port, a forwarder the runner holds to
+  `--endpoint`. `sandbox-exec` cannot name a remote host at all (`remote ip`
+  takes `*` or `localhost` and a port), so "this endpoint and no other" is
+  only sayable as "this port and no other", which is why the runner owns
+  the port.
+- **Environment**: `PATH`, locale and terminal variables, the operator's
+  `--env`, and the box's own paths on top. No token, no `SSH_AUTH_SOCK`, no
+  cloud profile reaches the agent.
+- **Keychain**: denied. It is a Mach service, not a file, and with reads
+  denied the host's own login was still one `security
+  find-generic-password` away (measured 2026-09-02: exit 0 outside the
+  profile, 44 inside).
+
+Measured 2026-09-02: Claude Code with a fresh `HOME`, `CLAUDE_CONFIG_DIR`
+and `CLAUDE_CODE_TMPDIR` runs, edits and exits 0 under all of it, and skips
+loading the user's skills, which a benchmark should not be measuring anyway.
+`sandbox-exec` on macOS, `bwrap` on Linux (toolchain roots bound read-only,
+the box read-write, nothing else present; the network is not restricted
+there, because bwrap can only remove it and the model is on it); the runner
+refuses to start where neither exists, and where `bwrap` cannot create a
+user namespace (Ubuntu 24.04 restricts it by default) the refusal names
+that rather than the model.
+
+The wrapper is proved, not trusted: before every attempt it runs a shell
+that must write inside the box, must not write beside it (temp root,
+`$HOME`), must not read a hidden test or a fresh secret in `$HOME`, must not
+see a token planted in the runner's own environment, and on macOS must
+reach the forwarder's port and no other loopback port. Any of those failing
+stops the run with the agent never started -- a `bwrap` that exits because
+a bind is missing used to be read as the model completing with an unchanged
+tree.
+
+Why allowlists: the first fix for a model that wrote into another
+repository's checkout made three known roots read-only, which protects
+exactly the places the operator thought of. The second denied all writes
+and no reads, which left the hidden tests readable to the agent being
+graded on them and every credential in `$HOME` readable to a process with
+the network. Rows measured before 2026-09-02 carry that caveat; nothing in
+the instruction points a model at the hidden test, but nothing stopped one
+from finding it either.
 
 ## What these numbers are not
 

@@ -10,7 +10,7 @@
       "detail": "79s/task",
       "measured": "2026-09-01",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "first run on the six-task corpus (vacuous_pass included), so not directly comparable to the 5/5 above; the miss put the no-criteria sentinel in a new key instead of the documented detail field; thinking off; one task took 226s, the rest 33-80s"
+      "caveat": "first run on the six-task corpus (vacuous_pass included), so not directly comparable to the 5/5 above; the miss put the no-criteria sentinel in a new key instead of the documented detail field; thinking off; one task took 226s, the rest 33-80s; measured before reads were contained (2026-09-02): the hidden test was readable to the agent, though nothing in the instruction points to it; due a re-run under the current runner"
     },
     {
       "model": "qwen3-coder-next:q8_0",
@@ -19,7 +19,7 @@
       "detail": "40s/task",
       "measured": "2026-09-02",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "six-task corpus, re-run the day after the 5/5 five-task result (36s/task); every task solved with existing tests green; the Ollama node was also serving production traffic during the run"
+      "caveat": "six-task corpus, re-run the day after the 5/5 five-task result (36s/task); every task solved with existing tests green; the Ollama node was also serving production traffic during the run; measured before reads were contained (2026-09-02): the hidden test was readable to the agent, though nothing in the instruction points to it; due a re-run under the current runner"
     },
     {
       "model": "Qwen/Qwen3.6-35B-A3B-FP8",
@@ -28,7 +28,7 @@
       "detail": "145s/task",
       "measured": "2026-08-31",
       "corpus": "a3e597c9973edced",
-      "caveat": "one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint"
+      "caveat": "one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint; measured before reads were contained (2026-09-02): the hidden test was readable to the agent, though nothing in the instruction points to it; due a re-run under the current runner"
     },
     {
       "model": "gpt-oss:120b",
@@ -37,7 +37,7 @@
       "detail": "97s/task",
       "measured": "2026-09-02",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "six-task corpus; all solved, but 2.4x the wall-clock of qwen3-coder-next on the same tasks (40-190s each); reasoning model, so most of the time is spent before the first edit"
+      "caveat": "six-task corpus; all solved, but 2.4x the wall-clock of qwen3-coder-next on the same tasks (40-190s each); reasoning model, so most of the time is spent before the first edit; measured before reads were contained (2026-09-02): the hidden test was readable to the agent, though nothing in the instruction points to it; due a re-run under the current runner"
     },
     {
       "model": "nemotron-3-super:120b",

@@ -8,7 +8,9 @@ into one that grades everything as solved.
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -158,7 +160,7 @@ class TestNoShellInterpolation(unittest.TestCase):
             hostile = "fix `touch pwned` and $(touch also-pwned) please"
             # containment is a separate invariant with its own tests; the CI
             # runners have no sandbox tool, and this test is about the shell
-            with mock.patch.object(runner, "contain", lambda box, argv: argv):
+            with mock.patch.object(runner, "contain", lambda box, argv, **kw: argv):
                 rc, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={}, box=box)
             self.assertEqual(rc, 0)
             # argv means the shell never ran, so nothing was created.
@@ -196,7 +198,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 raise KeyboardInterrupt
 
             with (
-                mock.patch.object(runner, "contain", lambda box, argv: argv),
+                mock.patch.object(runner, "contain", lambda box, argv, **kw: argv),
                 mock.patch.object(subprocess.Popen, "communicate", interrupted),
             ):
                 with self.assertRaises(KeyboardInterrupt):
@@ -255,13 +257,173 @@ class TestNoShellInterpolation(unittest.TestCase):
             self.assertTrue((box / "claude-config").is_dir())
             self.assertTrue((box / "tmp").is_dir())
 
+    @unittest.skipUnless(
+        shutil.which("sandbox-exec") or shutil.which("bwrap"),
+        "no containment tool here; the runner refuses to start on such a host (tested above)",
+    )
+    def test_the_agent_can_read_and_reach_only_its_box_and_the_forwarder(self):
+        """A write-only boundary left the hidden tests readable to the agent
+        being graded on them, every credential in $HOME readable to a process
+        with the network, and the Keychain one `security` call away. The
+        agent here is a shell that tries each of those and reports what it
+        got; the report is read from the box afterwards. The model server is
+        a listener this test owns, behind the runner's forwarder: the one
+        connection that must succeed, and the one that must be relayed."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            secret = Path(tmp) / "unlisted-secret"
+            secret.write_text("hunter2\n")
+            box = Path(tmp) / "box"
+            work = box / "work"
+            work.mkdir(parents=True)
+            hidden = next(runner.TASKS.glob("*/hidden_test.py"))
+            model = socket.create_server(("127.0.0.1", 0))
+            decoy = socket.create_server(("127.0.0.1", 0))
+            forward = runner.Forwarder("127.0.0.1", model.getsockname()[1])
+            report = work / "report"
+            agent = (
+                "bash -c '"
+                f"cat {hidden} >/dev/null 2>&1 && echo hidden-readable >> {report}; "
+                f"cat {secret} >/dev/null 2>&1 && echo secret-readable >> {report}; "
+                f"cat {Path.home()}/.zshrc >/dev/null 2>&1 && echo home-readable >> {report}; "
+                f"env | grep -q ASSAY_TEST_SENTINEL && echo env-leaked >> {report}; "
+                f'[ -n "$SSH_AUTH_SOCK" ] && echo agent-socket-leaked >> {report}; '
+                f"(exec 3<>/dev/tcp/127.0.0.1/{decoy.getsockname()[1]}) 2>/dev/null && echo decoy-reachable >> {report}; "
+                f"(exec 3<>/dev/tcp/127.0.0.1/{forward.port} && echo hello >&3) 2>/dev/null && echo model-reachable >> {report}; "
+                f"echo $HOME >> {report}; echo done >> {report}'"
+            )
+            try:
+                with mock.patch.dict(
+                    os.environ, {"ASSAY_TEST_SENTINEL": "s3cret", "SSH_AUTH_SOCK": "/nowhere"}
+                ):
+                    rc, _tail = runner.run_agent(
+                        agent,
+                        work,
+                        "x",
+                        timeout=30,
+                        env={"MODEL_PORT": "{endpoint_port}"},
+                        box=box,
+                        port=forward.port,
+                    )
+                self.assertEqual(rc, 0)
+                lines = report.read_text().splitlines()
+                self.assertEqual(lines[-1], "done", lines)
+                self.assertIn("model-reachable", lines, "the one allowed connection must work")
+                self.assertEqual(lines[-2], str((box / "home").resolve()), "HOME must be inside the box")
+                for bad in (
+                    "hidden-readable",
+                    "secret-readable",
+                    "home-readable",
+                    "env-leaked",
+                    "agent-socket-leaked",
+                ):
+                    self.assertNotIn(bad, lines)
+                if sys.platform == "darwin":
+                    self.assertNotIn(
+                        "decoy-reachable", lines, "a port other than the forwarder was reachable"
+                    )
+                # the forwarder relayed the agent's bytes to the model listener;
+                # the runner's own preflight connected first, and sent nothing
+                model.settimeout(5)
+                received = b""
+                while b"hello" not in received:
+                    conn, _ = model.accept()
+                    conn.settimeout(5)
+                    received += conn.recv(64)
+                    conn.close()
+                self.assertEqual(received, b"hello\n")
+            finally:
+                forward.close()
+                model.close()
+                decoy.close()
+
+    def test_the_agent_environment_is_an_allowlist_with_the_box_on_top(self):
+        import runner
+
+        box = Path("/x/box")
+        with mock.patch.dict(
+            os.environ, {"PATH": "/p", "AWS_SECRET_ACCESS_KEY": "no", "SSH_AUTH_SOCK": "no"}, clear=True
+        ):
+            env = runner.child_env(
+                box,
+                {
+                    "CLAUDE_OR_TARGET_HOST": "{endpoint_host}",
+                    "CLAUDE_OR_TARGET_PORT": "{endpoint_port}",
+                    "HOME": "/elsewhere",
+                },
+                port=4242,
+            )
+        self.assertEqual(env["PATH"], "/p")
+        self.assertNotIn("AWS_SECRET_ACCESS_KEY", env)
+        self.assertNotIn("SSH_AUTH_SOCK", env)
+        self.assertEqual((env["CLAUDE_OR_TARGET_HOST"], env["CLAUDE_OR_TARGET_PORT"]), ("127.0.0.1", "4242"))
+        self.assertEqual(env["HOME"], "/x/box/home", "the box wins over --env")
+        self.assertEqual(env["CLAUDE_CONFIG_DIR"], "/x/box/claude-config")
+        for key in ("TMPDIR", "CLAUDE_CODE_TMPDIR"):
+            self.assertEqual(env[key], "/x/box/tmp")
+
+    def test_toolchain_files_follow_every_link_of_the_chain(self):
+        """`claude-or` on the sweep host is a link to a link to a file in a
+        repository checkout. Allowing its directory would allow the checkout;
+        allowing the last file only would fail at the first link."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            real = Path(tmp) / "repo" / "tool"
+            real.parent.mkdir()
+            real.write_text("#!/bin/sh\n")
+            mid = Path(tmp) / "mid"
+            mid.symlink_to(real)
+            first = Path(tmp) / "bin" / "tool"
+            first.parent.mkdir()
+            first.symlink_to(mid)
+            with mock.patch.object(
+                runner.shutil, "which", lambda name: str(first) if name == "tool" else None
+            ):
+                files = runner.toolchain_files("tool --flag")
+        self.assertEqual(files, [str(first), str(mid), str(real)])
+
+    def test_the_darwin_profile_is_default_deny_for_reads_writes_network_and_the_keychain(self):
+        import runner
+
+        profile = runner.darwin_profile("/x/box", ["/Users/u/.local/bin/claude"], 4242)
+        for rule in (
+            "(deny file-read-data)",
+            '(literal "/")',
+            '(literal "/Users/u/.local/bin/claude")',
+            '(subpath "/x/box")',
+            '(deny file-read-data (subpath "/opt/homebrew/etc")',
+            "(deny file-write*)",
+            "(deny network*)",
+            '(allow network-outbound (remote ip "localhost:4242"))',
+            '(deny mach-lookup (global-name "com.apple.SecurityServer"))',
+        ):
+            self.assertIn(rule, profile)
+        self.assertNotIn("network-outbound", runner.darwin_profile("/x/box", [], None))
+        for root in ("/Users", "/tmp", "/private/tmp", "/private/var/folders"):
+            self.assertNotIn(f'(subpath "{root}")', profile)
+
+    def test_the_linux_prefix_binds_only_the_toolchain_and_the_box(self):
+        import runner
+
+        argv = runner.bwrap_argv("/x/box", ["/home/u/.local/bin/claude", "/usr/bin/node"])
+        triples = [tuple(argv[i : i + 3]) for i in range(len(argv) - 2)]
+        self.assertEqual(argv[0], "bwrap")
+        self.assertIn(("--bind", "/x/box", "/x/box"), triples)
+        self.assertIn(("--ro-bind", "/home/u/.local/bin/claude", "/home/u/.local/bin/claude"), triples)
+        self.assertNotIn(("--ro-bind", "/usr/bin/node", "/usr/bin/node"), triples, "already under /usr")
+        self.assertNotIn(("--ro-bind", "/", "/"), triples, "the whole host was bound once; never again")
+        self.assertNotIn("/home", argv, "a home directory is never a root")
+        self.assertIn("--unshare-pid", argv)
+
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
             with mock.patch.object(runner.shutil, "which", return_value=None):
                 with self.assertRaises(SystemExit) as ctx:
-                    runner.containment((Path(tmp),))
+                    runner.containment(Path(tmp), reads=[], port=None)
         self.assertIn("refusing", str(ctx.exception))
 
     def test_a_porous_wrapper_is_refused_before_the_agent_runs(self):
@@ -280,7 +442,7 @@ class TestNoShellInterpolation(unittest.TestCase):
             work = box / "work"
             work.mkdir(parents=True)
             with (
-                mock.patch.object(runner, "containment", return_value=[]),
+                mock.patch.object(runner, "containment", return_value=([], False)),
                 mock.patch.object(runner, "HOME", home),
             ):
                 with self.assertRaises(SystemExit) as ctx:
@@ -311,7 +473,7 @@ class TestNoShellInterpolation(unittest.TestCase):
             box = Path(tmp) / "box"
             work = box / "work"
             work.mkdir(parents=True)
-            with mock.patch.object(runner, "containment", return_value=["sh", "-c", "exit 7", "--"]):
+            with mock.patch.object(runner, "containment", return_value=(["sh", "-c", "exit 7", "--"], False)):
                 with self.assertRaises(SystemExit) as ctx:
                     runner.run_agent("sh -c 'true'", work, "x", timeout=30, env={}, box=box)
         self.assertIn("exit 7", str(ctx.exception))
