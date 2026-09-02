@@ -100,8 +100,12 @@ enumerate the runner or reach a Mach service, and sees an environment
 built from an allowlist (`sandbox-exec` on macOS, `bwrap` with its own pid
 and network namespaces on Linux). Every one of
 those is proved by a probe before every attempt, and the runner refuses to
-start where a tool is missing or the proof fails. Rows measured before
-2026-09-02 predate the read and network boundaries and say so.
+start where a tool is missing or the proof fails. The tests are the
+agent's code running a second time, so they run in a second box with no
+network at all, on a copy of the tree that takes regular files only; an
+attempt that was refused at the proxy or left a symlink for the grader is
+`void` whatever its tests say. Rows measured before 2026-09-02 predate
+the read and network boundaries and say so.
 
 ### Adding a model to the scoreboard
 

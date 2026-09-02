@@ -40,6 +40,7 @@ import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -343,24 +344,35 @@ DARWIN_DENIES = (
 )
 
 
-def darwin_profile(root: str, reads: list[str], port: int) -> str:
+def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
+    """`port` is the model proxy; None is a box with no network at all,
+    which is what the grading box gets."""
     allow = "".join(f'(subpath "{p}")' for p in (*SYSTEM_READS, root))
     allow += "".join(f'(literal "{p}")' for p in reads)
     deny_again = "".join(f'(subpath "{p}")' for p in SYSTEM_READS_EXCEPT)
+    network = f'(allow network-outbound (remote ip "localhost:{port}"))' if port else ""
     return (
         "(version 1)(allow default)"
         f'(deny file-read-data)(allow file-read-data (literal "/"){allow})(deny file-read-data {deny_again})'
         f'(deny file-write*)(allow file-write* (subpath "{root}")(subpath "/dev"))'
-        f'(deny network*)(allow network-outbound (remote ip "localhost:{port}"))' + "".join(DARWIN_DENIES)
+        f"(deny network*){network}" + "".join(DARWIN_DENIES)
     )
 
 
-def bwrap_argv(root: str, reads: list[str], socket_path: str) -> list[str]:
-    """bubblewrap with the toolchain roots read-only, the box read-write, the
-    proxy's Unix socket bound in, a fresh network namespace (loopback only),
-    and the relay started on RELAY_PORT ahead of the agent."""
+def bwrap_argv(root: str, reads: list[str], socket_path: str | None) -> list[str]:
+    """bubblewrap with the toolchain roots read-only, the box read-write, a
+    fresh network namespace (loopback only), and -- when there is a proxy --
+    its Unix socket bound in and the relay started on RELAY_PORT ahead of
+    the agent. Without one the namespace has loopback and nothing on it."""
     binds = [a for p in LINUX_READS if os.path.exists(p) for a in ("--ro-bind", p, p)]
     binds += [a for p in reads if not p.startswith(LINUX_READS) for a in ("--ro-bind", p, p)]
+    if socket_path:
+        binds += ["--bind", socket_path, socket_path]
+    relay = (
+        ["sh", "-c", 'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"', RELAY, socket_path, str(RELAY_PORT)]
+        if socket_path
+        else []
+    )
     return [
         "bwrap",
         *binds,
@@ -373,26 +385,20 @@ def bwrap_argv(root: str, reads: list[str], socket_path: str) -> list[str]:
         "--bind",
         root,
         root,
-        "--bind",
-        socket_path,
-        socket_path,
         "--unshare-pid",
         "--unshare-net",
         "--die-with-parent",
         "--",
-        "sh",
-        "-c",
-        'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"',
-        RELAY,
-        socket_path,
-        str(RELAY_PORT),
+        *relay,
     ]
 
 
-def containment(box: Path, *, reads: list[str], proxy: ModelProxy) -> list[str]:
+def containment(box: Path, *, reads: list[str], proxy: ModelProxy | None) -> list[str]:
     """The argv prefix under which a process can write only under `box` and
     /dev, read only the system toolchain roots, the files in `reads`, and
-    the box, and open a socket only to the model proxy.
+    the box, and open a socket only to the model proxy -- or, with no
+    proxy, no socket at all: the grading box, where the agent's code runs a
+    second time as tests and has no business talking to anything.
 
     Allowlists throughout, because the first version was a denylist: it
     made three checkout roots read-only and left the rest of the host open,
@@ -413,10 +419,11 @@ def containment(box: Path, *, reads: list[str], proxy: ModelProxy) -> list[str]:
     else present. Any other host, or a missing tool, is a refusal.
     """
     root = str(box.resolve())
-    if sys.platform == "darwin" and shutil.which("sandbox-exec") and proxy.socket_path is None:
-        return ["sandbox-exec", "-p", darwin_profile(root, reads, proxy.port)]
-    if sys.platform.startswith("linux") and shutil.which("bwrap") and proxy.socket_path:
-        return bwrap_argv(root, reads, proxy.socket_path)
+    socket_path = proxy.socket_path if proxy else None
+    if sys.platform == "darwin" and shutil.which("sandbox-exec") and socket_path is None:
+        return ["sandbox-exec", "-p", darwin_profile(root, reads, proxy.port if proxy else None)]
+    if sys.platform.startswith("linux") and shutil.which("bwrap") and (proxy is None or socket_path):
+        return bwrap_argv(root, reads, socket_path)
     raise SystemExit(
         f"no containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
         "refusing to run an agent that could write outside its task directory"
@@ -452,10 +459,12 @@ cat "$4" >/dev/null 2>&1 && exit 62
 cat "$5" >/dev/null 2>&1 && exit 63
 env | grep -q "$6" && exit 64
 if [ -n "$7" ]; then (exec 3<>"/dev/tcp/127.0.0.1/$7") 2>/dev/null && exit 65; fi
-i=0
-until (exec 3<>"/dev/tcp/127.0.0.1/$8") 2>/dev/null; do
-  i=$((i + 1)); [ "$i" -ge 50 ] && exit 66; sleep 0.1
-done
+if [ -n "$8" ]; then
+  i=0
+  until (exec 3<>"/dev/tcp/127.0.0.1/$8") 2>/dev/null; do
+    i=$((i + 1)); [ "$i" -ge 50 ] && exit 66; sleep 0.1
+  done
+fi
 kill -0 "$9" 2>/dev/null && exit 67
 if [ "$(uname)" = Darwin ]; then pbpaste >/dev/null 2>&1 && exit 68; fi
 exit 0
@@ -473,24 +482,24 @@ PROBE_FAILURES = {
 }
 
 
-def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy) -> list[str]:
+def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy | None) -> list[str]:
     """`argv` wrapped for the box, and PROVED before it is returned: the
     wrapper runs a shell once that must write inside the box (a wrapper
     that exits nonzero here, as bubblewrap does for a bind it cannot make,
     would otherwise be reported as the agent's own failure), must not write
     beside it, must not read a hidden test or a fresh secret in $HOME, must
     not see a token from this process's environment, must reach the model
-    proxy and no other loopback port, must not be able to signal this
-    runner, and on macOS must not reach the pasteboard (which stands for
-    every Mach service, the Keychain included). A prefix that cannot show
-    all of it is refused with the agent never started."""
+    proxy (when there is one) and no other loopback port, must not be able
+    to signal this runner, and on macOS must not reach the pasteboard
+    (which stands for every Mach service, the Keychain included). A prefix
+    that cannot show all of it is refused with the agent never started."""
     prefix = containment(box, reads=toolchain_files(agent), proxy=proxy)
     token = uuid.uuid4().hex
     # the token is in THIS process's environment while the agent's is built:
     # an allowlist that has regressed to a copy of os.environ carries it in
     os.environ[f"ASSAY_PROBE_{token[:8]}"] = token
     try:
-        env = child_env(box, {}, port=proxy.port)
+        env = child_env(box, {}, port=proxy.port if proxy else None)
     finally:
         del os.environ[f"ASSAY_PROBE_{token[:8]}"]
     inside = box / f".containment-probe-{token}"
@@ -516,7 +525,7 @@ def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy) -> lis
                 str(secret),
                 token,
                 str(decoy.getsockname()[1]),
-                str(proxy.port),
+                str(proxy.port) if proxy else "",
                 str(os.getpid()),
             ],
             capture_output=True,
@@ -581,20 +590,87 @@ def load_tasks(only: list[str] | None) -> list[dict]:
 
 
 def snapshot(root: Path) -> dict[str, str]:
-    """Every file's text, keyed by name relative to the tree root. Used on both
-    sides of the run so `changed_files` compares content, not timestamps."""
-    return {p.name: p.read_text(errors="replace") for p in sorted(root.iterdir()) if p.is_file()}
+    """Every regular file's text, keyed by name relative to the tree root.
+    Used on both sides of the run so `changed_files` compares content, not
+    timestamps. Symlinks are not followed: a link the agent left pointing
+    at a host file is `harvest`'s finding, not something to read."""
+    return {
+        p.name: p.read_text(errors="replace")
+        for p in sorted(root.iterdir())
+        if p.is_file() and not p.is_symlink()
+    }
 
 
-def run_pytest(cwd: Path, target: str = "") -> PytestRun:
+def harvest(work: Path, dest: Path) -> list[str]:
+    """Copy the agent's tree into `dest`, a directory the agent never had:
+    regular files only, byte for byte, each created exclusively. Returns
+    the names of the entries that were NOT regular files or directories.
+
+    The agent owned `work` and everything in it is its output, names
+    included. The first grader copied the hidden test INTO that tree with
+    shutil.copy2, which follows a destination symlink: an agent that left
+    `hidden_test.py -> ~/.ssh/authorized_keys` would have had the grader
+    overwrite that file with the runner's privileges (Codex adversarial
+    review, PR #6). Nothing is graded in place any more, and a link or a
+    device in the tree is a finding that voids the attempt. Directories
+    (`__pycache__`, `.pytest_cache`) are left behind: the corpus is flat and
+    the grade is on the files the task names.
+    """
+    dest.mkdir()
+    rejected = []
+    for p in sorted(work.iterdir()):
+        mode = p.lstat().st_mode
+        if stat.S_ISREG(mode):
+            with open(p, "rb") as src, open(dest / p.name, "xb") as out:
+                shutil.copyfileobj(src, out)
+        elif not stat.S_ISDIR(mode):
+            rejected.append(f"{p.name}: {'symlink' if stat.S_ISLNK(mode) else 'not a regular file'}")
+    return rejected
+
+
+def grading_prefix(box: Path) -> list[str]:
+    """The containment for test runs: the same box rules as the agent's,
+    with this interpreter readable and NO network. The tests are the
+    agent's code executing a second time -- an import-time payload in a
+    conftest.py or in an allowed module runs whatever pytest runs -- so
+    they run with exactly the agent's filesystem and less of its reach."""
+    return contain(box, [], agent=shlex.quote(sys.executable), proxy=None)
+
+
+def run_pytest(cwd: Path, target: str = "", *, box: Path, prefix: list[str]) -> PytestRun:
+    for d in ("home", "tmp"):
+        (box / d).mkdir(exist_ok=True)
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q"] + ([target] if target else []),
+        [*prefix, sys.executable, "-m", "pytest", "-q"] + ([target] if target else []),
         cwd=cwd,
         capture_output=True,
         text=True,
         timeout=300,
+        env=child_env(box, {}, port=None),
     )
     return parse_pytest(proc.stdout + proc.stderr)
+
+
+def grader_preflight() -> None:
+    """pytest must run inside a box before any attempt is graded in one.
+    A venv under $HOME, say, is unreadable from the box by design; the
+    symptom would be every task "unsolved" with no summary, which reads
+    exactly like a model that cannot code. Refuse up front instead."""
+    with tempfile.TemporaryDirectory() as tmp:
+        box = Path(tmp)
+        proc = subprocess.run(
+            [*grading_prefix(box), sys.executable, "-m", "pytest", "--version"],
+            cwd=box,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=child_env(box, {}, port=None),
+        )
+    if proc.returncode != 0:
+        raise SystemExit(
+            f"the grader's pytest ({sys.executable} -m pytest) does not run inside the box, so no "
+            f"attempt could be graded: {(proc.stderr or proc.stdout).strip()[-500:]}"
+        )
 
 
 def run_agent(
@@ -705,12 +781,24 @@ def attempt(
             agent, work, task["instruction"], timeout=timeout, env=env, box=box, proxy=proxy
         )
         elapsed = time.monotonic() - started
-        after = snapshot(work)
 
-        existing = run_pytest(work)
-        shutil.copy2(task["dir"] / "hidden_test.py", work / "hidden_test.py")
-        hidden = run_pytest(work, "hidden_test.py")
+        # The agent is dead (its whole group, on every exit path). What it
+        # left is copied out of its box into a fresh one, graded there, and
+        # the tests run under the agent's containment minus the network.
+        with tempfile.TemporaryDirectory() as gtmp:
+            gbox = Path(gtmp)
+            graded = gbox / "work"
+            tampered = harvest(work, graded)
+            after = snapshot(graded)
+            prefix = grading_prefix(gbox)
+            existing = run_pytest(graded, box=gbox, prefix=prefix)
+            shutil.copy2(task["dir"] / "hidden_test.py", graded / "hidden_test.py")
+            hidden = run_pytest(graded, "hidden_test.py", box=gbox, prefix=prefix)
 
+        # every request the proxy refused this attempt, the test runs
+        # included: an agent poking the model server's management API is
+        # a finding that voids the attempt, not noise
+        refused = proxy.refused[refused_before:]
         outcome = grade(
             task=task["name"],
             model=label,
@@ -719,6 +807,8 @@ def attempt(
             allowed=set(task["allowed"]),
             hidden=hidden,
             existing=existing,
+            refused=refused,
+            tampered=tampered,
         )
         evidence = {
             "elapsed_s": round(elapsed, 1),
@@ -727,9 +817,8 @@ def attempt(
             "existing": asdict(existing),
             "hidden": asdict(hidden),
             "agent_tail": tail,
-            # every request the proxy refused this attempt: an agent poking
-            # the model server's management API is a finding, not noise
-            "proxy_refused": proxy.refused[refused_before:],
+            "proxy_refused": refused,
+            "tampered": tampered,
         }
         return outcome, evidence
 
@@ -785,6 +874,7 @@ def main() -> int:
 
 
 def sweep(args, tasks: list[dict], *, env: dict, proxy: ModelProxy, fingerprint: str) -> int:
+    grader_preflight()
     results = []
     for task in tasks:
         outcome, evidence = attempt(
@@ -804,10 +894,8 @@ def sweep(args, tasks: list[dict], *, env: dict, proxy: ModelProxy, fingerprint:
                 file=sys.stderr,
             )
             return 3
-        mark = "QUALIFY" if outcome.qualifies else "no"
+        mark = "QUALIFY" if outcome.qualifies else ("VOID" if not outcome.contained else "no")
         ended = "" if evidence["agent_exit"] == 0 else f"  agent exit={evidence['agent_exit']}"
-        if evidence["proxy_refused"]:
-            ended += f"  proxy refused {len(evidence['proxy_refused'])}: {evidence['proxy_refused'][0]}"
         print(
             f"{mark:8} {outcome.task:24} solved={outcome.solved!s:5} "
             f"scope={outcome.in_scope!s:5} regressed={outcome.regressed!s:5} "
@@ -822,7 +910,8 @@ def sweep(args, tasks: list[dict], *, env: dict, proxy: ModelProxy, fingerprint:
         f"\n{args.label}: {q}/{n} qualify "
         f"({sum(r['solved'] for r in results)} solved, "
         f"{sum(not r['in_scope'] for r in results)} out of scope, "
-        f"{sum(r['regressed'] for r in results)} regressed)"
+        f"{sum(r['regressed'] for r in results)} regressed, "
+        f"{sum(not r['contained'] for r in results)} void)"
     )
 
     if args.out:
