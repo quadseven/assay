@@ -16,11 +16,11 @@ blank cell means "not run", never "not good".
 |---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
 | `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
-| `gemma4:31b` | local, Ollama | 0/6 · 300s/task (every task hit the cap) | -- | -- |
+| `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- |
 | `gpt-oss:120b` | local, Ollama | 6/6 · 97s/task | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
-| `nemotron-3-super:120b` | local, Ollama | 3/6 · 900s/task (every task hit the cap) | -- | -- |
+| `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
@@ -31,7 +31,9 @@ blank cell means "not run", never "not good".
 `--` means **not run**, never *not good*. Every number was measured
 on this hardware by the suite in its column; vendor and aggregator
 claims are never recorded as results. Each measurement's date and
-caveat live in that suite's `results/scoreboard.json`.
+caveat live in that suite's `results/scoreboard.json`. `void` means the
+run happened and measured something other than the model (the cell
+names what); the number it produced is not published.
 
 - **Agentic coding** -- qualify rate over the task corpus, then mean wall-clock per task
 - **Nutrition (mean MAPE)** -- lower is better; NutriBench macro extraction
@@ -65,17 +67,22 @@ anchor, not another candidate.
 **A benchmark can measure its own harness.** One 120B model timed out on all
 six tasks. Only the first of those was a clean measurement: the runner's
 timeout killed the agent wrapper and left the real CLI generating, so tasks
-two through six shared the server with one to five orphaned attempts. The row
-carries that caveat, the runner now kills the whole process group, and the
-model is queued for a clean re-run. If later tasks in a sweep look slower than
-the first, suspect the harness before the model.
+two through six shared the server with one to five orphaned attempts. Three
+of the six attempts still had a correct patch on disk when killed, and that
+3/6 is exactly the number this board refuses to publish: five of the six were
+not a controlled run. The row is `void` with the cause named, the runner now
+kills the whole process group, and the model is queued for a clean re-run. If
+later tasks in a sweep look slower than the first, suspect the harness before
+the model.
 
-The serving layer can do the same thing. A 31B model scored 0/6 at the cap
-with no file ever modified -- and had never loaded: the fleet's default served
-context (262k tokens across 8 parallel slots) left it half-offloaded and the
-runner died on every request. At a 32k context it loads in 17 s and answers.
-That row stays on the board as 0/6 with the cause named, because a blank cell
-would hide that the server, not the model, was measured.
+The serving layer can do the same thing. A 31B model hit the cap on all six
+tasks with no file ever modified -- and had never loaded: the fleet's default
+served context (262k tokens across 8 parallel slots) left it half-offloaded
+and the runner died on every request. At a 32k context it loads in 17 s and
+answers. That row is `void` too, not 0/6 and not a blank: a number would be
+read as the model, and a blank as never tried, and the truth is that the
+server was measured six times and the model never once. `void` rows exist so
+that neither misreading is available.
 
 ### Adding a model to the scoreboard
 

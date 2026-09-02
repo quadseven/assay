@@ -42,11 +42,11 @@
     {
       "model": "nemotron-3-super:120b",
       "where": "local, Ollama",
-      "value": "3/6",
-      "detail": "900s/task (every task hit the cap)",
+      "value": "void",
       "measured": "2026-09-02",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "all six tasks ran to the 900s cap: three had a correct patch on disk when killed, three never modified a file; the agent never returned on its own. Only task 1 ran on a quiet box: the runner had a defect (fixed the same day) that let a timed-out agent's child live on, so tasks 2-6 shared the server with 1-5 orphaned attempts still generating. Due a clean re-measure at a 300s cap."
+      "caveat": "VOID, not a score. All six tasks ran to the 900s cap: three had a correct patch on disk when killed, three never modified a file; the agent never returned on its own. Only task 1 ran on a quiet box: the runner had a defect (fixed the same day) that let a timed-out agent's child live on, so tasks 2-6 shared the server with 1-5 orphaned attempts still generating. The 3/6 those attempts produced is not published as a number because five of the six were not a controlled run. Due a clean re-measure at a 300s cap.",
+      "void": "harness defect: tasks 2-6 shared the box with orphaned attempts"
     },
     {
       "model": "qwen3.6:35b",
@@ -60,11 +60,11 @@
     {
       "model": "gemma4:31b",
       "where": "local, Ollama",
-      "value": "0/6",
-      "detail": "300s/task (every task hit the cap)",
+      "value": "void",
       "measured": "2026-09-02",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "not a measurement of the model: the server never loaded it. The fleet default context (262144 tokens x 8 parallel slots) offloads only 31/61 layers and the runner dies at load, so every request got HTTP 500 after ~68s and the agent retried into the cap. The same model loads in 17s and answers at a 32768 context. Re-measure after the served context is sized per model, and only in a sandbox"
+      "caveat": "VOID, not a score. The server never loaded the model, so none of the six attempts reached it. The fleet default context (262144 tokens x 8 parallel slots) offloads only 31/61 layers and the runner dies at load, so every request got HTTP 500 after ~68s and the agent retried into the 300s cap. The same model loads in 17s and answers at a 32768 context. The 0/6 the sweep produced is not published as a number. Re-measure after the served context is sized per model, and only in a sandbox.",
+      "void": "server never loaded the model (fleet context 262k x 8 slots)"
     }
   ]
 }

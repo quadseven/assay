@@ -53,6 +53,42 @@ class TestMeasurementsAreReadable(unittest.TestCase):
                     for key in ("model", "where", "value", "measured"):
                         self.assertTrue(str(m.get(key, "")).strip(), f"missing {key}")
 
+    def test_a_void_run_never_publishes_the_number_it_produced(self):
+        """Two rows shipped as 0/6 and 3/6 with 'not a measurement of the
+        model' only in a caveat the README does not render. A void row must
+        say why, and its value must be the word, never a score."""
+        for f in self._files():
+            for m in json.loads(f.read_text())["measurements"]:
+                if m.get("void") or m.get("value") == "void":
+                    with self.subTest(model=m.get("model")):
+                        self.assertTrue(
+                            str(m.get("void", "")).strip(), "a void row must name what was measured instead"
+                        )
+                        self.assertEqual(m.get("value"), "void", "a void row's value must not be a score")
+                        self.assertNotIn("detail", m, "a void row has no timing to publish either")
+        sys.path.insert(0, str(ROOT / "tools"))
+        import scoreboard
+
+        rendered = scoreboard.render(
+            [
+                {
+                    "column": "C",
+                    "note": "n",
+                    "measurements": [
+                        {
+                            "model": "m",
+                            "where": "w",
+                            "value": "void",
+                            "void": "server never loaded it",
+                            "measured": "2026-09-02",
+                        }
+                    ],
+                }
+            ]
+        )
+        row = next(line for line in rendered.splitlines() if line.startswith("| `m`"))
+        self.assertIn("void · server never loaded it", row)
+
     def test_a_model_is_one_row_however_many_ways_it_was_reached(self):
         """Keying the table on (model, where) split one model into two rows
         with half its results each, which reads as two different models."""
