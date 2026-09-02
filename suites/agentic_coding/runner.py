@@ -61,25 +61,54 @@ HOME = Path.home()
 
 
 SYSTEM_READS = (
-    # Where a toolchain lives on macOS: the OS, the command-line tools, and
-    # Homebrew. Not $HOME, not /tmp, not /Users: the box is the only place
-    # the agent may read that a person can also write to.
+    # Where a toolchain lives on macOS: the OS, the command-line tools,
+    # python.org frameworks, and Homebrew. Not $HOME, not /tmp, not /Users:
+    # the box is the only place the agent may read that a person can also
+    # write to. And not /Library or /etc wholesale (Codex, round 9): the
+    # toolchain is under three directories of /Library, and the rest is
+    # preferences, application support, managed profiles; /etc is hosts,
+    # resolvers, and service configuration, none of which a coding agent
+    # needs and all of which name the host. Time zones are the one thing
+    # under /var/db it reads (/etc/localtime points there).
     "/usr",
     "/bin",
     "/sbin",
     "/System",
-    "/Library",
-    "/private/etc",
-    "/private/var/db",
+    "/Library/Apple",
+    "/Library/Developer",
+    "/Library/Frameworks",
+    "/private/var/db/timezone",
     "/private/var/select",
     "/dev",
     "/opt/homebrew",
 )
 # Under an allowed root, but service configuration rather than toolchain: a
 # database password in a Homebrew etc file would otherwise be readable.
-SYSTEM_READS_EXCEPT = ("/opt/homebrew/etc", "/opt/homebrew/var", "/private/etc/ssh")
-# The same allowlist for a Linux host, as bind mounts.
-LINUX_READS = ("/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/opt")
+SYSTEM_READS_EXCEPT = ("/opt/homebrew/etc", "/opt/homebrew/var")
+# ... except the two files under it that the toolchain refuses to start
+# without: Homebrew's git dies with `fatal: unable to access` on a system
+# gitconfig it cannot read, and its node's OpenSSL dies opening openssl.cnf.
+# Found while narrowing the roots: every earlier box had this, and an agent
+# that shelled out to git in one got a fatal error for its trouble.
+SYSTEM_READS_FILES = ("/opt/homebrew/etc/gitconfig", "/opt/homebrew/etc/openssl@3/openssl.cnf")
+# The same allowlist for a Linux host, as bind mounts. /etc is bound file by
+# file (ETC_FILES): the loader and libc need a few of its files, and the rest
+# (hosts, resolv.conf, every service's directory) is what a host looks like
+# from inside. /opt is not bound at all: a toolchain there is named by
+# --agent and resolved through TOOLCHAIN, file by file.
+LINUX_READS = ("/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64")
+ETC_FILES = (
+    "/etc/ld.so.cache",
+    "/etc/ld.so.conf",
+    "/etc/ld.so.conf.d",
+    "/etc/localtime",
+    "/etc/passwd",
+    "/etc/group",
+    "/etc/nsswitch.conf",
+    "/etc/alternatives",
+    "/etc/python3",
+    "/etc/ssl/certs",
+)
 # What the child process is handed of this environment, and nothing else:
 # no tokens, no SSH_AUTH_SOCK, no cloud profile. HOME is set to the box.
 ENV_ALLOWLIST = ("PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "SHELL")
@@ -183,11 +212,40 @@ class ModelProxy:
         self.server: socket.socket | None = None
         self.socket_path: str | None = None
         self.port: int = RELAY_PORT
+        self._ports_used: set[int] = set()
 
     def listen_tcp(self) -> None:
-        self.server = socket.create_server(("127.0.0.1", 0))
-        self.port = self.server.getsockname()[1]
+        """A loopback port this proxy has never listened on. The port is the
+        one address an attempt's profile allows, so a process that outlives
+        its attempt -- one that put itself in a new session, where the
+        group kill cannot see it (Codex, round 9) -- can reach only a port
+        nobody answers on any more, and never the next attempt's."""
+        while True:
+            server = socket.create_server(("127.0.0.1", 0))
+            port = server.getsockname()[1]
+            if port not in self._ports_used:
+                break
+            server.close()
+        self._ports_used.add(port)
+        self.server, self.port = server, port
         threading.Thread(target=self._serve, daemon=True).start()
+
+    def begin_attempt(self) -> None:
+        """Listen for one attempt. A Unix socket is bound into a box whose
+        pid namespace dies with the agent, so it is opened once per sweep;
+        a TCP port is opened here, per attempt, and retired after it."""
+        if self.socket_path is None:
+            self.listen_tcp()
+
+    def end_attempt(self) -> int:
+        """Hang up on every generation in flight and, on TCP, stop listening:
+        from here nothing that came out of the box can reach the model.
+        Returns how many generations were abandoned."""
+        abandoned = self.abandon()
+        if self.socket_path is None and self.server is not None:
+            self.server.close()
+            self.server = None
+        return abandoned
 
     def listen_unix(self, path: Path) -> None:
         self.server = socket.socket(socket.AF_UNIX)
@@ -407,10 +465,12 @@ def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
     allow = "".join(f'(subpath "{p}")' for p in (*SYSTEM_READS, root))
     allow += "".join(f'(literal "{p}")' for p in reads)
     deny_again = "".join(f'(subpath "{p}")' for p in SYSTEM_READS_EXCEPT)
+    files_again = "".join(f'(literal "{p}")' for p in SYSTEM_READS_FILES)
     network = f'(allow network-outbound (remote ip "localhost:{port}"))' if port else ""
     return (
         "(version 1)(allow default)"
         f'(deny file-read-data)(allow file-read-data (literal "/"){allow})(deny file-read-data {deny_again})'
+        f"(allow file-read-data {files_again})"
         f'(deny file-write*)(allow file-write* (subpath "{root}")(subpath "/dev"))'
         f"(deny network*){network}" + "".join(DARWIN_DENIES)
     )
@@ -421,8 +481,9 @@ def bwrap_argv(root: str, reads: list[str], socket_path: str | None) -> list[str
     fresh network namespace (loopback only), and -- when there is a proxy --
     its Unix socket bound in and the relay started on RELAY_PORT ahead of
     the agent. Without one the namespace has loopback and nothing on it."""
-    binds = [a for p in LINUX_READS if os.path.exists(p) for a in ("--ro-bind", p, p)]
-    binds += [a for p in reads if not p.startswith(LINUX_READS) for a in ("--ro-bind", p, p)]
+    roots = LINUX_READS + ETC_FILES
+    binds = [a for p in roots if os.path.exists(p) for a in ("--ro-bind", p, p)]
+    binds += [a for p in reads if not p.startswith(roots) for a in ("--ro-bind", p, p)]
     if socket_path:
         binds += ["--bind", socket_path, socket_path]
     relay = (
@@ -484,6 +545,22 @@ def containment(box: Path, *, reads: list[str], proxy: ModelProxy | None) -> lis
     raise SystemExit(
         f"no containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
         "refusing to run an agent that could write outside its task directory"
+    )
+
+
+def proxy_unreachable_by(env: dict[str, str]) -> str | None:
+    """The agent learns the proxy's address only through `{endpoint_host}`
+    and `{endpoint_port}` in some --env value. Without both it goes to
+    wherever it was going, which the box denies: this suite's own README
+    named variables its agent never read, and two tasks ran to
+    `FailedToOpenSocket` and exit 1 with nothing modified -- a harness
+    failure the summary would have printed as 0/2 (measured 2026-09-02)."""
+    missing = [ph for ph in ("{endpoint_host}", "{endpoint_port}") if not any(ph in v for v in env.values())]
+    if not missing:
+        return None
+    return (
+        f"no --env value carries {' or '.join(missing)}: the agent has no way to learn the proxy's "
+        "address and would try the real server, which the box denies; name the variables the agent reads"
     )
 
 
@@ -838,6 +915,59 @@ def _kill_group(proc: subprocess.Popen) -> None:
         proc.communicate()
 
 
+def reap_orphans(box: Path) -> int:
+    """Kill what the group kill could not see: a process that called
+    setsid() left the agent's session and group, so `_kill_group` never
+    reached it (Codex, round 9). On Linux there is nothing to do -- the box
+    is a pid namespace whose init is the agent, and the kernel kills every
+    process in the namespace when init dies, whatever session it moved to.
+    On macOS there is no such fence, so the runner looks for what is still
+    working in the box by the one thing a sandboxed descendant cannot fake
+    to it: the kernel's record of its working directory, read through
+    libproc (3 ms for every process on the host; lsof takes 20 s). A
+    descendant that also chdir()ed out of the box is not found this way.
+    What it can still do is bounded by the profile it inherited: write
+    under a box that no longer exists and /dev, read the toolchain, and
+    connect to a port that stopped listening before this ran. It costs the
+    host CPU, and nothing else. Returns how many were killed."""
+    if sys.platform != "darwin":
+        return 0
+    root = str(box.resolve())
+    killed = 0
+    for pid, cwd in _darwin_cwds():
+        if pid != os.getpid() and (cwd == root or cwd.startswith(root + "/")):
+            try:
+                os.kill(pid, signal.SIGKILL)
+                killed += 1
+            except ProcessLookupError:
+                pass
+    return killed
+
+
+def _darwin_cwds() -> list[tuple[int, str]]:
+    """(pid, cwd) for every process this user may inspect: proc_listpids
+    then proc_pidinfo(PROC_PIDVNODEPATHINFO), whose reply is two equal
+    vnode_info_path halves (cwd, root) each ending in a MAXPATHLEN path --
+    read from the size the call reports, so no struct layout is assumed."""
+    import ctypes
+
+    libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
+    n = libproc.proc_listpids(1, 0, None, 0)  # PROC_ALL_PIDS
+    pids = (ctypes.c_int * (n // 4 + 64))()
+    n = libproc.proc_listpids(1, 0, pids, ctypes.sizeof(pids))
+    out = []
+    buf = ctypes.create_string_buffer(8192)
+    for pid in pids[: n // 4]:
+        if not pid:
+            continue
+        got = libproc.proc_pidinfo(pid, 9, ctypes.c_uint64(0), buf, 8192)  # PROC_PIDVNODEPATHINFO
+        if got <= 0:
+            continue
+        half = got // 2
+        out.append((pid, buf.raw[half - 1024 : half].split(b"\0", 1)[0].decode(errors="replace")))
+    return out
+
+
 def attempt(
     task: dict, *, agent: str, label: str, timeout: int, env: dict, proxy: ModelProxy
 ) -> tuple[Outcome, dict]:
@@ -856,14 +986,17 @@ def attempt(
 
         before = snapshot(work)
         refused_before = len(proxy.refused)
+        proxy.begin_attempt()
         started = time.monotonic()
         agent_exit, tail = run_agent(
             agent, work, task["instruction"], timeout=timeout, env=env, box=box, proxy=proxy
         )
         elapsed = time.monotonic() - started
-        abandoned = proxy.abandon()
+        abandoned = proxy.end_attempt()
+        orphans = reap_orphans(box)
 
-        # The agent is dead (its whole group, on every exit path). What it
+        # The agent's group is dead (every exit path), its port answers
+        # nobody, and what was still working in its box is dead too. What it
         # left is copied out of its box into a fresh one, graded there, and
         # the tests run under the agent's containment minus the network.
         with tempfile.TemporaryDirectory() as gtmp:
@@ -901,6 +1034,7 @@ def attempt(
             "proxy_refused": refused,
             "tampered": tampered,
             "generations_abandoned": abandoned,
+            "orphans_killed": orphans,
         }
         return outcome, evidence
 
@@ -936,6 +1070,9 @@ def main() -> int:
     if not host or not port.isdigit():
         print(f"--endpoint must be HOST:PORT, got {args.endpoint!r}", file=sys.stderr)
         return 2
+    if unreachable := proxy_unreachable_by(env):
+        print(unreachable, file=sys.stderr)
+        return 2
     tasks = load_tasks(args.task)
     if not tasks:
         print("no tasks matched", file=sys.stderr)
@@ -944,9 +1081,9 @@ def main() -> int:
     fingerprint = corpus_fingerprint()
     proxy = ModelProxy(host, int(port), model=args.endpoint_model or args.label)
     with tempfile.TemporaryDirectory() as proxy_dir:
-        if sys.platform == "darwin":
-            proxy.listen_tcp()
-        else:
+        # macOS listens per attempt (begin_attempt); the Unix socket is for
+        # the sweep, since the box it is bound into dies with each agent
+        if sys.platform != "darwin":
             proxy.listen_unix(Path(proxy_dir) / "model.sock")
         print(f"corpus {fingerprint}\nproxying inference for {proxy.model} -> {args.endpoint}\n")
         try:

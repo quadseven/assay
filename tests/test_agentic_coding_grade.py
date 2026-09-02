@@ -86,10 +86,15 @@ class StubModel:
                     self.abandoned += 1
                     continue
                 self.requests.append(got)
-                # three writes with a pause: a response that streams
-                for piece in (self.response[:8], self.response[8:16], self.response[16:]):
-                    conn.sendall(piece)
-                    time.sleep(0.02)
+                # three writes with a pause: a response that streams; a
+                # client gone mid-stream is a failed write, and the server
+                # goes on serving
+                try:
+                    for piece in (self.response[:8], self.response[8:16], self.response[16:]):
+                        conn.sendall(piece)
+                        time.sleep(0.02)
+                except OSError:
+                    self.abandoned += 1
 
     def close(self):
         self.server.close()
@@ -434,6 +439,96 @@ class TestNoShellInterpolation(unittest.TestCase):
                 os.kill(child, signal.SIGKILL)
                 self.fail(f"child {child} outlived the wrapper's clean exit")
 
+    @unittest.skipUnless(sys.platform == "darwin", "Linux boxes are pid namespaces: init dies, all die")
+    def test_a_descendant_that_left_the_session_loses_the_model_and_is_killed(self):
+        """`_kill_group` reaches the agent's process group. A descendant that
+        called setsid() is in neither the group nor the session, and the
+        wrapper exits 0 with it alive (Codex, round 9). Two fences, each
+        proved on its own: the attempt's port stops answering, so the
+        escapee's requests stop reaching the model while it still lives;
+        then the reap finds it by its working directory and kills it."""
+        import os
+        import signal
+        import time
+
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            box = Path(tmp) / "box"
+            work = box / "work"
+            work.mkdir(parents=True)
+            model = StubModel()
+            proxy = runner.ModelProxy("127.0.0.1", model.port, model="m")
+            proxy.begin_attempt()
+            first_port = proxy.port
+            pidfile = work / "escapee.pid"
+            body = '{"model":"m"}'
+            (work / "escapee.py").write_text(
+                "import os, socket, sys, time\n"
+                "if os.fork():\n    os._exit(0)\n"
+                "os.setsid()\n"
+                f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+                "port = int(os.environ['MODEL_PORT'])\n"
+                "while True:\n"
+                "    try:\n"
+                "        with socket.create_connection(('127.0.0.1', port), timeout=2) as c:\n"
+                f"            c.sendall(b'POST /v1/messages HTTP/1.1\\r\\nHost: x\\r\\nContent-Length: {len(body)}\\r\\n\\r\\n{body}')\n"
+                "            c.recv(4096)\n"
+                "    except OSError:\n        pass\n"
+                "    time.sleep(0.05)\n"
+            )
+            script = work / "agent.sh"
+            script.write_text(f"python3 {work}/escapee.py >/dev/null 2>&1 </dev/null\nexit 0\n")
+            escapee = None
+            try:
+                rc, tail = runner.run_agent(
+                    f"bash {script}",
+                    work,
+                    "x",
+                    timeout=30,
+                    env={"MODEL_PORT": "{endpoint_port}"},
+                    box=box,
+                    proxy=proxy,
+                )
+                self.assertEqual(rc, 0, tail)
+                deadline = time.time() + 5
+                while time.time() < deadline and not (pidfile.exists() and len(model.requests) > 0):
+                    time.sleep(0.05)
+                escapee = int(pidfile.read_text())
+                os.kill(escapee, 0)  # the group kill did not reach it: the premise
+                self.assertGreater(len(model.requests), 0, "the escapee never reached the model")
+
+                abandoned = proxy.end_attempt()
+                time.sleep(0.3)
+                reached = len(model.requests)
+                time.sleep(0.5)
+                os.kill(escapee, 0)  # still alive, and
+                self.assertEqual(len(model.requests), reached, "a retired port still reached the model")
+                with self.assertRaises(ConnectionRefusedError):
+                    socket.create_connection(("127.0.0.1", first_port), timeout=1)
+                self.assertGreaterEqual(abandoned, 0)
+
+                self.assertEqual(runner.reap_orphans(box), 1)
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    try:
+                        os.kill(escapee, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(0.05)
+                else:
+                    self.fail(f"escapee {escapee} survived the reap")
+                escapee = None
+                self.assertEqual(runner.reap_orphans(box), 0)
+
+                proxy.begin_attempt()
+                self.assertNotEqual(proxy.port, first_port, "the next attempt reused a retired port")
+            finally:
+                if escapee:
+                    os.kill(escapee, signal.SIGKILL)
+                proxy.close()
+                model.close()
+
     @unittest.skipUnless(
         shutil.which("sandbox-exec") or shutil.which("bwrap"),
         "no containment tool here; the runner refuses to start on such a host (tested below)",
@@ -517,6 +612,21 @@ class TestNoShellInterpolation(unittest.TestCase):
                 f"cat {hidden} >/dev/null 2>&1 && echo hidden-readable >> {report}\n"
                 f"cat {unlisted} >/dev/null 2>&1 && echo unlisted-readable >> {report}\n"
                 f"cat {Path.home()}/.zshrc >/dev/null 2>&1 && echo home-readable >> {report}\n"
+                # the same file by the APFS firmlink route, and the system
+                # roots the first allowlist swept in wholesale: /etc had the
+                # host's names and shell config, /Library its preferences,
+                # Homebrew's etc its tokens (Codex, round 9)
+                f"cat /System/Volumes/Data{Path.home()}/.zshrc >/dev/null 2>&1 && echo firmlink-readable >> {report}\n"
+                f"cat /etc/hosts >/dev/null 2>&1 && echo etc-readable >> {report}\n"
+                f"cat /private/etc/zshrc >/dev/null 2>&1 && echo private-etc-readable >> {report}\n"
+                f"cat /Library/Preferences/.GlobalPreferences.plist >/dev/null 2>&1 && echo library-readable >> {report}\n"
+                f"ls /opt/homebrew/etc >/dev/null 2>&1 && echo brew-etc-listable >> {report}\n"
+                # and the toolchain still starts: git and node both die on a
+                # Homebrew config file they cannot read, which every earlier
+                # box denied along with the directory
+                f"git --version >/dev/null 2>&1 && echo git-runs >> {report}\n"
+                f"node -e 1 >/dev/null 2>&1 && echo node-runs >> {report}\n"
+                f"python3 -c 1 >/dev/null 2>&1 && echo python-runs >> {report}\n"
                 f"env | grep -q ASSAY_TEST_SENTINEL && echo env-leaked >> {report}\n"
                 f'[ -n "$SSH_AUTH_SOCK" ] && echo agent-socket-leaked >> {report}\n'
                 f"(exec 3<>/dev/tcp/127.0.0.1/{decoy.getsockname()[1]}) 2>/dev/null && echo decoy-reachable >> {report}\n"
@@ -550,10 +660,18 @@ class TestNoShellInterpolation(unittest.TestCase):
                 self.assertIn("infer:HTTP/1.1 200 OK", lines, "the one allowed request must be answered")
                 self.assertIn("manage:HTTP/1.1 403 Forbidden", lines, "a management request must be refused")
                 self.assertEqual(lines[-2], str((box / "home").resolve()), "HOME must be inside the box")
+                for tool in ("git", "node", "python3"):
+                    if shutil.which(tool) and sys.platform == "darwin":
+                        self.assertIn(f"{tool.rstrip('3')}-runs", lines, f"{tool} cannot start in the box")
                 for bad in (
                     "hidden-readable",
                     "unlisted-readable",
                     "home-readable",
+                    "firmlink-readable",
+                    "etc-readable",
+                    "private-etc-readable",
+                    "library-readable",
+                    "brew-etc-listable",
                     "env-leaked",
                     "agent-socket-leaked",
                     "decoy-reachable",
@@ -696,6 +814,21 @@ class TestNoShellInterpolation(unittest.TestCase):
                         Path(tmp), reads=[], proxy=runner.ModelProxy("127.0.0.1", 1, model="m")
                     )
         self.assertIn("refusing", str(ctx.exception))
+
+    def test_a_sweep_whose_agent_cannot_learn_the_proxy_address_is_refused(self):
+        """The README named variables its agent never read; every attempt
+        went to the real server, which the box denies, and the sweep printed
+        0/2 for an agent that never sent a request (measured 2026-09-02)."""
+        import runner
+
+        self.assertIsNone(
+            runner.proxy_unreachable_by({"H": "{endpoint_host}", "P": "http://x:{endpoint_port}/v1"})
+        )
+        for env in ({}, {"CLAUDE_OR_TARGET_HOST": "{endpoint_host}"}, {"P": "{endpoint_port}"}):
+            with self.subTest(env=env):
+                why = runner.proxy_unreachable_by(env)
+                self.assertIsNotNone(why)
+                self.assertIn("no way to learn the proxy", why)
 
     def test_a_porous_wrapper_is_refused_before_the_agent_runs(self):
         """The wrapper is proved, not trusted: before every agent start it
