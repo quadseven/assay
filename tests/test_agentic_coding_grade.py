@@ -245,9 +245,10 @@ class TestNoShellInterpolation(unittest.TestCase):
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
 
-        with mock.patch.object(runner.shutil, "which", return_value=None):
-            with self.assertRaises(SystemExit) as ctx:
-                runner.containment(Path("/tmp"), (Path("/tmp"),))
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(runner.shutil, "which", return_value=None):
+                with self.assertRaises(SystemExit) as ctx:
+                    runner.containment(Path(tmp), (Path(tmp),))
         self.assertIn("refusing", str(ctx.exception))
 
     def test_run_agent_builds_argv_not_a_shell_string(self):
