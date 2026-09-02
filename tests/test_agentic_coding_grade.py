@@ -378,8 +378,10 @@ class TestNoShellInterpolation(unittest.TestCase):
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
-            secret = Path(tmp) / "unlisted-secret"
-            secret.write_text("hunter2\n")
+            # a file on nobody's list whose contents the agent must not see;
+            # only its PATH goes into the script
+            unlisted = Path(tmp) / "unlisted-file"
+            unlisted.write_text("planted\n")
             box = Path(tmp) / "box"
             work = box / "work"
             work.mkdir(parents=True)
@@ -394,7 +396,7 @@ class TestNoShellInterpolation(unittest.TestCase):
             script = work / "agent.sh"
             script.write_text(
                 f"cat {hidden} >/dev/null 2>&1 && echo hidden-readable >> {report}\n"
-                f"cat {secret} >/dev/null 2>&1 && echo secret-readable >> {report}\n"
+                f"cat {unlisted} >/dev/null 2>&1 && echo unlisted-readable >> {report}\n"
                 f"cat {Path.home()}/.zshrc >/dev/null 2>&1 && echo home-readable >> {report}\n"
                 f"env | grep -q ASSAY_TEST_SENTINEL && echo env-leaked >> {report}\n"
                 f'[ -n "$SSH_AUTH_SOCK" ] && echo agent-socket-leaked >> {report}\n'
@@ -431,7 +433,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 self.assertEqual(lines[-2], str((box / "home").resolve()), "HOME must be inside the box")
                 for bad in (
                     "hidden-readable",
-                    "secret-readable",
+                    "unlisted-readable",
                     "home-readable",
                     "env-leaked",
                     "agent-socket-leaked",
@@ -759,8 +761,8 @@ class TestGradingBox(unittest.TestCase):
         runner.grader_preflight()
         token = uuid.uuid4().hex
         escape = runner.HOME / f".assay-grade-escape-{token}"
-        secret = runner.HOME / f".assay-grade-secret-{token}"
-        secret.write_text(token)
+        planted = runner.HOME / f".assay-grade-planted-{token}"
+        planted.write_text(token)
         with tempfile.TemporaryDirectory() as tmp:
             proxy = live_proxy(tmp)
             try:
@@ -772,7 +774,7 @@ class TestGradingBox(unittest.TestCase):
                     f"        open({str(escape)!r}, 'w').close()\n\n\n"
                     "def test_home_is_not_readable():\n"
                     "    with pytest.raises(OSError):\n"
-                    f"        open({str(secret)!r}).read()\n\n\n"
+                    f"        open({str(planted)!r}).read()\n\n\n"
                     "def test_the_model_proxy_is_closed():\n"
                     "    with pytest.raises(OSError):\n"
                     f"        socket.create_connection(('127.0.0.1', {proxy.port}), timeout=2).close()\n"
@@ -783,7 +785,7 @@ class TestGradingBox(unittest.TestCase):
                 task = _task(
                     Path(tmp) / "task",
                     agent_script=(
-                        f"cp planted.py conftest.py; ln -s {secret} hidden_test.py; "
+                        f"cp planted.py conftest.py; ln -s {planted} hidden_test.py; "
                         "printf 'def f():\\n    return 2\\n' > mod.py\n"
                     ),
                     hidden_test=hidden,
@@ -794,7 +796,7 @@ class TestGradingBox(unittest.TestCase):
                 )
             finally:
                 proxy.close()
-                secret.unlink(missing_ok=True)
+                planted.unlink(missing_ok=True)
                 leaked = escape.exists()
                 escape.unlink(missing_ok=True)
         self.assertFalse(leaked, "test-time code wrote into the host's home")
