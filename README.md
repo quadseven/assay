@@ -14,20 +14,26 @@ blank cell means "not run", never "not good".
 
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | Serving contracts / decode |
 |---|---|---|---|---|
-| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
-| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
+| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | 3/3 · 64.8 tok/s |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | 2/3 · 61.8 tok/s |
+| `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- |
+| `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
+| `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
-| `qwen3-coder-next:q8_0` | local, Ollama | 5/5 · 36s/task | -- | -- |
+| `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
+| `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
 on this hardware by the suite in its column; vendor and aggregator
 claims are never recorded as results. Each measurement's date and
-caveat live in that suite's `results/scoreboard.json`.
+caveat live in that suite's `results/scoreboard.json`. `void` means the
+run happened and measured something other than the model (the cell
+names what); the number it produced is not published.
 
 - **Agentic coding** -- qualify rate over the task corpus, then mean wall-clock per task
 - **Nutrition (mean MAPE)** -- lower is better; NutriBench macro extraction
@@ -35,25 +41,71 @@ caveat live in that suite's `results/scoreboard.json`.
 
 <!-- scoreboard:end -->
 
-### The one result to take away
+### What the first runs suggested, and why no number is published yet
 
-**Decode throughput does not predict agentic coding. It inverted.**
-`Qwen3.6-35B-A3B` generates tokens ~3x faster than the incumbent and takes
-**4x longer per coding task**, solving fewer of them. It is a reasoning model,
-so most of its budget is spent before the first character of an answer exists:
-a tok/s benchmark counts that as output, an agent counts it as latency several
-round trips deep.
+Every agentic-coding row above is `void` today: those runs happened before
+the runner contained reads, so the hidden test file was readable to the
+agent. No run was seen opening it and nothing in the instruction points to
+it, but a score that cannot exclude it is not a score. What those runs
+suggested, to be confirmed under the contained runner before any of it is
+stated as a result:
 
-Picking a local coding model on tok/s would have picked the wrong one here.
+- **Decode throughput did not predict agentic coding.** The model that
+  generates tokens ~3x faster than the incumbent took ~4x longer per task.
+  It is a reasoning model, so most of its budget is spent before the first
+  character of an answer exists: a tok/s benchmark counts that as output,
+  an agent counts it as latency several round trips deep.
+- **The biggest model was not the fastest solver.** A 304B MoE served
+  tensor-parallel across both nodes (tonyd2wild's community DSpark recipe: a
+  patched vLLM with MXFP4 MoE kernels and speculative decoding) costs the
+  whole fleet while it is up, and an 85 GB model on ONE node finished the
+  same tasks in half the wall-clock.
+- **Two models cleared every task**, which if it holds means the corpus is
+  saturated at the top and the next useful signal needs harder tasks or a
+  public anchor, not another candidate.
 
-**Both boxes together can now serve a model neither can hold alone.**
-`DeepSeek-V4-Flash-0731` (304B MoE, 167 GB at NVFP4) runs tensor-parallel
-across the two GB10 nodes with tonyd2wild's community DSpark recipe (a
-patched vLLM with MXFP4 MoE kernels and speculative decoding) and, with
-thinking off, is the first local model to clear the six-task
-corpus at 5/6 while decoding as fast as the 35B model above. The price is
-the whole fleet: nothing else can be served while it is up, and each task
-takes about twice as long as `qwen3-coder-next` did on the five-task corpus.
+**A benchmark can measure its own harness.** One 120B model timed out on all
+six tasks. Only the first of those was a clean measurement: the runner's
+timeout killed the agent wrapper and left the real CLI generating, so tasks
+two through six shared the server with one to five orphaned attempts. Three
+of the six attempts still had a correct patch on disk when killed, and that
+3/6 is exactly the number this board refuses to publish: five of the six were
+not a controlled run. The row is `void` with the cause named, the runner now
+kills the whole process group, and the model is queued for a clean re-run. If
+later tasks in a sweep look slower than the first, suspect the harness before
+the model.
+
+The serving layer can do the same thing. A 31B model hit the cap on all six
+tasks with no file ever modified -- and had never loaded: the fleet's default
+served context (262k tokens across 8 parallel slots) left it half-offloaded
+and the runner died on every request. At a 32k context it loads in 17 s and
+answers. That row is `void` too, not 0/6 and not a blank: a number would be
+read as the model, and a blank as never tried, and the truth is that the
+server was measured six times and the model never once. `void` rows exist so
+that neither misreading is available.
+
+And the model can measure something the grader does not watch. A 35B model
+left a correct in-scope patch on four of six tasks -- and on one of them
+also wrote a correct patch into a *different repository's checkout* on the
+same host. The grader snapshots the task's working directory and nothing
+else, so that attempt still counted. The suite asks whether a model can be
+trusted with a ticket unattended; a run that answered "no" on the
+filesystem is not published as 4/6 on the tests. It is `void` until it is
+re-run contained, and the runner now enforces that: the agent can write
+only inside its own attempt box, read only the system toolchain and the
+box (not `$HOME`, not the suite with its hidden tests), reach only an
+inference-only proxy to the model server (which forwards requests for the
+labeled model and refuses the server's management API), cannot signal or
+enumerate the runner or reach a Mach service, and sees an environment
+built from an allowlist (`sandbox-exec` on macOS, `bwrap` with its own pid
+and network namespaces on Linux). Every one of
+those is proved by a probe before every attempt, and the runner refuses to
+start where a tool is missing or the proof fails. The tests are the
+agent's code running a second time, so they run in a second box with no
+network at all, on a copy of the tree that takes regular files only; an
+attempt that was refused at the proxy or left a symlink for the grader is
+`void` whatever its tests say. Rows measured before 2026-09-02 predate
+the read and network boundaries and say so.
 
 ### Adding a model to the scoreboard
 
@@ -88,7 +140,7 @@ model that measured **4x slower** on the work that actually mattered.
 | `agentic_coding` | SWE-bench Verified / Aider polyglot are the public comparables | **not run**, so no number is claimed |
 
 The agentic-coding corpus is deliberately private-workload-shaped rather than
-public: four of its five tasks encode a rule or incident from the operator's
+public: five of its six tasks encode a rule or incident from the operator's
 own systems, because a model that tops a generic coding benchmark has not been
 measured on the work it would actually be given. That is a real limitation as
 well as the point -- these scores are not comparable to anyone else's, and a
@@ -187,7 +239,7 @@ non-zero if the corpus is missing rather than silently scoring nothing.
 [`suites/`](suites/) and owns its own corpus, runners, graders and results.
 
 - [`suites/agentic_coding/`](suites/agentic_coding/) -- can a model be trusted
-  to work a real backlog ticket unattended? Five tasks seeded from this
+  to work a real backlog ticket unattended? Six tasks seeded from this
   operator's own recorded failures, each scored on three axes at once, with a
   hidden test the model never sees. This is where the scoreboard's coding
   column comes from.

@@ -54,7 +54,15 @@ def render(suites: list[dict]) -> str:
     for s in suites:
         for m in s["measurements"]:
             model = m["model"]
-            cell = m["value"] + (f" · {m['detail']}" if m.get("detail") else "")
+            # A run that measured the server or the harness instead of the
+            # model is VOID: its reason is the cell, and the number it
+            # produced is never rendered. Two rows shipped as 0/6 and 3/6
+            # with the truth only in a caveat the README does not show, and
+            # a reader compares numbers, not caveats.
+            if m.get("void"):
+                cell = f"void · {m['void']}"
+            else:
+                cell = m["value"] + (f" · {m['detail']}" if m.get("detail") else "")
             by_model.setdefault(model, {})[s["column"]] = cell
             # Shortest wins: a longer `where` is the same host plus how it was
             # reached, which belongs in the suite's own results, not here.
@@ -73,7 +81,9 @@ def render(suites: list[dict]) -> str:
     lines.append("`--` means **not run**, never *not good*. Every number was measured")
     lines.append("on this hardware by the suite in its column; vendor and aggregator")
     lines.append("claims are never recorded as results. Each measurement's date and")
-    lines.append("caveat live in that suite's `results/scoreboard.json`.")
+    lines.append("caveat live in that suite's `results/scoreboard.json`. `void` means the")
+    lines.append("run happened and measured something other than the model (the cell")
+    lines.append("names what); the number it produced is not published.")
     lines.append("")
     for s in suites:
         lines.append(f"- **{s['column']}** -- {s['note']}")

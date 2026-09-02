@@ -6,29 +6,65 @@
     {
       "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
       "where": "local, vLLM, TP=2 across BOTH nodes, via the Anthropic bridge",
-      "value": "5/6",
-      "detail": "79s/task",
+      "value": "void",
       "measured": "2026-09-01",
       "corpus": "8d61e9c2dbdd8b3a",
-      "caveat": "first run on the six-task corpus (vacuous_pass included), so not directly comparable to the 5/5 above; the miss put the no-criteria sentinel in a new key instead of the documented detail field; thinking off; one task took 226s, the rest 33-80s"
+      "caveat": "VOID, not a score. The run produced 5/6 at 79s/task on the six-task corpus, but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: first run on the six-task corpus (vacuous_pass included), so not directly comparable to the 5/5 above; the miss put the no-criteria sentinel in a new key instead of the documented detail field; thinking off; one task took 226s, the rest 33-80s. Due a re-run under the contained runner.",
+      "void": "measured before reads were contained: the hidden test was readable to the agent"
     },
     {
       "model": "qwen3-coder-next:q8_0",
       "where": "local, Ollama",
-      "value": "5/5",
-      "detail": "36s/task",
-      "measured": "2026-08-31",
-      "corpus": "a3e597c9973edced",
-      "caveat": "five-task corpus; the sixth task (vacuous_pass) postdates this run"
+      "value": "void",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "VOID, not a score. The run produced 6/6 at 40s/task on the six-task corpus, but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: six-task corpus, re-run the day after the 5/5 five-task result (36s/task); every task solved with existing tests green; the Ollama node was also serving production traffic during the run. Due a re-run under the contained runner.",
+      "void": "measured before reads were contained: the hidden test was readable to the agent"
     },
     {
       "model": "Qwen/Qwen3.6-35B-A3B-FP8",
       "where": "local, vLLM, via the Anthropic bridge",
-      "value": "3/4 valid",
-      "detail": "145s/task",
+      "value": "void",
       "measured": "2026-08-31",
       "corpus": "a3e597c9973edced",
-      "caveat": "one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint"
+      "caveat": "VOID, not a score. The run produced 3/4 valid at 145s/task on the FIVE-task corpus (a3e597c9973edced predates vacuous_pass; four attempts were valid, one void), but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: one task void: it edited a file OUTSIDE its working directory, caught by the corpus fingerprint. Due a re-run under the contained runner.",
+      "void": "measured before reads were contained: the hidden test was readable to the agent"
+    },
+    {
+      "model": "gpt-oss:120b",
+      "where": "local, Ollama",
+      "value": "void",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "VOID, not a score. The run produced 6/6 at 97s/task on the six-task corpus, but it ran before the runner contained reads (2026-09-02): the hidden test file was readable to the agent (nothing in the instruction points to it, and no run was seen opening it, but a score that cannot exclude it is not published). Earlier note: six-task corpus; all solved, but 2.4x the wall-clock of qwen3-coder-next on the same tasks (40-190s each); reasoning model, so most of the time is spent before the first edit. Due a re-run under the contained runner.",
+      "void": "measured before reads were contained: the hidden test was readable to the agent"
+    },
+    {
+      "model": "nemotron-3-super:120b",
+      "where": "local, Ollama",
+      "value": "void",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "VOID, not a score. All six tasks ran to the 900s cap: three had a correct patch on disk when killed, three never modified a file; the agent never returned on its own. Only task 1 ran on a quiet box: the runner had a defect (fixed the same day) that let a timed-out agent's child live on, so tasks 2-6 shared the server with 1-5 orphaned attempts still generating. The 3/6 those attempts produced is not published as a number because five of the six were not a controlled run. Due a clean re-measure at a 300s cap.",
+      "void": "harness defect: tasks 2-6 shared the box with orphaned attempts"
+    },
+    {
+      "model": "qwen3.6:35b",
+      "where": "local, Ollama",
+      "value": "void",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "VOID, not a score. Six-task corpus at a 300s cap: four attempts left a correct in-scope patch (28-49s), two ended with no file modified. But on one task the model also wrote a correct patch into a DIFFERENT repo's checkout on this host (contained and reverted), and the grader only snapshots the task's own working directory, so an attempt that escaped it can still count as qualifying. The suite's question is whether the model can be trusted unattended; a run that answered no on the filesystem cannot be published as 4/6 on the tests. Same out-of-cwd behavior as the vLLM row above. Re-run only under enforced filesystem isolation.",
+      "void": "wrote into another repo's checkout mid-sweep; the grader cannot see that"
+    },
+    {
+      "model": "gemma4:31b",
+      "where": "local, Ollama",
+      "value": "void",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "VOID, not a score. The server never loaded the model, so none of the six attempts reached it. The fleet default context (262144 tokens x 8 parallel slots) offloads only 31/61 layers and the runner dies at load, so every request got HTTP 500 after ~68s and the agent retried into the 300s cap. The same model loads in 17s and answers at a 32768 context. The 0/6 the sweep produced is not published as a number. Re-measure after the served context is sized per model, and only in a sandbox.",
+      "void": "server never loaded the model (fleet context 262k x 8 slots)"
     }
   ]
 }
