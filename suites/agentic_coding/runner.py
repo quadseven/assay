@@ -921,51 +921,56 @@ def reap_orphans(box: Path) -> int:
     reached it (Codex, round 9). On Linux there is nothing to do -- the box
     is a pid namespace whose init is the agent, and the kernel kills every
     process in the namespace when init dies, whatever session it moved to.
-    On macOS there is no such fence, so the runner looks for what is still
-    working in the box by the one thing a sandboxed descendant cannot fake
-    to it: the kernel's record of its working directory, read through
-    libproc (3 ms for every process on the host; lsof takes 20 s). A
-    descendant that also chdir()ed out of the box is not found this way.
-    What it can still do is bounded by the profile it inherited: write
-    under a box that no longer exists and /dev, read the toolchain, and
-    connect to a port that stopped listening before this ran. It costs the
-    host CPU, and nothing else. Returns how many were killed."""
+    On macOS the fence is the sandbox itself: every descendant inherits the
+    attempt's profile and no unprivileged process can leave one, so the
+    kernel can be asked, for any pid, what that pid's sandbox permits.
+    Every process the sandbox lets write this box but not the directory
+    above it belongs to this attempt -- whatever session, group or working
+    directory it moved to (a cwd-based sweep missed a setsid+chdir
+    escapee: Codex, round 10). An unsandboxed process may write both and
+    is never touched. Returns how many were killed."""
     if sys.platform != "darwin":
         return 0
     root = str(box.resolve())
+    outside = os.path.dirname(root)
     killed = 0
-    for pid, cwd in _darwin_cwds():
-        if pid != os.getpid() and (cwd == root or cwd.startswith(root + "/")):
+    for pid in _darwin_pids():
+        if pid == os.getpid():
+            continue
+        if _sandbox_allows(pid, root) and not _sandbox_allows(pid, outside):
             try:
                 os.kill(pid, signal.SIGKILL)
                 killed += 1
-            except ProcessLookupError:
-                pass
+            except (ProcessLookupError, PermissionError):
+                pass  # gone already, or another user's: not ours either way
     return killed
 
 
-def _darwin_cwds() -> list[tuple[int, str]]:
-    """(pid, cwd) for every process this user may inspect: proc_listpids
-    then proc_pidinfo(PROC_PIDVNODEPATHINFO), whose reply is two equal
-    vnode_info_path halves (cwd, root) each ending in a MAXPATHLEN path --
-    read from the size the call reports, so no struct layout is assumed."""
+def _darwin_pids() -> list[int]:
+    """Every pid on the host, from libproc (3 ms; `ps` is slower and lsof
+    takes 20 s)."""
     import ctypes
 
     libproc = ctypes.CDLL("/usr/lib/libproc.dylib")
     n = libproc.proc_listpids(1, 0, None, 0)  # PROC_ALL_PIDS
     pids = (ctypes.c_int * (n // 4 + 64))()
     n = libproc.proc_listpids(1, 0, pids, ctypes.sizeof(pids))
-    out = []
-    buf = ctypes.create_string_buffer(8192)
-    for pid in pids[: n // 4]:
-        if not pid:
-            continue
-        got = libproc.proc_pidinfo(pid, 9, ctypes.c_uint64(0), buf, 8192)  # PROC_PIDVNODEPATHINFO
-        if got <= 0:
-            continue
-        half = got // 2
-        out.append((pid, buf.raw[half - 1024 : half].split(b"\0", 1)[0].decode(errors="replace")))
-    return out
+    return [pid for pid in pids[: n // 4] if pid]
+
+
+def _sandbox_allows(pid: int, directory: str) -> bool:
+    """Whether `pid`'s sandbox lets it write data to `directory` (which
+    must exist), per `sandbox_check(3)`: 0 allowed, 1 denied, -1 unknown --
+    unknown is never treated as ours. The path is a variadic argument, and
+    on arm64 ctypes only uses the variadic calling convention for arguments
+    beyond `argtypes`, so `argtypes` stops at the filter type."""
+    import ctypes
+
+    lib = ctypes.CDLL("/usr/lib/system/libsystem_sandbox.dylib")
+    lib.sandbox_check.restype = ctypes.c_int
+    lib.sandbox_check.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
+    SANDBOX_FILTER_PATH = 1
+    return lib.sandbox_check(pid, b"file-write-data", SANDBOX_FILTER_PATH, directory.encode()) == 0
 
 
 def attempt(

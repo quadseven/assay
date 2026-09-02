@@ -156,17 +156,23 @@ The agent runs **contained**, and every boundary is an allowlist:
   loopback port is opened per attempt and closed when the attempt ends,
   and the port is the one address the escapee's inherited profile allows:
   from that moment its requests reach nobody, and the next attempt's port
-  is one it has never been allowed. Then the runner reaps what is still
-  working in the box, found by the kernel's record of its working
-  directory (libproc, 3 ms across every process on the host; `lsof` takes
-  20 s), recorded as `orphans_killed`. What that does not find is a
-  descendant that also left the box's directory; it keeps its profile --
-  writes under a box that no longer exists and `/dev`, reads of the
-  toolchain, a socket to a port nobody answers -- and costs the host CPU,
-  nothing else. The test for this is a wrapper that exits 0 leaving a
-  `setsid()` grandchild polling the model: it is alive when the wrapper
-  returns (that is the premise), its requests stop arriving the moment
-  the port is retired while it still lives, and the reap kills it.
+  is one it has never been allowed. Then the runner reaps every process
+  that still belongs to the attempt, found by the one thing a descendant
+  cannot shed: its sandbox. Every pid on the host (libproc, 3 ms; `lsof`
+  takes 20 s) is asked, through `sandbox_check(3)`, whether its profile
+  lets it write this attempt's box and whether it lets it write the
+  directory above; a process allowed the first and denied the second is
+  the attempt's, whatever session, group or working directory it moved
+  to, and is killed, recorded as `orphans_killed`. An unsandboxed process
+  is allowed both and is never touched; another attempt's process is
+  denied the first. The first version of this found escapees by working
+  directory, which a `setsid()` + `chdir()` descendant evaded (Codex,
+  round 10). The test for this is a wrapper that exits 0 leaving a
+  `setsid()` grandchild that has `chdir()`ed to `/` and polls the model:
+  it is alive when the wrapper returns (that is the premise), its
+  requests stop arriving the moment the port is retired while it still
+  lives, the reap kills it, and a contained `sleep` in a sibling box
+  survives the reap.
 - **Environment**: `PATH`, locale and terminal variables, the operator's
   `--env`, and the box's own paths on top. No token, no `SSH_AUTH_SOCK`, no
   cloud profile reaches the agent.

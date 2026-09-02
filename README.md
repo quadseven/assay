@@ -14,17 +14,17 @@ blank cell means "not run", never "not good".
 
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | Serving contracts / decode |
 |---|---|---|---|---|
-| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
-| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
+| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | 3/3 · 64.8 tok/s |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | 2/3 · 61.8 tok/s |
 | `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- |
-| `gpt-oss:120b` | local, Ollama | 6/6 · 97s/task | -- | -- |
+| `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
 | `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
-| `qwen3-coder-next:q8_0` | local, Ollama | 6/6 · 40s/task | -- | -- |
+| `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
 | `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
@@ -41,28 +41,28 @@ names what); the number it produced is not published.
 
 <!-- scoreboard:end -->
 
-### The one result to take away
+### What the first runs suggested, and why no number is published yet
 
-**Decode throughput does not predict agentic coding. It inverted.**
-`Qwen3.6-35B-A3B` generates tokens ~3x faster than the incumbent and takes
-**4x longer per coding task**, solving fewer of them. It is a reasoning model,
-so most of its budget is spent before the first character of an answer exists:
-a tok/s benchmark counts that as output, an agent counts it as latency several
-round trips deep.
+Every agentic-coding row above is `void` today: those runs happened before
+the runner contained reads, so the hidden test file was readable to the
+agent. No run was seen opening it and nothing in the instruction points to
+it, but a score that cannot exclude it is not a score. What those runs
+suggested, to be confirmed under the contained runner before any of it is
+stated as a result:
 
-Picking a local coding model on tok/s would have picked the wrong one here.
-
-**Both boxes together can now serve a model neither can hold alone -- and it
-is still not the best coding model here.** `DeepSeek-V4-Flash-0731` (304B MoE,
-167 GB at NVFP4) runs tensor-parallel across the two GB10 nodes with
-tonyd2wild's community DSpark recipe (a patched vLLM with MXFP4 MoE kernels and
-speculative decoding) and, with thinking off, scores 5/6 at 79 s/task. The
-price is the whole fleet: nothing else can be served while it is up. On the
-same six tasks the 85 GB `qwen3-coder-next:q8_0` on ONE node scores 6/6 at
-40 s/task, and `gpt-oss:120b` also clears 6/6 at 97 s. The biggest model is
-not the best one, and the two that solve everything mean the corpus is
-saturated at the top: the next useful signal needs harder tasks or a public
-anchor, not another candidate.
+- **Decode throughput did not predict agentic coding.** The model that
+  generates tokens ~3x faster than the incumbent took ~4x longer per task.
+  It is a reasoning model, so most of its budget is spent before the first
+  character of an answer exists: a tok/s benchmark counts that as output,
+  an agent counts it as latency several round trips deep.
+- **The biggest model was not the fastest solver.** A 304B MoE served
+  tensor-parallel across both nodes (tonyd2wild's community DSpark recipe: a
+  patched vLLM with MXFP4 MoE kernels and speculative decoding) costs the
+  whole fleet while it is up, and an 85 GB model on ONE node finished the
+  same tasks in half the wall-clock.
+- **Two models cleared every task**, which if it holds means the corpus is
+  saturated at the top and the next useful signal needs harder tasks or a
+  public anchor, not another candidate.
 
 **A benchmark can measure its own harness.** One 120B model timed out on all
 six tasks. Only the first of those was a clean measurement: the runner's

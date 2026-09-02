@@ -446,9 +446,13 @@ class TestNoShellInterpolation(unittest.TestCase):
         wrapper exits 0 with it alive (Codex, round 9). Two fences, each
         proved on its own: the attempt's port stops answering, so the
         escapee's requests stop reaching the model while it still lives;
-        then the reap finds it by its working directory and kills it."""
+        then the reap finds it by the sandbox it inherited and cannot
+        leave -- after it also chdir()ed out of the box, which is what a
+        cwd-based reap missed (Codex, round 10) -- and kills it, while a
+        contained process of ANOTHER box is left alone."""
         import os
         import signal
+        import subprocess
         import time
 
         import runner
@@ -457,6 +461,11 @@ class TestNoShellInterpolation(unittest.TestCase):
             box = Path(tmp) / "box"
             work = box / "work"
             work.mkdir(parents=True)
+            other_box = Path(tmp) / "other"
+            other_box.mkdir()
+            bystander = subprocess.Popen(
+                runner.containment(other_box, reads=[], proxy=None) + ["/bin/sleep", "60"]
+            )
             model = StubModel()
             proxy = runner.ModelProxy("127.0.0.1", model.port, model="m")
             proxy.begin_attempt()
@@ -467,6 +476,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 "import os, socket, sys, time\n"
                 "if os.fork():\n    os._exit(0)\n"
                 "os.setsid()\n"
+                "os.chdir('/')\n"
                 f"open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
                 "port = int(os.environ['MODEL_PORT'])\n"
                 "while True:\n"
@@ -509,6 +519,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 self.assertGreaterEqual(abandoned, 0)
 
                 self.assertEqual(runner.reap_orphans(box), 1)
+                self.assertIsNone(bystander.poll(), "the reap killed another box's process")
                 deadline = time.time() + 5
                 while time.time() < deadline:
                     try:
@@ -526,6 +537,8 @@ class TestNoShellInterpolation(unittest.TestCase):
             finally:
                 if escapee:
                     os.kill(escapee, signal.SIGKILL)
+                bystander.kill()
+                bystander.wait()
                 proxy.close()
                 model.close()
 
