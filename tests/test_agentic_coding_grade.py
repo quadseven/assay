@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from grade import Outcome, PytestRun, changed_files, grade, out_of_scope, parse_pytest
 
@@ -153,7 +154,10 @@ class TestNoShellInterpolation(unittest.TestCase):
             # No `$$`: a marker whose name depends on the shell's PID cannot be
             # asserted on, which is what went wrong the first time.
             hostile = "fix `touch pwned` and $(touch also-pwned) please"
-            ok, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={})
+            # containment is a separate invariant with its own test; the CI
+            # runners have no sandbox tool, and this test is about the shell
+            with mock.patch.object(runner, "containment", return_value=[]):
+                ok, _tail = runner.run_agent("printf %s", work, hostile, timeout=30, env={})
             self.assertTrue(ok)
             # argv means the shell never ran, so nothing was created.
             self.assertEqual(sorted(p.name for p in work.iterdir()), [])
@@ -168,7 +172,6 @@ class TestNoShellInterpolation(unittest.TestCase):
         import os
         import signal
         import time
-        from unittest import mock
 
         import runner
 
@@ -189,7 +192,10 @@ class TestNoShellInterpolation(unittest.TestCase):
                     time.sleep(0.05)
                 raise KeyboardInterrupt
 
-            with mock.patch.object(subprocess.Popen, "communicate", interrupted):
+            with (
+                mock.patch.object(runner, "containment", return_value=[]),
+                mock.patch.object(subprocess.Popen, "communicate", interrupted),
+            ):
                 with self.assertRaises(KeyboardInterrupt):
                     runner.run_agent(agent, work, "x", timeout=30, env={})
             self.assertEqual(len(calls), 1)
@@ -205,12 +211,18 @@ class TestNoShellInterpolation(unittest.TestCase):
                 os.kill(child, signal.SIGKILL)
                 self.fail(f"grandchild {child} survived the interrupt")
 
+    @unittest.skipUnless(
+        shutil.which("sandbox-exec") or shutil.which("bwrap"),
+        "no containment tool here; the runner refuses to start on such a host (tested below)",
+    )
     def test_the_agent_cannot_write_outside_its_task_directory(self):
         """A model wrote a correct patch into a different repository's
         checkout mid-sweep and the grader, which snapshots only the task
         directory, counted the attempt. Containment is an invariant of the
         run: the write must FAIL, not merely be noticed afterwards, and the
-        task directory must still be writable through the same containment."""
+        task directory must still be writable through the same containment.
+        Skipped where no tool exists (the ARC runners): there the invariant
+        is the refusal, which the next test proves everywhere."""
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,8 +243,6 @@ class TestNoShellInterpolation(unittest.TestCase):
             )
 
     def test_the_runner_refuses_to_start_without_containment(self):
-        from unittest import mock
-
         import runner
 
         with mock.patch.object(runner.shutil, "which", return_value=None):
