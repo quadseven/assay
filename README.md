@@ -16,6 +16,7 @@ blank cell means "not run", never "not good".
 |---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | 3/4 valid · 145s/task | -- | 3/3 · 64.8 tok/s |
 | `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | 5/6 · 79s/task | -- | 2/3 · 61.8 tok/s |
+| `gemma4:31b` | local, Ollama | 0/6 · 300s/task (every task hit the cap) | -- | -- |
 | `gpt-oss:120b` | local, Ollama | 6/6 · 97s/task | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
@@ -24,6 +25,7 @@ blank cell means "not run", never "not good".
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
 | `qwen3-coder-next:q8_0` | local, Ollama | 6/6 · 40s/task | -- | -- |
+| `qwen3.6:35b` | local, Ollama | 4/6 · 54s/task | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
@@ -67,6 +69,13 @@ two through six shared the server with one to five orphaned attempts. The row
 carries that caveat, the runner now kills the whole process group, and the
 model is queued for a clean re-run. If later tasks in a sweep look slower than
 the first, suspect the harness before the model.
+
+The serving layer can do the same thing. A 31B model scored 0/6 at the cap
+with no file ever modified -- and had never loaded: the fleet's default served
+context (262k tokens across 8 parallel slots) left it half-offloaded and the
+runner died on every request. At a 32k context it loads in 17 s and answers.
+That row stays on the board as 0/6 with the cause named, because a blank cell
+would hide that the server, not the model, was measured.
 
 ### Adding a model to the scoreboard
 

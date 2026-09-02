@@ -47,6 +47,24 @@
       "measured": "2026-09-02",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "all six tasks ran to the 900s cap: three had a correct patch on disk when killed, three never modified a file; the agent never returned on its own. Only task 1 ran on a quiet box: the runner had a defect (fixed the same day) that let a timed-out agent's child live on, so tasks 2-6 shared the server with 1-5 orphaned attempts still generating. Due a clean re-measure at a 300s cap."
+    },
+    {
+      "model": "qwen3.6:35b",
+      "where": "local, Ollama",
+      "value": "4/6",
+      "detail": "54s/task",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "six-task corpus at a 300s cap; four solved in 28-49s, two ended with no file modified (one after 24s, one after 151s of generation). During this sweep the model also wrote a correct patch into a DIFFERENT repo's checkout on another task -- contained and reverted, but the same out-of-cwd behavior as the vLLM row above; re-run only in a sandbox"
+    },
+    {
+      "model": "gemma4:31b",
+      "where": "local, Ollama",
+      "value": "0/6",
+      "detail": "300s/task (every task hit the cap)",
+      "measured": "2026-09-02",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "not a measurement of the model: the server never loaded it. The fleet default context (262144 tokens x 8 parallel slots) offloads only 31/61 layers and the runner dies at load, so every request got HTTP 500 after ~68s and the agent retried into the cap. The same model loads in 17s and answers at a 32768 context. Re-measure after the served context is sized per model, and only in a sandbox"
     }
   ]
 }
