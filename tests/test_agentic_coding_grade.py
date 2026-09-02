@@ -805,7 +805,7 @@ class TestNoShellInterpolation(unittest.TestCase):
         self.assertNotIn("(target others)", profile, "measured 2026-09-02: an `others` filter does not bite")
         self.assertNotIn("(deny system-*)", profile, "a syntax error, not a rule")
         self.assertNotIn("file-read-data", profile, "denying contents alone leaves the host enumerable")
-        for root in ("/Users", "/tmp", "/private/tmp", "/private/var/folders"):
+        for root in ("/Users", "/tmp", "/private/tmp", "/private/var/folders"):  # noqa: S108 -- asserting these are NOT granted
             self.assertNotIn(f'(subpath "{root}")', profile)
         # metadata comes back as literals on the roots' ancestors and the
         # box's, never a subpath, and never above the CLI under $HOME

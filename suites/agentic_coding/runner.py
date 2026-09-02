@@ -552,7 +552,7 @@ DARWIN_DENIES = (
 # (`/var/folders/...`): following one is a metadata read of the link itself,
 # which shows the link's target and nothing under it (`ls /tmp` in the box
 # prints `/tmp`; `ls /private/tmp` is refused).
-DARWIN_LINKS = ("/etc", "/tmp", "/var")
+DARWIN_LINKS = ("/etc", "/tmp", "/var")  # noqa: S108 -- symlink names granted metadata only, nothing is created there
 
 
 def ancestors(paths: tuple[str, ...]) -> list[str]:
@@ -622,7 +622,7 @@ def bwrap_argv(root: str, reads: list[str], socket_path: str | None) -> list[str
         "--proc",
         "/proc",
         "--tmpfs",
-        "/tmp",
+        "/tmp",  # noqa: S108 -- the box gets a private tmpfs here; the host /tmp is not used
         "--bind",
         root,
         root,
