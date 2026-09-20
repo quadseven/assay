@@ -12,23 +12,23 @@ blank cell means "not run", never "not good".
 
 <!-- scoreboard:begin -->
 
-| Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | Serving contracts / decode |
-|---|---|---|---|---|
-| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | 3/3 · 64.8 tok/s |
-| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | 2/3 · 61.8 tok/s |
-| `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- |
-| `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
-| `llama3.2:3b` | local, Ollama | -- | ~53% | -- |
-| `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | -- |
-| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | -- |
-| `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- |
-| `nemotron-3.5-lightning:30b` | local, Ollama, single node, via the Anthropic bridge | 5/6, 45s/task | -- | -- |
-| `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- |
-| `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- |
-| `qwen2.5:32b` | local, Ollama | -- | 53% | -- |
-| `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- |
-| `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- |
-| `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | 3/3 · 20.3 tok/s |
+| Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | In-character chat | Serving contracts / decode |
+|---|---|---|---|---|---|
+| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 3/3 · 64.8 tok/s |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 2/3 · 61.8 tok/s |
+| `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- | -- |
+| `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
+| `llama3.2:3b` | local, Ollama | -- | ~53% | -- | -- |
+| `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
+| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
+| `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
+| `nemotron-3.5-lightning:30b` | local, Ollama, single node, via the Anthropic bridge | 5/6, 45s/task | -- | 2/4, 17.6s/reply | -- |
+| `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- | -- |
+| `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- | -- |
+| `qwen2.5:32b` | local, Ollama | -- | 53% | -- | -- |
+| `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
+| `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- | -- |
+| `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | -- | 3/3 · 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
 on this hardware by the suite in its column; vendor and aggregator
@@ -39,6 +39,7 @@ names what); the number it produced is not published.
 
 - **Agentic coding** -- qualify rate over the task corpus, then mean wall-clock per task
 - **Nutrition (mean MAPE)** -- lower is better; NutriBench macro extraction
+- **In-character chat** -- qualify rate over four persona prompts, then mean wall-clock per reply
 - **Serving contracts / decode** -- contracts held out of json_object, tool_calling, vision; then decode tok/s
 
 <!-- scoreboard:end -->
