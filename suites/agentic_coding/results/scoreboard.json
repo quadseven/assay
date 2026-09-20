@@ -65,6 +65,22 @@
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "VOID, not a score. The server never loaded the model, so none of the six attempts reached it. The fleet default context (262144 tokens x 8 parallel slots) offloads only 31/61 layers and the runner dies at load, so every request got HTTP 500 after ~68s and the agent retried into the 300s cap. The same model loads in 17s and answers at a 32768 context. The 0/6 the sweep produced is not published as a number. Re-measure after the served context is sized per model, and only in a sandbox.",
       "void": "server never loaded the model (fleet context 262k x 8 slots)"
+    },
+    {
+      "model": "nemotron-3.5-lightning:30b",
+      "where": "local, Ollama, single node, via the Anthropic bridge",
+      "value": "5/6, 45s/task",
+      "measured": "2026-09-20",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "BEST NEMOTRON MEASURED, and it is the small one. 5/6 at 25 GB beats nemotron-3-super:120b's 3/6 at 86 GB on the same corpus - 3.4x smaller and better. It also equals the TP=2 frontier result while using ONE node instead of both, at 45s/task against that run's 79s. Only miss was write_after_side_effect (hidden test still failing); scope was clean on all six and nothing regressed. ANOTHER tok/s inversion: this decodes 33.7 tok/s against nemotron-3-nano:30b's 71.6 - half the decode speed, 2.5x the qualify rate. Never shortlist on throughput. Run on ONE node through Ollama 0.34.2 (the fleet's second node is offline), via the Anthropic bridge. Peak GPU 73 C / 50 W during the sweep - recorded because this hardware class has hard-cut under sustained load at 80-83 C, so temperature is a result here, not a footnote. HARNESS TRAP worth repeating: on a host where `claude` on PATH is a wrapper shim that execs a binary elsewhere, every task fails in 0.2s with `agent exit=126` and the sweep reports a clean 0/6 that is NOT a model result - the sandbox allowlist follows symlink chains, not shim indirection. Put the real client first on PATH and re-run before believing any zero."
+    },
+    {
+      "model": "nemotron-3-nano:30b-a3b-q4_K_M",
+      "where": "local, Ollama, single node, via the Anthropic bridge",
+      "value": "2/6, 33s/task",
+      "measured": "2026-09-20",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "Weakest local model measured on this corpus so far, despite the fastest decode of the Nemotrons at 71.6 tok/s. Failure mode is distinctive and worth knowing: four of the six misses left NO FILES MODIFIED - it did not attempt an edit rather than attempting a wrong one, so a diff review would have found nothing to reject. Holds json_object and tool_calling on the serving probe, so this is not a tool-calling failure; it is an agentic follow-through failure. Run on ONE node through Ollama 0.34.2 (the fleet's second node is offline), via the Anthropic bridge. Peak GPU 73 C / 50 W during the sweep - recorded because this hardware class has hard-cut under sustained load at 80-83 C, so temperature is a result here, not a footnote. HARNESS TRAP worth repeating: on a host where `claude` on PATH is a wrapper shim that execs a binary elsewhere, every task fails in 0.2s with `agent exit=126` and the sweep reports a clean 0/6 that is NOT a model result - the sandbox allowlist follows symlink chains, not shim indirection. Put the real client first on PATH and re-run before believing any zero."
     }
   ]
 }
