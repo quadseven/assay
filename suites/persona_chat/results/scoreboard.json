@@ -1,0 +1,28 @@
+{
+  "suite": "persona_chat",
+  "column": "In-character chat",
+  "note": "qualify rate over four persona prompts, then mean wall-clock per reply",
+  "measurements": [
+    {
+      "model": "nemotron-3-nano:30b-a3b-q4_K_M",
+      "where": "local, Ollama, single node, OpenAI-compatible endpoint",
+      "value": "4/4, 6.0s/reply",
+      "measured": "2026-09-20",
+      "caveat": "BEST FOR THIS ROLE, and it is the model that scored WORST on agentic_coding (2/6). The inversion is the point: it answers in 739-1302 characters of reasoning and 206-326 completion tokens, where nemotron-3.5-lightning spends 3673-4748 characters thinking about the same prompts. Fastest of the three measured and the only one that never overran its budget."
+    },
+    {
+      "model": "mistral-small:24b",
+      "where": "local, Ollama, single node, OpenAI-compatible endpoint",
+      "value": "4/4, 9.5s/reply",
+      "measured": "2026-09-20",
+      "caveat": "The incumbent, and it holds all four contracts - this suite does NOT show it failing. It is matched on quality and beaten on latency by a model a third its resident size: mistral-small sat at 57.4 GB resident against a 14 GB file (KV cache at 8-way parallelism), where nemotron-3-nano sits at ~25 GB. The case for replacing it is headroom, not quality. First reply was 31.8s cold; later ones 1-3s."
+    },
+    {
+      "model": "nemotron-3.5-lightning:30b",
+      "where": "local, Ollama, single node, OpenAI-compatible endpoint",
+      "value": "2/4, 17.6s/reply",
+      "measured": "2026-09-20",
+      "caveat": "WRONG TOOL FOR THIS ROLE despite being the best local agent measured (5/6 on agentic_coding). Both misses are THINKING-OVERRUN at max_tokens=1200: content empty, finish_reason length, 4568 and 4748 characters of reasoning spent on one-line NPC dialogue. Raising the budget would buy a reply nobody waits for - it is already 17.6s mean against nano's 6.0s. NOTE the earlier 0/4 for this model was a probe artifact at max_tokens=400, not a quality result, and is not published as one."
+    }
+  ]
+}
