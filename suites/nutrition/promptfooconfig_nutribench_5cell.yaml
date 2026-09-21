@@ -9,7 +9,7 @@
 # but that one needs more API keys in env (see that file's header).
 #
 # 5 cells (5 x 30 rows = 150 cell-evaluations):
-#   1. mistral-small:24b on local the local Ollama host
+#   1. nemotron-3-nano:30b-a3b-q4_K_M on local the local Ollama host
 #   2-5. Poolside laguna-{xs.2, m.1} x {direct, thinking}
 #
 # How to run:
@@ -39,10 +39,10 @@ prompts:
 providers:
   # -- Local Ollama (local) ------------------------------------------
   - id: 'python:nutribench_provider.py'
-    label: 'mistral-small:24b (local)'
+    label: 'nemotron-3-nano:30b-a3b-q4_K_M (local)'
     config:
       kind: ollama
-      model: mistral-small:24b
+      model: nemotron-3-nano:30b-a3b-q4_K_M
       base_url: http://localhost:11434
 
   # -- Poolside cloud  --  4 cells (model x thinking) -----------------

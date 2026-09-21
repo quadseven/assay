@@ -7,7 +7,7 @@
 # instead.
 #
 # Cells:
-#   - 1x mistral-small:24b on local the local Ollama host
+#   - 1x nemotron-3-nano:30b-a3b-q4_K_M on local the local Ollama host
 #   - 4x Poolside laguna-{xs.2, m.1} x {direct, thinking}
 #   - 4x OpenRouter free-tier (rotate as availability shifts)
 #   - Anthropic / OpenAI / Gemini stanzas commented out  --  uncomment +
@@ -38,10 +38,10 @@ prompts:
 providers:
   # -- Local Ollama (local) ------------------------------------------
   - id: 'python:nutribench_provider.py'
-    label: 'mistral-small:24b (local)'
+    label: 'nemotron-3-nano:30b-a3b-q4_K_M (local)'
     config:
       kind: ollama
-      model: mistral-small:24b
+      model: nemotron-3-nano:30b-a3b-q4_K_M
       base_url: http://localhost:11434
 
   # -- Poolside cloud  --  4 cells (model x thinking) -----------------

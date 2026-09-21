@@ -21,7 +21,7 @@ Usage:
     cd suites/nutrition
     OLLAMA_BASE_URL=http://localhost:11434 \\
       uv run python nutribench_runner_cot.py \\
-        --model mistral-small:24b \\
+        --model nemotron-3-nano:30b-a3b-q4_K_M \\
         --split v2 --max-rows 30
 """
 
@@ -128,7 +128,7 @@ def ollama_generate_cot(*, model: str, meal_description: str) -> tuple[dict | No
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--model", default="mistral-small:24b")
+    p.add_argument("--model", default="nemotron-3-nano:30b-a3b-q4_K_M")
     p.add_argument("--split", default="v2", choices=list(SPLIT_PATHS))
     p.add_argument("--max-rows", type=int, default=20)
     p.add_argument("--show-reasoning", action="store_true", help="Print first 200 chars of reasoning per row")
