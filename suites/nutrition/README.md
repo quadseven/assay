@@ -60,6 +60,12 @@ All runs 2026-05-08 / 2026-05-09, NutriBench v2, 30 rows unless noted.
 | qwen2.5:32b | 51.3% | 49.0% | 48.5% | 64.5% | ~53% |
 | llama3.2:3b (5 rows) | -- | -- | -- | -- | ~53% |
 
+> These are the numbers as measured in 2026-08 and they are unchanged.
+> `mistral-small:24b` has since been retired and its weights deleted, so
+> its row cannot be reproduced locally. The suite now defaults to
+> `nemotron-3-nano:30b-a3b-q4_K_M`, which has NOT yet been measured on this
+> benchmark -- do not read the row above as applying to it.
+
 Pass rates for mistral-small:24b were 43.3% energy, 40.0% protein, 36.7% carb,
 20.0% fat. Fat is the hardest axis for every model tested; the models
 consistently under-estimate it.
@@ -156,7 +162,7 @@ OLLAMA_BASE_URL=http://localhost:11434 \
 
 # Retrieval arm. Additionally needs the 6.9GB Open Food Facts parquet.
 OLLAMA_BASE_URL=http://localhost:11434 \
-  uv run python nutribench_runner_rag.py --model mistral-small:24b --split v2 --max-rows 30
+  uv run python nutribench_runner_rag.py --model nemotron-3-nano:30b-a3b-q4_K_M --split v2 --max-rows 30
 
 # Cloud arm.
 POOLSIDE_API_KEY=<your Poolside API key> \

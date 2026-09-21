@@ -29,10 +29,10 @@ prompts:
 providers:
   # -- Local Ollama --------------------------------------------------
   - id: 'python:nutribench_provider.py'
-    label: 'mistral-small:24b (local)'
+    label: 'nemotron-3-nano:30b-a3b-q4_K_M (local)'
     config:
       kind: ollama
-      model: mistral-small:24b
+      model: nemotron-3-nano:30b-a3b-q4_K_M
       base_url: http://localhost:11434
 
   # -- Poolside cloud (4 cells: model x thinking) -------------------

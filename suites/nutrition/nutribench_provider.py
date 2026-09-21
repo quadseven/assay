@@ -14,10 +14,10 @@ Promptfoo provider config example (in promptfooconfig_nutribench_5cell.yaml):
 
     providers:
       - id: 'python:nutribench_provider.py'
-        label: 'mistral-small:24b (local)'
+        label: 'nemotron-3-nano:30b-a3b-q4_K_M (local)'
         config:
           kind: ollama
-          model: mistral-small:24b
+          model: nemotron-3-nano:30b-a3b-q4_K_M
           base_url: http://localhost:11434
       - id: 'python:nutribench_provider.py'
         label: 'poolside xs.2 thinking'
