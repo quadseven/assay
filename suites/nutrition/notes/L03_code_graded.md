@@ -61,7 +61,7 @@ Hypothesis: **RAG-grounded meal-gen has higher macros-within-10% pass rate than 
 ### Smoke run #1  --  `format=json`, 3 prompts x llama3.2:3b x both arms
 
 ```
-                       free-form (A)     RAG (B)    delta 
+                       free-form (A)     RAG (B)    delta
 JSON well-formed %         100.0           100.0    0.0
 10 meals %                   0.0             0.0    0.0   <- schema FAIL (only `formatted` returned)
 macros within +/-10% %         0.0             0.0    0.0
@@ -76,7 +76,7 @@ mean latency (s)            13.6            11.1   -2.5
 Switched harness to use [Ollama's structured-output GBNF sampling](https://ollama.com/blog/structured-outputs) per prod parity (the upstream service does the same). Switched `/api/chat` -> `/api/generate`.
 
 ```
-                       free-form (A)     RAG (B)    delta 
+                       free-form (A)     RAG (B)    delta
 JSON well-formed %         100.0            33.3   -66.7   <- RAG truncated 2/3 trials
 10 meals %                 100.0            33.3   -66.7
 macros within +/-10% %         0.0             0.0     0     <- BOTH arms fail value accuracy
