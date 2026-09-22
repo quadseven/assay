@@ -22,9 +22,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: '^(.*/uv\.lock|.*/poetry\.lock|.*/package-lock\.json)$'
+        exclude: '^(.*/uv\.lock|.*/poetry\.lock|.*/package-lock\.json|.*\.(patch|diff))$'
       - id: end-of-file-fixer
-        exclude: '^(.*/uv\.lock|.*/poetry\.lock|.*/package-lock\.json)$'
+        exclude: '^(.*/uv\.lock|.*/poetry\.lock|.*/package-lock\.json|.*\.(patch|diff))$'
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: check-added-large-files
