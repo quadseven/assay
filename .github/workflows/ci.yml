@@ -24,11 +24,13 @@ jobs:
   # additionally ASSERTS the lockfile is current, so a stale lock fails here
   # instead of being silently tolerated.
   test:
-    uses: quadseven/infra-public/.github/workflows/check.python.yml@cd83e5727c0a7b904f780960664a51b3a3a0c685
+    uses: quadseven/infra-public/.github/workflows/check.python.yml@3d7eb0b00e8bfe949783d772ab777100182ab05d
     with:
       install-cmd: "uv sync --locked"
       test-cmd: "uv run pytest -q"
       ruff: true
+      # Same ruff build the provisioned pre-commit pins (infra#995).
+      ruff-version: "0.15.10"
 
   # DELIBERATELY NOT in the shared reusable. The scan is specific to this repo
   # being publishable, its terms file is local-only, and folding it into the
