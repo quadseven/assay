@@ -5,7 +5,7 @@
 # clean 5-cell run with no environment-failure noise on the leaderboard.
 #
 # For the larger model bake-off that includes OpenRouter / Anthropic /
-# OpenAI / Gemini cells, use `promptfooconfig_nutribench_full.yaml`  -- 
+# OpenAI / Gemini cells, use `promptfooconfig_nutribench_full.yaml`  --
 # but that one needs more API keys in env (see that file's header).
 #
 # 5 cells (5 x 30 rows = 150 cell-evaluations):

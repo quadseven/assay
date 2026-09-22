@@ -276,7 +276,7 @@ testing harness replacing ad-hoc Python invocations.
 
 `mean_score` is fraction of axes within +/-20% (0.0..1.0). `4/4 pass` is
 the strict per-cell pass rate (all 4 axes simultaneously within +/-20%).
-`xs.2 thinking` confirms its position as production-recommended cell  -- 
+`xs.2 thinking` confirms its position as production-recommended cell  --
 fits DL-011 8s gate at p50 (mean=8.6s, but p50 likely lower; thinking
 adds variance).
 
