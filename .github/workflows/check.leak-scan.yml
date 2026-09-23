@@ -14,7 +14,7 @@ name: check.leak-scan
 # `edited` is in the trigger list on purpose: a PR body can leak long after
 # the last push.
 #
-# allowed-repo-refs: repos this one cites by `<name>#123` as a matter of
+# allowed-repo-refs: repos this one cites by `<name>#<number>` as a matter of
 # course. This repo's own refs are always exempt and need no entry.
 
 on:
