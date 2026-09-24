@@ -18,8 +18,10 @@ name: check.leak-scan
 # course. This repo's own refs are always exempt and need no entry.
 
 # DENY-LIST LAYER. Terms with no generic shape (people, products, projects)
-# are read at run time from the SSM parameter below, through the role in the
-# LEAK_SCAN_ROLE_ARN secret. That role can read this one parameter and
+# are read at run time from the fleet's shared SSM parameter, through the role
+# in the LEAK_SCAN_ROLE_ARN secret. `use-shared-deny-list: true` selects that
+# parameter; its path lives in the reusable, not here, so this repo's own
+# scanner never sees a cloud parameter path. That role can read that one parameter and
 # nothing else, and trusts only pull_request runs of the public repos that
 # share it. The terms never live in this repo, the log shows only how many
 # were loaded, and a hit is redacted. A fork PR gets no secrets, so the scan fails closed there rather
@@ -31,13 +33,13 @@ on:
 
 jobs:
   leak-scan:
-    uses: quadseven/infra-public/.github/workflows/_reusable.leak-scan.yml@273755079c88172df39501ee6914fd878c0920bc
+    uses: quadseven/infra-public/.github/workflows/_reusable.leak-scan.yml@d29debca5bfaef03d568c20a97894213fb6926a5
     permissions:
       contents: read
       # Mint the OIDC token for the deny-list read role.
       id-token: write
     with:
       allowed-repo-refs: infra, infra-public, grug
-      deny-list-ssm-param: /infra/leak-scan/deny-list
+      use-shared-deny-list: true
     secrets:
       aws-role-arn: ${{ secrets.LEAK_SCAN_ROLE_ARN }}
