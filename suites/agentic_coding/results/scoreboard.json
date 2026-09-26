@@ -81,6 +81,22 @@
       "measured": "2026-09-20",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "Weakest local model measured on this corpus so far, despite the fastest decode of the Nemotrons at 71.6 tok/s. Failure mode is distinctive and worth knowing: four of the six misses left NO FILES MODIFIED - it did not attempt an edit rather than attempting a wrong one, so a diff review would have found nothing to reject. Holds json_object and tool_calling on the serving probe, so this is not a tool-calling failure; it is an agentic follow-through failure. Run on ONE node through Ollama 0.34.2 (the fleet's second node is offline), via the Anthropic bridge. Peak GPU 73 C / 50 W during the sweep - recorded because this hardware class has hard-cut under sustained load at 80-83 C, so temperature is a result here, not a footnote. HARNESS TRAP worth repeating: on a host where `claude` on PATH is a wrapper shim that execs a binary elsewhere, every task fails in 0.2s with `agent exit=126` and the sweep reports a clean 0/6 that is NOT a model result - the sandbox allowlist follows symlink chains, not shim indirection. Put the real client first on PATH and re-run before believing any zero."
+    },
+    {
+      "model": "Qwen/Qwen3.8-Flash-Next (unsloth UD-IQ4_XS GGUF)",
+      "where": "local, Ollama, single node, via the Anthropic bridge",
+      "value": "6/6, 79s/task",
+      "measured": "2026-09-26",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "125B total / 6B active plus 51B n-gram embedding and 4B MTP (180B on disk). No official build fits one node with KV room: Ollama q4_K_M is 120 GB, NVFP4 133 GB, FP8 186 GB. This is the 93.7 GB unsloth UD-IQ4_XS, imported into Ollama 0.34.2 with the library's own renderer/parser (qwen3.8 / qwen3.5), num_ctx 65536, ~98 GB resident. TIES the incumbent on score and is 2.2x slower (79s against 35s the same day) at ~3.7x the resident memory. Six solved, none out of scope, none regressed. Three tasks were first voided, NOT failed: the host's thermal guard stopped accepting connections mid-attempt and the proxy recorded refused requests; each was re-run alone, starting below 60 C, and qualified (53s, 76s, 92s). The first-pass times of the three that qualified (120s, 65s, 66s) were taken while the box cycled through guard pauses, so treat 79s/task as an upper bound. Peak zone 90.1 C (one 30s sample; never 3 minutes over 90). Thinking left at the model default."
+    },
+    {
+      "model": "nemotron-3.5-lightning:30b",
+      "where": "local, Ollama, single node, via the Anthropic bridge",
+      "value": "6/6, 35s/task",
+      "measured": "2026-09-26",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "Same-day re-run as the comparison for Qwen3.8; the 2026-09-20 row read 5/6, 45s/task (write_after_side_effect missed), and this run solved it, so the one-task gap is run-to-run variance, not a fixed miss. vacuous_pass was first voided by a thermal-guard pause and re-run alone (45s). A background consumer shared the model at about one request a minute (8-way parallel server), so times may be slightly inflated. Peak zone 80.9 C."
     }
   ]
 }

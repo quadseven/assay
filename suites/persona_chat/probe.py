@@ -73,9 +73,7 @@ def ask(
         "completion_tokens": usage.get("completion_tokens"),
         "reasoning_chars": len(reasoning),
         "thinking_overrun": bool(
-            not content.strip()
-            and reasoning
-            and choice.get("finish_reason") == "length"
+            not content.strip() and reasoning and choice.get("finish_reason") == "length"
         ),
     }
     return content, elapsed, diagnosis
@@ -104,9 +102,7 @@ def main() -> int:
                 args.url, args.model, prompts.build(name), max_tokens=args.max_tokens
             )
         except (urllib.error.URLError, TimeoutError, OSError) as e:
-            report["prompts"].append(
-                {"name": name, "qualifies": False, "error": f"{type(e).__name__}: {e}"}
-            )
+            report["prompts"].append({"name": name, "qualifies": False, "error": f"{type(e).__name__}: {e}"})
             continue
         verdicts = contracts.grade(reply, max_chars=args.max_chars)
         ok = contracts.qualifies(verdicts)
@@ -118,9 +114,7 @@ def main() -> int:
                 "seconds": round(elapsed, 2),
                 "diagnosis": diagnosis,
                 "reply": reply.strip()[:400],
-                "verdicts": [
-                    {"name": v.name, "held": v.held, "detail": v.detail} for v in verdicts
-                ],
+                "verdicts": [{"name": v.name, "held": v.held, "detail": v.detail} for v in verdicts],
             }
         )
 
