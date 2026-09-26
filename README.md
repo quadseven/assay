@@ -15,6 +15,7 @@ blank cell means "not run", never "not good".
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | In-character chat | Serving contracts / decode |
 |---|---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 3/3 · 64.8 tok/s |
+| `Qwen/Qwen3.8-Flash-Next (unsloth UD-IQ4_XS GGUF)` | local, Ollama, single node | 6/6, 79s/task | -- | 3/4, 7.4s/reply | 2/3 · 27.5 tok/s |
 | `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 2/3 · 61.8 tok/s |
 | `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- | -- |
 | `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
@@ -22,7 +23,7 @@ blank cell means "not run", never "not good".
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
 | `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
 | `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
-| `nemotron-3.5-lightning:30b` | local, Ollama, single node, via the Anthropic bridge | 5/6, 45s/task | -- | 2/4, 17.6s/reply | -- |
+| `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3 · 91.9 tok/s |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- | -- |
