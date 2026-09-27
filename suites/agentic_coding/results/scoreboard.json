@@ -97,6 +97,14 @@
       "measured": "2026-09-26",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "Same-day re-run as the comparison for Qwen3.8; the 2026-09-20 row read 5/6, 45s/task (write_after_side_effect missed), and this run solved it, so the one-task gap is run-to-run variance, not a fixed miss. vacuous_pass was first voided by a thermal-guard pause and re-run alone (45s). A background consumer shared the model at about one request a minute (8-way parallel server), so times may be slightly inflated. Peak zone 80.9 C."
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B (Ollama qwen3.8:27b-mtp-q8_0)",
+      "where": "local, Ollama, single node, via the Anthropic bridge",
+      "value": "2/2 valid, 97s/task",
+      "measured": "2026-09-27",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "INCOMPLETE: two tasks valid, four VOID. absent_row_vs_error (120s) and two_error_paths (74s) qualified. The other four were voided, not failed: the host's thermal guard refused new connections mid-attempt. Each voided attempt still left a solved, in-scope, non-regressing patch, but a void is not a score. The one re-run started below 60 C (empty_loop_success) voided again after 662s. The second (median_even) drove the node to 96.9 C and the node powered off; the remaining re-runs were abandoned. A dense 27B at Q8 decodes at full memory bandwidth on every token and took the node from 55 C past 85 C within about two minutes of each task. The guard only refuses NEW connections, so an in-flight generation keeps heating. Thinking left at the model default. Compare nemotron-3.5-lightning:30b at 6/6, 35s/task on 2026-09-26."
     }
   ]
 }
