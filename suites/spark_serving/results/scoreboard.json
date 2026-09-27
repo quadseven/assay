@@ -42,6 +42,14 @@
       "detail": "91.9 tok/s",
       "measured": "2026-09-26",
       "caveat": "Same-day comparison row for the Qwen3.8 run. Text-only, so vision is an honest 400. Same array-argument todo probe: 5/5 real arrays. Another node-level consumer was sending about one request a minute to this model on this node during the run."
+    },
+    {
+      "model": "Qwen/Qwen3.8-27B (Ollama qwen3.8:27b-mtp-q8_0)",
+      "where": "local, Ollama, single node",
+      "value": "3/3",
+      "detail": "21.6 tok/s",
+      "measured": "2026-09-27",
+      "caveat": "27B DENSE, Q8_0 with the MTP draft head (30.5 GB resident). The plain qwen3.8:27b-q8_0 build held the same 3/3 at 8.1 tok/s: every token reads all 27B parameters, so MTP is worth 2.7x and is what the other suites used. Vision held (the library build ships the projector). The array-argument todo probe (5 trials, as on 2026-09-26) returned a real array 5/5, never a string, at 18.1 s per call against 5.7 s for nemotron-3.5-lightning:30b."
     }
   ]
 }
