@@ -15,6 +15,7 @@ blank cell means "not run", never "not good".
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | In-character chat | Serving contracts / decode |
 |---|---|---|---|---|---|
 | `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 3/3 · 64.8 tok/s |
+| `Qwen/Qwen3.8-27B (Ollama qwen3.8:27b-mtp-q8_0)` | local, Ollama, single node | 2/2 valid, 97s/task | -- | -- | 3/3 · 21.6 tok/s |
 | `Qwen/Qwen3.8-Flash-Next (unsloth UD-IQ4_XS GGUF)` | local, Ollama, single node | 6/6, 79s/task | -- | 3/4, 7.4s/reply | 2/3 · 27.5 tok/s |
 | `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 2/3 · 61.8 tok/s |
 | `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- | -- |
