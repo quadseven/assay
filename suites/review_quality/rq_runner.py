@@ -192,11 +192,36 @@ def render(summary: list[dict]) -> str:
     return head + "\n".join(lines) + "\n"
 
 
+def estimate_plan_share(
+    models: list[str], reps: int, cases: list[rq_corpus.Case], out_tokens: int = 500
+) -> tuple[float, float]:
+    """(list-price dollars, share of the OpenCode Go plan allowance) for a planned run.
+
+    The allowances are counted per model as spend / that model's monthly limit and
+    pooled, so a run costs `dollars / limit` of the plan whichever model it hits.
+    The 5-hour cap is 20% of the pool: a full sweep can lock a live reviewer out.
+    """
+    dollars = share = 0.0
+    for name in models:
+        _model, _extra, p_in, p_out, limit = MODELS[name]
+        for case in cases:
+            cost = (len(case.diff) / rq_corpus.CHARS_PER_TOKEN * p_in + out_tokens * p_out) / 1e6 * reps
+            dollars += cost
+            share += cost / limit if limit else 0.0
+    return dollars, share
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default=",".join(MODELS))
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--concurrency", type=int, default=4)
+    ap.add_argument(
+        "--max-plan-share",
+        type=float,
+        default=0.05,
+        help="refuse a run expected to use more than this share of the plan allowance (5-hour cap is 0.20)",
+    )
     ap.add_argument("--out", default="")
     ap.add_argument(
         "--system-file",
@@ -205,6 +230,13 @@ def main() -> None:
     )
     args = ap.parse_args()
     key = os.environ["OPENCODE_GO_API_KEY"]
+    planned = [m.strip() for m in args.models.split(",") if m.strip()]
+    dollars, share = estimate_plan_share(planned, args.reps, rq_corpus.build_corpus())
+    print(f"planned: ~${dollars:.2f} list price, ~{share:.1%} of the plan allowance (5-hour cap 20%)")
+    if share > args.max_plan_share:
+        raise SystemExit(
+            f"refusing: {share:.1%} exceeds --max-plan-share {args.max_plan_share:.0%}; use fewer models/reps or a key that no live reviewer shares"
+        )
     names = [m.strip() for m in args.models.split(",") if m.strip()]
     system = Path(args.system_file).read_text() if args.system_file else SYSTEM
     rows = asyncio.run(run(names, args.reps, args.concurrency, key, system))

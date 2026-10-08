@@ -64,3 +64,13 @@ def test_corpus_is_deterministic_sized_and_contains_the_plant():
         assert 0.95 * rq_corpus.SIZES[c.size] < tokens < 1.1 * rq_corpus.SIZES[c.size]
         if c.has_bug:
             assert f"+++ b/{c.path}" in c.diff
+
+
+def test_plan_share_estimate_scales_with_reps_and_refuses_free_models_cost():
+    import rq_runner
+
+    cases = rq_corpus.build_corpus()
+    d1, s1 = rq_runner.estimate_plan_share(["deepseek-v4.1-flash (think off)"], 1, cases)
+    d2, s2 = rq_runner.estimate_plan_share(["deepseek-v4.1-flash (think off)"], 2, cases)
+    assert abs(d2 - 2 * d1) < 1e-9 and abs(s2 - 2 * s1) < 1e-9
+    assert rq_runner.estimate_plan_share(["longcat-2.5-preview-free"], 2, cases) == (0.0, 0.0)
