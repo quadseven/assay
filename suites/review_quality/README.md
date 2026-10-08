@@ -18,6 +18,14 @@ OPENCODE_GO_API_KEY=... python suites/review_quality/rq_runner.py --reps 2 --out
 
 Results and the recommendation: [results/index.md](results/index.md).
 
+## Cost: this spends the same allowance a live reviewer uses
+
+OpenCode Go counts every model's spend against one pooled allowance (spend divided by that
+model's monthly limit), with a 5-hour cap of 20%. A full sweep on 2026-10-08 used about
+$9 of list price, hit the 5-hour cap and made a live reviewer fall back to free tiers for
+about 90 minutes. The runner prints the planned share first and refuses above
+`--max-plan-share` (default 5%). Run big sweeps with a key no live service shares.
+
 ## What this does not cover
 
 The corpus is synthetic and each diff holds one defect, so catch rates are an
