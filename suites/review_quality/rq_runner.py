@@ -50,12 +50,14 @@ MODELS: dict[str, tuple[str, dict, float, float, float | None]] = {
 }
 
 
-async def call(client: httpx.AsyncClient, key: str, model: str, extra: dict, diff: str) -> dict:
+async def call(
+    client: httpx.AsyncClient, key: str, model: str, extra: dict, diff: str, system: str = SYSTEM
+) -> dict:
     body = {
         "model": model,
         "max_tokens": 8192,
         "response_format": {"type": "json_object"},
-        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": diff}],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": diff}],
     }
     for k, v in extra.items():  # a None value removes a default field (hy3 rejects response_format)
         if v is None:
@@ -92,7 +94,7 @@ async def call(client: httpx.AsyncClient, key: str, model: str, extra: dict, dif
     }
 
 
-async def run(models: list[str], reps: int, concurrency: int, key: str) -> list[dict]:
+async def run(models: list[str], reps: int, concurrency: int, key: str, system: str = SYSTEM) -> list[dict]:
     cases = rq_corpus.build_corpus()
     sem = asyncio.Semaphore(concurrency)
     rows: list[dict] = []
@@ -100,7 +102,7 @@ async def run(models: list[str], reps: int, concurrency: int, key: str) -> list[
     async def one(name: str, case: rq_corpus.Case, rep: int) -> None:
         model, extra, p_in, p_out, _limit = MODELS[name]
         async with sem:
-            out = await call(client, key, model, extra, case.diff)
+            out = await call(client, key, model, extra, case.diff, system)
         g = rq_grade.grade(
             out.get("text"),
             has_bug=case.has_bug,
@@ -196,10 +198,16 @@ def main() -> None:
     ap.add_argument("--reps", type=int, default=2)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--out", default="")
+    ap.add_argument(
+        "--system-file",
+        default="",
+        help="use this file as the system prompt (e.g. a reviewer's real prompt, kept out of this repo)",
+    )
     args = ap.parse_args()
     key = os.environ["OPENCODE_GO_API_KEY"]
     names = [m.strip() for m in args.models.split(",") if m.strip()]
-    rows = asyncio.run(run(names, args.reps, args.concurrency, key))
+    system = Path(args.system_file).read_text() if args.system_file else SYSTEM
+    rows = asyncio.run(run(names, args.reps, args.concurrency, key, system))
     table = render(summarize(rows))
     print(table)
     if args.out:

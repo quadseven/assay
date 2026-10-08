@@ -55,6 +55,44 @@ between models are inside that noise; only the large gaps below are findings.
 - GLM-5.x, Hy3 and the free Longcat 2.5 are not usable as a first tier: 40-65% timeouts (GLM, Hy3) or 14-24% timeouts plus errors (Longcat free).
 - Thinking on is worse than thinking off for DeepSeek: 20-25% timeouts for no gain.
 
-## Recommendation
+## With a real reviewer prompt (supersedes the recommendation below)
+
+The runs above use a 40-word stand-in system prompt. A production reviewer sends a
+much longer one (about 5.5k tokens of rules), and the ranking changed. The table
+below is the same corpus with a reviewer's real prompt supplied through
+`rq_runner.py --system-file` (the prompt itself stays out of this public repo).
+2 reps per model (14 bug and 6 clean calls per size).
+
+| model | size | n | catch | empty on bug | FP on clean | timeout | error | p50 s | p95 s | $/review | reviews/mo (Go) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| mimo-v2.5 (think off) | 10k | 20 | 79% | 21% | 0% | 0% | 0% | 10.5 | 24.6 | 0.0025 | 24,111 |
+| mimo-v2.5 (think off) | 40k | 20 | 86% | 7% | 33% | 0% | 5% | 13.9 | 38.4 | 0.0072 | 8,277 |
+| mimo-v2.6-flash (think off) | 10k | 20 | 79% | 21% | 33% | 0% | 0% | 8.7 | 44.2 | 0.0024 | 24,540 |
+| mimo-v2.6-flash (think off) | 40k | 20 | 71% | 14% | 17% | 10% | 0% | 27.5 | 44.6 | 0.0072 | 8,349 |
+| deepseek-v4.1-flash (think off) | 10k | 20 | 100% | 0% | 50% | 0% | 0% | 2.9 | 5.0 | 0.0027 | 21,964 |
+| deepseek-v4.1-flash (think off) | 40k | 20 | 93% | 7% | 0% | 0% | 0% | 3.8 | 5.7 | 0.0078 | 7,688 |
+| kimi-k2.7-code | 10k | 20 | 64% | 14% | 33% | 35% | 0% | 24.0 | 39.3 | 0.0226 | 2,650 |
+| kimi-k2.7-code | 40k | 20 | 71% | 14% | 33% | 20% | 0% | 30.7 | 43.9 | 0.0527 | 1,139 |
+| longcat-2.0 | 10k | 20 | 29% | 7% | 0% | 70% | 0% | 42.7 | 43.2 | 0.0081 | 7,439 |
+| longcat-2.0 | 40k | 20 | 43% | 14% | 0% | 55% | 0% | 33.9 | 41.5 | 0.0175 | 3,425 |
+| longcat-2.5-preview-free | 10k | 20 | 50% | 14% | 50% | 15% | 10% | 17.1 | 35.6 | 0.0000 | unlimited |
+| longcat-2.5-preview-free | 40k | 20 | 57% | 14% | 33% | 30% | 0% | 32.7 | 45.0 | 0.0000 | unlimited |
+| glm-5.2 | 10k | 20 | 43% | 0% | 0% | 60% | 0% | 28.8 | 42.5 | 0.0306 | 1,963 |
+| glm-5.2 | 40k | 20 | 36% | 0% | 0% | 75% | 0% | 31.5 | 43.3 | 0.0779 | 770 |
+| hy3 | 10k | 20 | 64% | 29% | 0% | 5% | 30% | 17.2 | 31.8 | 0.0038 | 15,956 |
+| hy3 | 40k | 20 | 36% | 7% | 0% | 20% | 50% | 33.2 | 41.3 | 0.0084 | 7,183 |
+
+Under the real prompt `deepseek-v4.1-flash` with thinking off is the clear first
+choice: 100% / 93% catch, 0% timeouts, 3-4 s median, 5-6 s p95. Both MiMo models fall to
+71-86% catch with 7-21% empty answers on defect diffs; `mimo-v2.5` is the better
+of the two (no timeouts at 10k, 0% at 40k). Kimi, Longcat, GLM and Hy3 time out or
+error on 20-75% of calls. Lesson: rank models with the prompt they will actually run.
+
+## Recommendation (stand-in prompt, kept for the record)
 
 Primary `mimo-v2.6-flash` with thinking disabled: best catch of the cheap models, near-zero timeouts, the most monthly reviews. Second `deepseek-v4.1-flash` with thinking disabled: fastest and a different model family for a second opinion. Last, the free `longcat-2.5-preview-free`. The false-positive rate of the first two is high on this synthetic corpus, so a verification or dedupe step downstream matters more than the primary choice.
+
+## Recommendation (final)
+
+Primary `deepseek-v4.1-flash` with thinking disabled, second `mimo-v2.5` with thinking
+disabled, last the free `longcat-2.5-preview-free`.
