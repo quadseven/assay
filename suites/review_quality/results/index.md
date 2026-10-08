@@ -1,0 +1,60 @@
+# review_quality results
+
+Runs on 2026-10-08. Corpus digest `e392da75e320ec1b` (seed 20261008): 7 planted-defect
+kinds plus 3 clean variants at each of 10k and 40k tokens = 20 cases. Two runs are
+pooled: 2 reps of every model, plus 3 more reps of the six leading candidates
+(n = 50 calls per model and size for those six, 20 for the rest; 35 bug and 15 clean
+calls per size for the six). Prices are the OpenCode Go list prices of 2026-10-08,
+uncached input. Reviews per month is the Go plan's monthly dollar limit for that
+model divided by the measured cost per review.
+
+| model | size | n | catch | empty on bug | FP on clean | timeout | error | p50 s | p95 s | $/review | reviews/mo (Go) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| deepseek-v4.1-flash (think off) | 10k | 50 | 100% | 0% | 53% | 0% | 0% | 2.0 | 4.0 | 0.0019 | 32,428 |
+| deepseek-v4.1-flash (think off) | 40k | 50 | 91% | 6% | 60% | 0% | 0% | 2.6 | 4.9 | 0.0070 | 8,588 |
+| deepseek-v4.1-flash (think on) | 10k | 20 | 100% | 0% | 33% | 20% | 0% | 7.5 | 20.1 | 0.0023 | 25,643 |
+| deepseek-v4.1-flash (think on) | 40k | 20 | 93% | 0% | 33% | 25% | 0% | 8.3 | 22.3 | 0.0075 | 8,019 |
+| mimo-v2.6-flash (think off) | 10k | 50 | 100% | 0% | 67% | 0% | 2% | 6.1 | 26.7 | 0.0017 | 35,841 |
+| mimo-v2.6-flash (think off) | 40k | 50 | 100% | 0% | 53% | 2% | 0% | 5.8 | 24.5 | 0.0064 | 9,366 |
+| mimo-v2.5 (think off) | 10k | 50 | 94% | 0% | 20% | 6% | 0% | 8.6 | 28.1 | 0.0017 | 34,386 |
+| mimo-v2.5 (think off) | 40k | 50 | 86% | 0% | 20% | 8% | 0% | 10.6 | 24.4 | 0.0065 | 9,275 |
+| kimi-k2.7-code | 10k | 50 | 97% | 0% | 13% | 8% | 0% | 10.4 | 33.7 | 0.0141 | 4,268 |
+| kimi-k2.7-code | 40k | 50 | 100% | 0% | 27% | 10% | 0% | 11.2 | 28.5 | 0.0448 | 1,338 |
+| longcat-2.0 | 10k | 50 | 97% | 0% | 7% | 20% | 0% | 12.1 | 33.9 | 0.0046 | 12,978 |
+| longcat-2.0 | 40k | 50 | 94% | 0% | 0% | 20% | 0% | 19.3 | 44.6 | 0.0152 | 3,936 |
+| longcat-2.5-preview-free | 10k | 50 | 80% | 0% | 40% | 24% | 2% | 13.0 | 27.2 | 0.0000 | unlimited |
+| longcat-2.5-preview-free | 40k | 50 | 74% | 0% | 7% | 14% | 12% | 16.6 | 33.7 | 0.0000 | unlimited |
+| glm-5.3-flash | 10k | 20 | 64% | 0% | 0% | 45% | 5% | 12.7 | 33.6 | 0.0026 | 23,237 |
+| glm-5.3-flash | 40k | 20 | 43% | 0% | 0% | 65% | 0% | 11.4 | 32.8 | 0.0071 | 8,418 |
+| glm-5.2 | 10k | 20 | 86% | 0% | 0% | 40% | 0% | 23.7 | 39.1 | 0.0209 | 2,867 |
+| glm-5.2 | 40k | 20 | 86% | 0% | 0% | 40% | 0% | 26.1 | 38.0 | 0.0674 | 890 |
+| hy3 | 10k | 20 | 50% | 0% | 0% | 65% | 0% | 28.9 | 43.1 | 0.0032 | 18,791 |
+| hy3 | 40k | 20 | 86% | 0% | 0% | 40% | 0% | 34.5 | 44.4 | 0.0074 | 8,088 |
+
+## Variance
+
+Two separate 2-rep runs of the same models disagreed by up to 7 points of catch and
+17 points of false positives (mimo-v2.5 scored 100% in one and 93% in the other at 10k tokens),
+and Longcat free's timeout share ranged from 15% to 35%. Differences under about 10 points
+between models are inside that noise; only the large gaps below are findings.
+
+## Reading the table
+
+- **catch**: a finding names the planted file and either sits within 6 lines of the defect or mentions a defect keyword. Timeouts count against catch.
+- **empty on bug**: a valid empty findings list on a diff that contains a defect.
+- **FP on clean**: share of clean-diff calls with at least one medium-or-higher finding. Clean calls are few (6 per size per 2 reps), so single calls move it by many points.
+- **timeout**: no answer within the 45 s hard deadline.
+- Request shapes: `thinking: disabled` makes GLM answer HTTP 400 (omitted for GLM). Hy3 answers HTTP 400 whenever `response_format` is sent (omitted for Hy3). Longcat free answered HTTP 429 now and then.
+- Not measured: models on the `/messages` or `/responses` wires, the pro tiers, and any real-repository diff.
+
+## Findings
+
+- Reliable and cheap at both sizes: `mimo-v2.6-flash` (100% catch, 0-2% timeouts, about 9.4k reviews a month at 40k tokens) and `deepseek-v4.1-flash` with thinking off (2-3 s median, 0% timeouts, but 6% empty answers on defect diffs at 40k tokens and 53-60% clean-diff false positives).
+- `mimo-v2.5` has fewer clean-diff false positives (20%) than `mimo-v2.6-flash` (53-67%) but caught only 86% at 40k tokens and timed out 6-8% of the time.
+- `kimi-k2.7-code` and `longcat-2.0` catch well with low false positives but cost 3-7x more per review (kimi: 1.3k reviews a month at 40k tokens) or time out 20% of the time (longcat-2.0).
+- GLM-5.x, Hy3 and the free Longcat 2.5 are not usable as a first tier: 40-65% timeouts (GLM, Hy3) or 14-24% timeouts plus errors (Longcat free).
+- Thinking on is worse than thinking off for DeepSeek: 20-25% timeouts for no gain.
+
+## Recommendation
+
+Primary `mimo-v2.6-flash` with thinking disabled: best catch of the cheap models, near-zero timeouts, the most monthly reviews. Second `deepseek-v4.1-flash` with thinking disabled: fastest and a different model family for a second opinion. Last, the free `longcat-2.5-preview-free`. The false-positive rate of the first two is high on this synthetic corpus, so a verification or dedupe step downstream matters more than the primary choice.
