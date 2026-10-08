@@ -110,7 +110,7 @@ def _filler_file(rng: random.Random, index: int) -> tuple[str, str]:
 
 def build_case(kind: str, size: str, seed: int = 20261008, variant: int = 0) -> Case:
     """One deterministic case. `kind` is a planted-defect kind or "clean"."""
-    rng = random.Random(f"{seed}:{kind}:{size}:{variant}")
+    rng = random.Random(f"{seed}:{kind}:{size}:{variant}")  # noqa: S311 - seeded corpus layout, not security
     if kind == "clean":
         plant_kinds = [KINDS[(variant * 2 + j) % len(KINDS)] for j in range(2)]
         planted = [(_PLANTS[k][0], _PLANTS[k][2]) for k in plant_kinds]

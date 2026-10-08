@@ -139,36 +139,40 @@ def _pct(values: list[float], q: float) -> float:
     return ordered[min(len(ordered) - 1, int(q * len(ordered)))] if ordered else float("nan")
 
 
+def _rate(rows: list[dict], test) -> float:
+    return sum(1 for r in rows if test(r)) / len(rows) if rows else float("nan")
+
+
+def _summarize_one(name: str, size: str, sub: list[dict]) -> dict:
+    bug = [r for r in sub if r["kind"] != "clean"]
+    clean = [r for r in sub if r["kind"] == "clean"]
+    answered = [r for r in sub if r["status"] in ("ok", "empty")]
+    cost = statistics.mean(r["cost"] for r in answered) if answered else float("nan")
+    limit = MODELS[name][4]
+    seconds = [r["seconds"] for r in answered]
+    return {
+        "model": name,
+        "size": size,
+        "n": len(sub),
+        "catch": _rate(bug, lambda r: r["caught"]),
+        "empty_on_bug": _rate(bug, lambda r: r["status"] == "empty"),
+        "fp_clean": _rate(clean, lambda r: r["fp"] > 0),
+        "timeout": _rate(sub, lambda r: r["status"] == "timeout"),
+        "error": _rate(sub, lambda r: r["status"] in ("error", "bad_json")),
+        "p50": _pct(seconds, 0.5),
+        "p95": _pct(seconds, 0.95),
+        "cost": cost,
+        "reviews_per_month": (limit / cost) if (limit and cost == cost and cost > 0) else None,
+    }
+
+
 def summarize(rows: list[dict]) -> list[dict]:
     out = []
     for name in dict.fromkeys(r["model"] for r in rows):
         for size in rq_corpus.SIZES:
             sub = [r for r in rows if r["model"] == name and r["size"] == size]
-            if not sub:
-                continue
-            bug = [r for r in sub if r["kind"] != "clean"]
-            clean = [r for r in sub if r["kind"] == "clean"]
-            answered = [r for r in sub if r["status"] in ("ok", "empty")]
-            cost = statistics.mean(r["cost"] for r in answered) if answered else float("nan")
-            limit = MODELS[name][4]
-            out.append(
-                {
-                    "model": name,
-                    "size": size,
-                    "n": len(sub),
-                    "catch": sum(r["caught"] for r in bug) / len(bug) if bug else float("nan"),
-                    "empty_on_bug": sum(r["status"] == "empty" for r in bug) / len(bug)
-                    if bug
-                    else float("nan"),
-                    "fp_clean": sum(r["fp"] > 0 for r in clean) / len(clean) if clean else float("nan"),
-                    "timeout": sum(r["status"] == "timeout" for r in sub) / len(sub),
-                    "error": sum(r["status"] in ("error", "bad_json") for r in sub) / len(sub),
-                    "p50": _pct([r["seconds"] for r in answered], 0.5),
-                    "p95": _pct([r["seconds"] for r in answered], 0.95),
-                    "cost": cost,
-                    "reviews_per_month": (limit / cost) if (limit and cost == cost and cost > 0) else None,
-                }
-            )
+            if sub:
+                out.append(_summarize_one(name, size, sub))
     return out
 
 
