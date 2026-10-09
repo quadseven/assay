@@ -96,3 +96,19 @@ Primary `mimo-v2.6-flash` with thinking disabled: best catch of the cheap models
 
 Primary `deepseek-v4.1-flash` with thinking disabled, second `mimo-v2.5` with thinking
 disabled, last the free `longcat-2.5-preview-free`.
+
+## Self-hosted GPUs (Ollama behind a gateway)
+
+Run 2026-10-09 with `rq_runner.py --base-url <gateway> --system-file <real prompt> --sizes 10k
+--concurrency 1 --warmup`. 10k-token cases only (14 defect and 6 clean calls per model): 40k-token
+prefills are the sustained load that has powered a Spark off, so they were not run. The runner was
+wrapped in a guard that aborts at 86 C on either box; the peak was 65 C.
+
+| model | size | n | catch | empty on bug | FP on clean | timeout | error | p50 s | p95 s | $/review | reviews/mo (Go) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| nemotron-3-nano:30b-a3b-q4_K_M | 10k | 20 | 64% | 36% | 17% | 0% | 0% | 33.5 | 74.5 | 0.0000 | unlimited |
+| qwen3-coder-next:q4_K_M | 10k | 20 | 86% | 14% | 50% | 0% | 0% | 13.8 | 55.3 | 0.0000 | unlimited |
+
+`qwen3-coder-next:q4_K_M` beats `nemotron-3-nano:30b-a3b-q4_K_M` on catch (86% vs 64%), empty answers
+(14% vs 36%) and speed (14 s vs 33 s median). It also draws more clean-diff false positives (50% vs 17%
+on 6 calls). Model choice, not the serving engine, was the measured gap; the serving engine itself was not compared.

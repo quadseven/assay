@@ -26,6 +26,12 @@ $9 of list price, hit the 5-hour cap and made a live reviewer fall back to free 
 about 90 minutes. The runner prints the planned share first and refuses above
 `--max-plan-share` (default 5%). Run big sweeps with a key no live service shares.
 
+## Self-hosted endpoints
+
+`--base-url` points the runner at any OpenAI-compatible chat-completions URL and `--models` then names
+served model ids. Use `--sizes 10k`, `--concurrency 1` and `--warmup` on shared GPUs, and watch
+temperatures: long prefills are sustained load.
+
 ## What this does not cover
 
 The corpus is synthetic and each diff holds one defect, so catch rates are an
