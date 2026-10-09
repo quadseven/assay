@@ -97,7 +97,7 @@ Primary `mimo-v2.6-flash` with thinking disabled: best catch of the cheap models
 Primary `deepseek-v4.1-flash` with thinking disabled, second `mimo-v2.5` with thinking
 disabled, last the free `longcat-2.5-preview-free`.
 
-## Self-hosted GPUs (two DGX Sparks, Ollama, via a gateway)
+## Self-hosted GPUs (Ollama behind a gateway)
 
 Run 2026-10-09 with `rq_runner.py --base-url <gateway> --system-file <real prompt> --sizes 10k
 --concurrency 1 --warmup`. 10k-token cases only (14 defect and 6 clean calls per model): 40k-token
