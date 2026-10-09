@@ -64,11 +64,9 @@ async def call(
             body.pop(k, None)
         else:
             body[k] = v
-    headers = {
-        "authorization": f"Bearer {key}",
-        "x-opencode-session": str(uuid.uuid4()),
-        "user-agent": "assay-review-quality/1",
-    }
+    headers = {"x-opencode-session": str(uuid.uuid4()), "user-agent": "assay-review-quality/1"}
+    if key:  # a self-hosted endpoint may need none; an empty bearer is an illegal header
+        headers["authorization"] = f"Bearer {key}"
     start = time.monotonic()
     try:
         resp = await asyncio.wait_for(client.post(URL, json=body, headers=headers), TIMEOUT_S)
@@ -94,8 +92,15 @@ async def call(
     }
 
 
-async def run(models: list[str], reps: int, concurrency: int, key: str, system: str = SYSTEM) -> list[dict]:
-    cases = rq_corpus.build_corpus()
+async def run(
+    models: list[str],
+    reps: int,
+    concurrency: int,
+    key: str,
+    system: str = SYSTEM,
+    sizes: tuple[str, ...] = tuple(rq_corpus.SIZES),
+) -> list[dict]:
+    cases = [c for c in rq_corpus.build_corpus() if c.size in sizes]
     sem = asyncio.Semaphore(concurrency)
     rows: list[dict] = []
 
@@ -211,7 +216,17 @@ def estimate_plan_share(
     return dollars, share
 
 
+async def _warm(names: list[str], key: str, system: str) -> None:
+    """One unscored call per model so a cold load is not scored as latency."""
+    probe = rq_corpus.build_case("off_by_one", "10k").diff
+    async with httpx.AsyncClient(timeout=TIMEOUT_S + 5) as client:
+        for name in names:
+            model, extra, *_ = MODELS[name]
+            await call(client, key, model, extra, probe, system)
+
+
 def main() -> None:
+    global URL, TIMEOUT_S
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default=",".join(MODELS))
     ap.add_argument("--reps", type=int, default=2)
@@ -224,12 +239,30 @@ def main() -> None:
     )
     ap.add_argument("--out", default="")
     ap.add_argument(
+        "--base-url",
+        default="",
+        help="OpenAI-compatible chat-completions URL for a self-hosted endpoint (e.g. a GPU gateway); "
+        "with --models naming the served model ids. Such models are free, so no plan-share check applies.",
+    )
+    ap.add_argument("--timeout", type=float, default=TIMEOUT_S, help="hard per-call deadline in seconds")
+    ap.add_argument(
+        "--sizes", default=",".join(rq_corpus.SIZES), help="comma list of corpus sizes to run (10k,40k)"
+    )
+    ap.add_argument(
+        "--warmup", action="store_true", help="send one unscored call per model first (cold model loads)"
+    )
+    ap.add_argument(
         "--system-file",
         default="",
         help="use this file as the system prompt (e.g. a reviewer's real prompt, kept out of this repo)",
     )
     args = ap.parse_args()
-    key = os.environ["OPENCODE_GO_API_KEY"]
+    TIMEOUT_S = args.timeout
+    if args.base_url:
+        URL = args.base_url
+        for served in (m.strip() for m in args.models.split(",") if m.strip()):
+            MODELS.setdefault(served, (served, {}, 0.0, 0.0, None))
+    key = os.environ.get("OPENCODE_GO_API_KEY", "") if args.base_url else os.environ["OPENCODE_GO_API_KEY"]
     planned = [m.strip() for m in args.models.split(",") if m.strip()]
     dollars, share = estimate_plan_share(planned, args.reps, rq_corpus.build_corpus())
     print(f"planned: ~${dollars:.2f} list price, ~{share:.1%} of the plan allowance (5-hour cap 20%)")
@@ -239,7 +272,9 @@ def main() -> None:
         )
     names = [m.strip() for m in args.models.split(",") if m.strip()]
     system = Path(args.system_file).read_text() if args.system_file else SYSTEM
-    rows = asyncio.run(run(names, args.reps, args.concurrency, key, system))
+    if args.warmup:
+        asyncio.run(_warm(names, key, system))
+    rows = asyncio.run(run(names, args.reps, args.concurrency, key, system, tuple(args.sizes.split(","))))
     table = render(summarize(rows))
     print(table)
     if args.out:
