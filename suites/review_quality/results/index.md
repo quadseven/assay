@@ -116,7 +116,9 @@ on 6 calls). Model choice, not the serving engine, was the measured gap; the ser
 ### Same model under vLLM (single GPU, FP8) instead of Ollama (4-bit GGUF)
 
 Trial 2026-10-10: Qwen3-Coder-Next FP8 under vLLM 0.25.1 (prefix caching, chunked prefill, 2 sequences,
-65k context, 80% GPU memory), real reviewer prompt, 2 reps, peak GPU 69 C.
+65k context, 80% GPU memory), real reviewer prompt, 2 reps, peak GPU 69 C. The self-hosted runs in this file used a
+180 s deadline (`--timeout 180`), not the 45 s of the hosted runs, so a 95 s call is a slow success here and the timeout
+column means no answer in 180 s.
 
 | model | size | n | catch | empty on bug | FP on clean | timeout | error | p50 s | p95 s | $/review | reviews/mo (Go) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
