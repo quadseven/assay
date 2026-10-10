@@ -19,10 +19,21 @@ import argparse
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import persona_contracts as contracts
 import persona_prompts as prompts
+
+
+def _http_endpoint(url: str) -> str:
+    """The endpoint, if it is http(s). The URL comes from the operator's command
+    line; refusing file: and custom schemes keeps urlopen from reading local
+    files or speaking something other than HTTP."""
+    scheme = urllib.parse.urlparse(url).scheme
+    if scheme not in ("http", "https"):
+        raise ValueError(f"endpoint must be an http(s) URL, got scheme {scheme!r}: {url!r}")
+    return url.rstrip("/")
 
 
 def ask(
@@ -54,13 +65,13 @@ def ask(
             "stream": False,
         }
     ).encode()
-    req = urllib.request.Request(
-        f"{url.rstrip('/')}/v1/chat/completions",
+    req = urllib.request.Request(  # noqa: S310 - scheme checked by _http_endpoint
+        f"{_http_endpoint(url)}/v1/chat/completions",
         data=body,
         headers={"content-type": "application/json"},
     )
     start = time.monotonic()
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - scheme checked above
         payload = json.loads(resp.read())
     elapsed = time.monotonic() - start
     choice = (payload.get("choices") or [{}])[0]
