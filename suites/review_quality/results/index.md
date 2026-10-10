@@ -112,3 +112,21 @@ wrapped in a guard that aborts at 86 C on either box; the peak was 65 C.
 `qwen3-coder-next:q4_K_M` beats `nemotron-3-nano:30b-a3b-q4_K_M` on catch (86% vs 64%), empty answers
 (14% vs 36%) and speed (14 s vs 33 s median). It also draws more clean-diff false positives (50% vs 17%
 on 6 calls). Model choice, not the serving engine, was the measured gap; the serving engine itself was not compared.
+
+### Same model under vLLM (single GPU, FP8) instead of Ollama (4-bit GGUF)
+
+Trial 2026-10-10: Qwen3-Coder-Next FP8 under vLLM 0.25.1 (prefix caching, chunked prefill, 2 sequences,
+65k context, 80% GPU memory), real reviewer prompt, 2 reps, peak GPU 69 C. The self-hosted runs in this file used a
+180 s deadline (`--timeout 180`), not the 45 s of the hosted runs, so a 95 s call is a slow success here and the timeout
+column means no answer in 180 s.
+
+| model | size | n | catch | empty on bug | FP on clean | timeout | error | p50 s | p95 s | $/review | reviews/mo (Go) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| qcn-fp8 | 10k | 20 | 93% | 7% | 50% | 0% | 0% | 5.0 | 95.1 | 0.0000 | unlimited |
+| qcn-fp8 | 40k | 20 | 71% | 21% | 17% | 10% | 0% | 20.7 | 25.1 | 0.0000 | unlimited |
+
+At 10k tokens it was faster (5.0 s median against 13.8 s) with similar catch (93% against 86%; 14 defect calls each, so
+inside the noise). At 40k tokens it caught 71% with 21% empty answers and 10% timeouts; the Ollama 4-bit model was
+not run at 40k, so there is no like-for-like comparison there. One 10k call took about 95 s (p95), consistent with
+first-request compilation or cache effects. Conclusion: a faster engine, not a clearly better reviewer.
+
