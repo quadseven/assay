@@ -35,7 +35,13 @@ class TestMeasurementsAreReadable(unittest.TestCase):
     """
 
     def _files(self):
-        files = sorted(ROOT.glob("suites/*/results/scoreboard.json"))
+        # A suite that publishes its own table (loom_lanes) has rows, not
+        # per-model measurements; its own test checks its date and caveat.
+        files = [
+            f
+            for f in sorted(ROOT.glob("suites/*/results/scoreboard.json"))
+            if "table" not in json.loads(f.read_text())
+        ]
         self.assertGreater(len(files), 0, "no published measurements found")
         return files
 

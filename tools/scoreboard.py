@@ -32,12 +32,65 @@ BEGIN = "<!-- scoreboard:begin -->"
 END = "<!-- scoreboard:end -->"
 
 
+def _load_all() -> list[dict]:
+    return [json.loads(p.read_text()) for p in sorted(ROOT.glob("suites/*/results/scoreboard.json"))]
+
+
 def load_suites() -> list[dict]:
-    """Published measurements, one file per suite, in a stable order."""
-    out = []
-    for p in sorted(ROOT.glob("suites/*/results/scoreboard.json")):
-        out.append(json.loads(p.read_text()))
-    return out
+    """Published measurements, one file per suite, in a stable order. A suite
+    that publishes its own table (`table` instead of `column`) is not here:
+    its rows are not one cell per model."""
+    return [s for s in _load_all() if "column" in s]
+
+
+def load_tables() -> list[dict]:
+    """Suites whose result is a table of their own, rendered under the main
+    one. loom_lanes is one: its row is a lane AND a model, and one model runs
+    on several lanes."""
+    return [s for s in _load_all() if "table" in s]
+
+
+def _num(v) -> str:
+    return "--" if v is None else str(v)
+
+
+def render_loom_lanes(t: dict) -> str:
+    """The Loom lanes table. A lane that took no ticket in the window has no
+    row; a blank cell is a rate with nothing to divide by."""
+    w = t["window"]
+    repos = t["repos"]
+    where = ", ".join(f"`{r}`" for r in repos["public"]) or "no public repo"
+    if repos["private"]:
+        where += f", plus {repos['private']} private repo(s) counted but not named"
+    lines = [f"### {t['table']}", ""]
+    if not t["rows"]:
+        lines.append("**Not run yet.** No collection has been published, so there is no row to read.")
+    else:
+        lines.append(f"Measured {t['measured']} over {w['start']} to {w['end']}, from {where}.")
+        lines.append("")
+        lines.append(
+            "| Lane | Model | Tickets | PRs | Merged, no fix round | Fix rounds / merged "
+            "| Failures | Claim to PR (median min) | Findings / PR (high) |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        for r in t["rows"]:
+            fails = ", ".join(f"{k} {v}" for k, v in r["failures"].items()) or "0"
+            findings = (
+                "--"
+                if r["findings_per_pr"] is None
+                else f"{r['findings_per_pr']} ({r['high_findings_per_pr']})"
+            )
+            lines.append(
+                f"| {r['lane']} | `{r['model']}` | {r['tickets_taken']} | {r['prs_opened']} "
+                f"| {r['merged_no_fix']}/{r['merged']} | {_num(r['fix_rounds_per_merged'])} | {fails} "
+                f"| {_num(r['median_minutes_claim_to_pr'])} | {findings} |"
+            )
+    lines.append("")
+    lines.append(f"- **{t['table']}** -- {t['note']}. {t['caveat']}")
+    return "\n".join(lines)
+
+
+TABLE_RENDERERS = {"loom_lanes": render_loom_lanes}
 
 
 def render(suites: list[dict]) -> str:
@@ -97,6 +150,8 @@ def main() -> int:
     args = ap.parse_args()
 
     table = render(load_suites())
+    for t in load_tables():
+        table += "\n\n" + TABLE_RENDERERS[t["suite"]](t)
     readme = ROOT / "README.md"
     s = readme.read_text()
 

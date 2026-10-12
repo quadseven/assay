@@ -44,6 +44,12 @@ names what); the number it produced is not published.
 - **In-character chat** -- qualify rate over four persona prompts, then mean wall-clock per reply
 - **Serving contracts / decode** -- contracts held out of json_object, tool_calling, vision; then decode tok/s
 
+### Loom lanes
+
+**Not run yet.** No collection has been published, so there is no row to read.
+
+- **Loom lanes** -- one row per lane and model over the window: tickets taken, pull requests opened, merged with no fix round, fix rounds per merged pull request, failures by reason, median minutes from claim to pull request, review-bot findings per pull request. Measured from what Loom wrote on GitHub, not from a controlled run: lanes take different tickets, so a row compares a lane with its own workload, not with another lane's. A failure's model is inferred when no pull request names it.
+
 <!-- scoreboard:end -->
 
 ### What the first runs suggested, and why no number is published yet
@@ -256,6 +262,10 @@ non-zero if the corpus is missing rather than silently scoring nothing.
   matrix, and an Open Food Facts retriever over DuckDB.
 - [`suites/review_quality/`](suites/review_quality/) -- a design note, not an
   implementation.
+- [`suites/loom_lanes/`](suites/loom_lanes/) -- how does each Loom lane's
+  model do on real Loom tickets? Read from the pull requests and ticket
+  comments Loom already writes; runs no model. This is where the Loom lanes
+  table comes from.
 
 [`suites/README.md`](suites/README.md) describes how to add one.
 
