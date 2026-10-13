@@ -136,12 +136,18 @@ def toolchain_files(agent: str) -> list[str]:
 # What a coding agent needs from a model server, and nothing else. Claude
 # Code sends `POST /v1/messages` (with `?beta=true`), `POST
 # /v1/messages/count_tokens`, and one fire-and-forget `HEAD /api/hello`
-# preconnect (measured 2026-09-02 against the CLI's bundle). Everything else
+# preconnect (measured 2026-09-02 against the CLI's bundle). OpenAI-compatible
+# agents send `POST /v1/chat/completions`. Everything else
 # an Ollama or vLLM server answers -- /api/delete, /api/pull, /api/create,
 # /api/push, /api/copy, /v1/models -- is management of a shared server that
 # an agent being benchmarked has no business reaching.
 ALLOWED_REQUESTS = frozenset(
-    {("POST", "/v1/messages"), ("POST", "/v1/messages/count_tokens"), ("HEAD", "/api/hello")}
+    {
+        ("POST", "/v1/messages"),
+        ("POST", "/v1/messages/count_tokens"),
+        ("POST", "/v1/chat/completions"),
+        ("HEAD", "/api/hello"),
+    }
 )
 MAX_HEAD = 64 * 1024
 MAX_BODY = 64 * 1024 * 1024

@@ -85,6 +85,13 @@ python3 runner.py --agent '/path/outside/home/opencode run -m spark/qwen3-coder-
     --env 'OPENCODE_CONFIG_CONTENT={{"model": "spark/qwen3-coder-next:q4_K_M", "autoupdate": false, "provider": {{"spark": {{"npm": "@ai-sdk/anthropic", "options": {{"baseURL": "http://{endpoint_host}:{endpoint_port}/v1", "apiKey": "unused"}}, "models": {{"qwen3-coder-next:q4_K_M": {{}}}}}}}}}}' \
     --env 'OPENCODE_DISABLE_AUTOUPDATE=1'
 
+# OpenCode with an OpenAI-compatible provider, for a vLLM endpoint:
+python3 runner.py --agent '/path/outside/home/opencode run -m spark/qwen3-coder-next:q4_K_M' \
+    --label 'qwen3-coder-next:q4_K_M (opencode harness)' \
+    --endpoint-model qwen3-coder-next:q4_K_M --endpoint <model-host>:8000 \
+    --env 'OPENCODE_CONFIG_CONTENT={{"model": "spark/qwen3-coder-next:q4_K_M", "autoupdate": false, "provider": {{"spark": {{"npm": "@ai-sdk/openai-compatible", "options": {{"baseURL": "http://{endpoint_host}:{endpoint_port}/v1", "apiKey": "unused", "name": "spark"}}, "models": {{"qwen3-coder-next:q4_K_M": {{}}}}}}}}}}' \
+    --env 'OPENCODE_DISABLE_AUTOUPDATE=1'
+
 # Through a gateway (e.g. to reach a vLLM target over an Anthropic bridge):
 python3 runner.py --agent 'claude-or <target> spark:warm-any' \
     --label 'Qwen3.6-35B-A3B' --out results/qwen3.6.json \

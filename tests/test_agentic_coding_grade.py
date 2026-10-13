@@ -1240,6 +1240,20 @@ class TestModelProxy(unittest.TestCase):
         self.assertEqual(len(self.model.requests), 2)
         self.assertEqual(self.proxy.refused, [])
 
+    def test_openai_chat_completions_is_forwarded_only_for_the_labeled_model(self):
+        got = self.request("POST /v1/chat/completions", b'{"model":"m","messages":[]}')
+        self.assertEqual(got, self.model.response)
+        self.assertEqual(len(self.model.requests), 1)
+        self.assertTrue(self.model.requests[0].startswith(b"POST /v1/chat/completions HTTP/1.1\r\n"))
+
+        got = self.request("POST /v1/chat/completions", b'{"model":"other","messages":[]}')
+        self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        got = self.request("GET /v1/models")
+        self.assertTrue(got.startswith(b"HTTP/1.1 403 Forbidden\r\n"), got)
+        self.assertEqual(len(self.model.requests), 1, "refused requests must not reach the endpoint")
+        self.assertEqual(len(self.proxy.mismatched), 1)
+        self.assertEqual(len(self.proxy.refused), 1)
+
     def test_management_requests_are_refused_at_the_proxy_and_remembered(self):
         for line, body in (
             ("DELETE /api/delete", b'{"model":"qwen3-coder-next:q8_0"}'),
