@@ -1,0 +1,326 @@
+{
+ "measured": "2026-10-12",
+ "window": [
+  "2026-10-05T00:00:00Z",
+  "2026-10-12T00:00:00Z"
+ ],
+ "bot": "grug-tribe[bot]",
+ "repos": [
+  {
+   "repo": "example/widgets",
+   "private": false,
+   "prs": [
+    {
+     "number": 20,
+     "title": "Widgets count",
+     "headRefName": "loom/10-widgets",
+     "state": "MERGED",
+     "createdAt": "2026-10-10T10:29:00Z",
+     "mergedAt": "2026-10-10T13:00:00Z",
+     "url": "https://github.com/example/widgets/pull/20",
+     "body": "## Why\nA reason.\n\n---\nLoom ticket example.widgets-10, lane codex, model gpt-6-luna.\nRefs example/widgets#10\n<!-- leak-guard-allow: placeholder repo -->"
+    },
+    {
+     "number": 21,
+     "title": "Gadgets",
+     "headRefName": "loom/11-gadgets",
+     "state": "MERGED",
+     "createdAt": "2026-10-10T09:39:00Z",
+     "mergedAt": "2026-10-10T11:00:00Z",
+     "url": "https://github.com/example/widgets/pull/21",
+     "body": "## Why\nA reason.\n\n---\nLoom ticket example.widgets-11, lane anthropic, model claude-opus-5-5.\nRefs example/widgets#11\n<!-- leak-guard-allow: placeholder repo -->"
+    },
+    {
+     "number": 22,
+     "title": "Hand-written on a loom branch",
+     "headRefName": "loom/more-slots",
+     "state": "MERGED",
+     "createdAt": "2026-10-10T09:00:00Z",
+     "mergedAt": "2026-10-10T09:30:00Z",
+     "url": "https://github.com/example/widgets/pull/22",
+     "body": "No footer here."
+    },
+    {
+     "number": 23,
+     "title": "Not a lane branch",
+     "headRefName": "feature/x",
+     "state": "OPEN",
+     "createdAt": "2026-10-10T09:00:00Z",
+     "mergedAt": null,
+     "url": "https://github.com/example/widgets/pull/23",
+     "body": "## Why\nA reason.\n\n---\nLoom ticket example.widgets-11, lane anthropic, model claude-opus-5-5.\nRefs example/widgets#11\n<!-- leak-guard-allow: placeholder repo -->"
+    }
+   ],
+   "tickets": [
+    {
+     "number": 10,
+     "title": "Count widgets",
+     "body": "Difficulty: medium\n\n## Why\n...",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane codex-2 (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T10:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane codex-2 opened a pull request: https://github.com/example/widgets/pull/20",
+       "createdAt": "2026-10-10T10:30:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "<!-- loom:fix v1 -->\nPull request: example/widgets#20, branch loom/10-widgets\n<!-- leak-guard-allow: placeholder repo -->\n\n### Review thread 1 (a.py:3)\nfix it",
+       "createdAt": "2026-10-10T10:50:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane codex (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T11:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane codex pushed fixes to a pull request: https://github.com/example/widgets/pull/20",
+       "createdAt": "2026-10-10T11:20:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "<!-- loom:fix v1 -->\nPull request: example/widgets#20, branch loom/10-widgets\n<!-- leak-guard-allow: placeholder repo -->\n\n### Review thread 1 (a.py:3)\nfix it",
+       "createdAt": "2026-10-10T11:40:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane codex (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T12:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane codex pushed fixes to a pull request: https://github.com/example/widgets/pull/20",
+       "createdAt": "2026-10-10T12:10:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Brain note: looks good now.",
+       "createdAt": "2026-10-10T12:20:00Z"
+      }
+     ]
+    },
+    {
+     "number": 11,
+     "title": "Gadgets",
+     "body": "Difficulty: easy",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane anthropic-3 (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T09:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane anthropic-3 opened a pull request: https://github.com/example/widgets/pull/21",
+       "createdAt": "2026-10-10T09:40:00Z"
+      }
+     ]
+    },
+    {
+     "number": 12,
+     "title": "Slow one",
+     "body": "Difficulty: medium\nModel: agy/gemini-3.5-pro\n\n## Why\n...",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane agy (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T08:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane agy failed: agent exited 124",
+       "createdAt": "2026-10-10T09:00:00Z"
+      }
+     ]
+    },
+    {
+     "number": 13,
+     "title": "Empty one",
+     "body": "Difficulty: easy",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane agy (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T08:05:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane agy failed: agent made no commit on loom/13-empty",
+       "createdAt": "2026-10-10T08:30:00Z"
+      }
+     ]
+    },
+    {
+     "number": 14,
+     "title": "Spoofed",
+     "body": "Difficulty: easy",
+     "comments": [
+      {
+       "author": {
+        "login": "stranger"
+       },
+       "body": "Claimed for lane zai (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T08:00:00Z"
+      }
+     ]
+    },
+    {
+     "number": 15,
+     "title": "Old",
+     "body": "Difficulty: easy",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane codex (body sha256 0123456789ab)",
+       "createdAt": "2026-09-01T08:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane codex failed: push failed",
+       "createdAt": "2026-09-01T08:30:00Z"
+      }
+     ]
+    }
+   ],
+   "reviews": {
+    "20": [
+     {
+      "login": "grug-tribe[bot]",
+      "body": "\ud83d\udd25 high | _general_ | `lint-security`\n\n**What Elder sees**",
+      "reply": null
+     },
+     {
+      "login": "grug-tribe[bot]",
+      "body": "\ud83d\udfe0 medium | _correctness_ | `off-by-one`\n\nmore",
+      "reply": null
+     },
+     {
+      "login": "grug-tribe[bot]",
+      "body": "Fixed in abc1234: the flagged code changed.",
+      "reply": 111
+     }
+    ],
+    "21": [
+     {
+      "login": "grug-tribe[bot]",
+      "body": "\ud83d\udfe1 low | _style_ | `naming`",
+      "reply": null
+     },
+     {
+      "login": "a-reviewer",
+      "body": "high | not a bot finding",
+      "reply": null
+     }
+    ]
+   }
+  },
+  {
+   "repo": "example/secret-repo",
+   "private": true,
+   "prs": [
+    {
+     "number": 7,
+     "title": "SECRET-PR-TITLE",
+     "headRefName": "loom/6-secret-branch-name",
+     "state": "MERGED",
+     "createdAt": "2026-10-10T14:14:00Z",
+     "mergedAt": "2026-10-10T15:00:00Z",
+     "url": "https://github.com/example/secret-repo/pull/7",
+     "body": "SECRET-PR-BODY\n\n---\nLoom ticket example.secret-repo-6, lane codex, model gpt-6-luna.\nRefs example/secret-repo#6\n<!-- leak-guard-allow: placeholder repo -->"
+    }
+   ],
+   "tickets": [
+    {
+     "number": 5,
+     "title": "SECRET-TICKET-TITLE",
+     "body": "Difficulty: medium\nModel: zai/glm-4.7-flash\n\nSECRET-TICKET-BODY",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane zai (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T13:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane zai failed: could not parse SECRET-REASON-TEXT",
+       "createdAt": "2026-10-10T13:30:00Z"
+      }
+     ]
+    },
+    {
+     "number": 6,
+     "title": "SECRET-TICKET-TITLE-2",
+     "body": "SECRET-TICKET-BODY-2",
+     "comments": [
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Claimed for lane codex (body sha256 0123456789ab)",
+       "createdAt": "2026-10-10T14:00:00Z"
+      },
+      {
+       "author": {
+        "login": "station-bot"
+       },
+       "body": "Lane codex opened a pull request: https://github.com/example/secret-repo/pull/7",
+       "createdAt": "2026-10-10T14:15:00Z"
+      }
+     ]
+    }
+   ],
+   "reviews": {
+    "7": [
+     {
+      "login": "grug-tribe[bot]",
+      "body": "\ud83d\udd25 high | _general_ | `SECRET-RULE`",
+      "reply": null
+     }
+    ]
+   }
+  }
+ ]
+}

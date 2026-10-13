@@ -1,0 +1,16 @@
+{
+  "suite": "loom_lanes",
+  "table": "Loom lanes",
+  "note": "one row per lane and model over the window: tickets taken, pull requests opened, merged with no fix round, fix rounds per merged pull request, failures by reason, median minutes from claim to pull request, review-bot findings per pull request",
+  "measured": "not run",
+  "window": {
+    "start": null,
+    "end": null
+  },
+  "repos": {
+    "public": [],
+    "private": 0
+  },
+  "caveat": "Measured from what Loom wrote on GitHub, not from a controlled run: lanes take different tickets, so a row compares a lane with its own workload, not with another lane's. A failure's model is inferred when no pull request names it.",
+  "rows": []
+}

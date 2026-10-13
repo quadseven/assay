@@ -17,6 +17,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _load(f: Path) -> dict:
+    """Read a published scoreboard, failing with its path when it is not JSON.
+
+    Not a swallow: a torn or empty file still fails every test that reads it,
+    but the failure names the file instead of a bare JSONDecodeError.
+    """
+    try:
+        return json.loads(f.read_text())
+    except json.JSONDecodeError as e:
+        raise AssertionError(f"{f.relative_to(ROOT)} is not valid JSON: {e}") from e
+
+
 class TestScoreboardIsCurrent(unittest.TestCase):
     def test_readme_matches_the_generator(self):
         proc = subprocess.run(
@@ -28,6 +40,18 @@ class TestScoreboardIsCurrent(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
 
 
+class TestLoadNamesTheBrokenFile(unittest.TestCase):
+    def test_a_torn_scoreboard_fails_naming_its_path(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as d:
+            f = Path(d) / "scoreboard.json"
+            f.write_text('{"suite": ')
+            with self.assertRaises(AssertionError) as cm:
+                _load(f)
+            self.assertIn(str(f.relative_to(ROOT)), str(cm.exception))
+
+
 class TestMeasurementsAreReadable(unittest.TestCase):
     """Every published number carries what a reader needs to judge it a month
     later. A number without its date and caveat is how "3x faster" became a
@@ -35,13 +59,18 @@ class TestMeasurementsAreReadable(unittest.TestCase):
     """
 
     def _files(self):
-        files = sorted(ROOT.glob("suites/*/results/scoreboard.json"))
+        # A suite that publishes its own table (loom_lanes) has rows, not
+        # per-model measurements; its own test checks its date and caveat.
+        # A malformed scoreboard must fail loudly, naming the file (see
+        # _load). unittest still runs the other test methods, so skipping or
+        # swallowing JSON errors here would only hide a broken measurement.
+        files = [f for f in sorted(ROOT.glob("suites/*/results/scoreboard.json")) if "table" not in _load(f)]
         self.assertGreater(len(files), 0, "no published measurements found")
         return files
 
     def test_every_suite_declares_its_column_and_what_it_means(self):
         for f in self._files():
-            d = json.loads(f.read_text())
+            d = _load(f)
             with self.subTest(suite=f.parent.parent.name):
                 for key in ("suite", "column", "note", "measurements"):
                     self.assertIn(key, d)
@@ -49,7 +78,7 @@ class TestMeasurementsAreReadable(unittest.TestCase):
 
     def test_every_measurement_carries_model_where_value_and_date(self):
         for f in self._files():
-            for m in json.loads(f.read_text())["measurements"]:
+            for m in _load(f)["measurements"]:
                 with self.subTest(model=m.get("model")):
                     for key in ("model", "where", "value", "measured"):
                         self.assertTrue(str(m.get(key, "")).strip(), f"missing {key}")
@@ -59,7 +88,7 @@ class TestMeasurementsAreReadable(unittest.TestCase):
         model' only in a caveat the README does not render. A void row must
         say why, and its value must be the word, never a score."""
         for f in self._files():
-            for m in json.loads(f.read_text())["measurements"]:
+            for m in _load(f)["measurements"]:
                 if m.get("void") or m.get("value") == "void":
                     with self.subTest(model=m.get("model")):
                         self.assertTrue(
@@ -104,7 +133,7 @@ class TestMeasurementsAreReadable(unittest.TestCase):
         }
         words = {"four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
         for f in self._files():
-            for m in json.loads(f.read_text())["measurements"]:
+            for m in _load(f)["measurements"]:
                 corpus = m.get("corpus")
                 if corpus not in known:
                     continue
