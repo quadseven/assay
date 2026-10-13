@@ -16,8 +16,8 @@ All of it is text Loom writes itself, with fixed wording:
   body ends with a footer naming the ticket, the lane and the model:
 
   ```
-  Loom ticket owner.repo-12, lane codex, model gpt-6-luna.
-  Refs owner/repo#12
+  Loom ticket <owner>.<repo>-<n>, lane codex, model gpt-6-luna.
+  Refs <owner>/<repo>#<n>
   ```
 
   A pull request on a `loom/` branch with no footer was written by hand and

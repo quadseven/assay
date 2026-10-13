@@ -7,8 +7,8 @@ What it reads, all of it written by Loom itself:
 - A lane pull request's body ends with a footer naming its ticket, lane and
   model, followed by the issue it refers to:
 
-      Loom ticket owner.repo-12, lane codex, model gpt-6-luna.
-      Refs owner/repo#12
+      Loom ticket <owner>.<repo>-<n>, lane codex, model gpt-6-luna.
+      Refs <owner>/<repo>#<n>
 
 - A ticket's comments record each run. The station writes them with fixed
   wording, so they parse exactly:

@@ -34,7 +34,7 @@ def _rows(trusted=STATION):
 
 class TestFooter(unittest.TestCase):
     def test_reads_ticket_lane_model_and_refs(self):
-        body = "## Why\nx\n\n---\nLoom ticket owner.repo-105, lane opencode-go, model opencode-go/kimi-k2.7-code.\nRefs owner/repo#105"
+        body = "## Why\nx\n\n---\nLoom ticket owner.repo-105, lane opencode-go, model opencode-go/kimi-k2.7-code.\nRefs owner/repo#105"  # leak-guard-allow: placeholder repo
         self.assertEqual(
             lanes_score.parse_footer(body),
             {
@@ -169,7 +169,10 @@ class TestRows(unittest.TestCase):
         self.assertIn(("zai", "unknown"), _rows(trusted=None))
 
     def test_a_hand_written_pull_request_on_a_loom_branch_is_not_a_lane_pr(self):
-        self.assertEqual(_rows()[("anthropic", "claude-opus-5-5")]["prs"], ["example/widgets#21"])
+        self.assertEqual(
+            _rows()[("anthropic", "claude-opus-5-5")]["prs"],
+            ["example/widgets#21"],  # leak-guard-allow: placeholder
+        )
 
 
 class TestPrivateRepoContributesCountsOnly(unittest.TestCase):
@@ -194,7 +197,10 @@ class TestPrivateRepoContributesCountsOnly(unittest.TestCase):
 
     def test_public_pull_requests_are_named(self):
         rows = {(r["lane"], r["model"]): r for r in self.doc["rows"]}
-        self.assertEqual(rows[("codex", "gpt-6-luna")]["prs"], ["example/widgets#20"])
+        self.assertEqual(
+            rows[("codex", "gpt-6-luna")]["prs"],
+            ["example/widgets#20"],  # leak-guard-allow: placeholder
+        )
 
 
 class TestPublishedScoreboard(unittest.TestCase):
