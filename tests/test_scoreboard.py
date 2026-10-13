@@ -37,6 +37,9 @@ class TestMeasurementsAreReadable(unittest.TestCase):
     def _files(self):
         # A suite that publishes its own table (loom_lanes) has rows, not
         # per-model measurements; its own test checks its date and caveat.
+        # A malformed scoreboard must fail this test loudly. unittest still
+        # runs the other test methods, so skipping or swallowing JSON errors
+        # here would only hide a broken published measurement.
         files = [
             f
             for f in sorted(ROOT.glob("suites/*/results/scoreboard.json"))

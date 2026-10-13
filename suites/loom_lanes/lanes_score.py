@@ -184,142 +184,150 @@ def _in(at: str, window: tuple[str, str]) -> bool:
     return bool(at) and window[0] <= at < window[1]
 
 
+def _row(rows: dict, lane: str, model: str) -> dict:
+    key = (lane, model)
+    if key not in rows:
+        rows[key] = {
+            "lane": lane,
+            "model": model,
+            "tickets": set(),
+            "prs_opened": 0,
+            "merged": 0,
+            "merged_no_fix": 0,
+            "fix_rounds_on_merged": 0,
+            "failures": {},
+            "claim_to_pr": [],
+            "findings": 0,
+            "high_findings": 0,
+            "public_prs": [],
+        }
+    return rows[key]
+
+
+def _lane_prs(repos: list[dict], window: tuple[str, str]) -> tuple[list, dict, dict]:
+    lane_models: dict[str, set[str]] = {}
+    pr_model: dict[tuple[str, str, str], str] = {}
+    footers = []
+    for repo in repos:
+        for pr in repo["prs"]:
+            if not (pr.get("headRefName") or "").startswith("loom/"):
+                continue
+            footer = parse_footer(pr.get("body"))
+            if footer is None:
+                continue
+            footers.append((repo, pr, footer))
+            if _in(pr.get("createdAt", ""), window):
+                lane_models.setdefault(footer["lane"], set()).add(footer["model"])
+            if footer["issue"]:
+                pr_model[(footer["issue"][0], str(footer["issue"][1]), footer["lane"])] = footer["model"]
+    return footers, lane_models, pr_model
+
+
+def _model_for(repo: str, ticket: dict, lane: str, lane_models: dict, pr_model: dict) -> str:
+    if model := pr_model.get((repo, str(ticket["number"]), lane)):
+        return model
+    if match := MODEL_LINE_RE.search(ticket.get("body") or ""):
+        return match.group(1)
+    seen = lane_models.get(lane, set())
+    return next(iter(seen)) if len(seen) == 1 else UNKNOWN_MODEL
+
+
+def _ticket_rows(
+    repos: list[dict],
+    window: tuple[str, str],
+    trusted: set[str] | None,
+    lane_models: dict,
+    pr_model: dict,
+    rows: dict,
+) -> dict:
+    events_of = {}
+    for repo in repos:
+        for ticket in repo["tickets"]:
+            events = ticket_events(ticket.get("comments") or [], trusted)
+            events_of[(repo["repo"], int(ticket["number"]))] = events
+            for event in events:
+                if not _in(event["at"], window) or event["kind"] not in {"claim", "failed"}:
+                    continue
+                model = _model_for(repo["repo"], ticket, event["lane"], lane_models, pr_model)
+                row = _row(rows, event["lane"], model)
+                if event["kind"] == "claim":
+                    row["tickets"].add((repo["repo"], ticket["number"]))
+                else:
+                    failures = row["failures"]
+                    failures[event["class"]] = failures.get(event["class"], 0) + 1
+    return events_of
+
+
+def _claim_to_pr(events: list[dict], ref: tuple[str, int], lane: str) -> float | None:
+    opened = next((e for e in events if e["kind"] == "opened" and e.get("pr") == ref), None)
+    if opened is None:
+        return None
+    claims = [e for e in events if e["kind"] == "claim" and e["lane"] == lane and e["at"] <= opened["at"]]
+    return _minutes(claims[-1]["at"], opened["at"]) if claims else None
+
+
+def _add_pr(rows: dict, repo: dict, pr: dict, footer: dict, events_of: dict, bot: str) -> None:
+    row = _row(rows, footer["lane"], footer["model"])
+    row["prs_opened"] += 1
+    ref = (repo["repo"], int(pr["number"]))
+    events = events_of.get(footer["issue"], []) if footer["issue"] else []
+    if pr.get("mergedAt"):
+        rounds = fix_rounds(events, ref)
+        row["merged"] += 1
+        row["fix_rounds_on_merged"] += rounds
+        if rounds == 0:
+            row["merged_no_fix"] += 1
+    minutes = _claim_to_pr(events, ref, footer["lane"])
+    if minutes is not None:
+        row["claim_to_pr"].append(minutes)
+    found, high = review_findings(repo.get("reviews", {}).get(str(pr["number"]), []), bot)
+    row["findings"] += found
+    row["high_findings"] += high
+    if not repo["private"]:
+        row["public_prs"].append(f"{ref[0]}#{ref[1]}")
+
+
+def _result_rows(rows: dict) -> list[dict]:
+    out = []
+    for (lane, model), row in sorted(rows.items()):
+        opened = row["prs_opened"]
+        merged = row["merged"]
+        times = row["claim_to_pr"]
+        out.append(
+            {
+                "lane": lane,
+                "model": model,
+                "tickets_taken": len(row["tickets"]),
+                "prs_opened": opened,
+                "merged": merged,
+                "merged_no_fix": row["merged_no_fix"],
+                "fix_rounds_per_merged": round(row["fix_rounds_on_merged"] / merged, 2) if merged else None,
+                "failures": dict(sorted(row["failures"].items())),
+                "median_minutes_claim_to_pr": round(statistics.median(times), 1) if times else None,
+                "findings_per_pr": round(row["findings"] / opened, 2) if opened else None,
+                "high_findings_per_pr": round(row["high_findings"] / opened, 2) if opened else None,
+                "prs": sorted(row["public_prs"]),
+            }
+        )
+    return out
+
+
 def score(
     repos: list[dict], window: tuple[str, str], bot: str, trusted: set[str] | None = None
 ) -> list[dict]:
     """One row per (lane, model) over every repo given.
 
-    `repos` is what the collector recorded, one entry per repository:
-    {"repo", "private", "prs": [...], "tickets": [...], "reviews": {pr: [...]}}.
-    `window` is a pair of ISO-8601 UTC timestamps, start inclusive.
-
-    A ticket run's model is read, in order, from: the lane's pull request for
-    that ticket (the footer is what actually ran), the ticket's own `Model:`
-    line, the one model that lane used on every pull request in the window,
-    and otherwise `unknown`. A failed run leaves no footer, so without the
-    later steps a lane that failed everything -- the case most worth seeing --
-    would have no model at all.
+    A failed run's model comes from its PR footer, ticket Model line, or the
+    sole model that lane used in the window, in that order. Otherwise it is
+    unknown. The passes preserve ticket events for fix and timing counts.
     """
     rows: dict[tuple[str, str], dict] = {}
-
-    def row(lane: str, model: str) -> dict:
-        key = (lane, model)
-        if key not in rows:
-            rows[key] = {
-                "lane": lane,
-                "model": model,
-                "tickets": set(),
-                "prs_opened": 0,
-                "merged": 0,
-                "merged_no_fix": 0,
-                "fix_rounds_on_merged": 0,
-                "failures": {},
-                "claim_to_pr": [],
-                "findings": 0,
-                "high_findings": 0,
-                "public_prs": [],
-            }
-        return rows[key]
-
-    # Pass 1: every lane pull request, and the model each lane used.
-    lane_models: dict[str, set[str]] = {}
-    pr_model: dict[tuple[str, str, str], str] = {}  # (ticket repo, ticket number, lane) -> model
-    footers = []
-    for r in repos:
-        for pr in r["prs"]:
-            if not (pr.get("headRefName") or "").startswith("loom/"):
-                continue
-            f = parse_footer(pr.get("body"))
-            if f is None:
-                continue
-            footers.append((r, pr, f))
-            if _in(pr.get("createdAt", ""), window):
-                lane_models.setdefault(f["lane"], set()).add(f["model"])
-            if f["issue"]:
-                pr_model[(f["issue"][0], str(f["issue"][1]), f["lane"])] = f["model"]
-
-    def model_for(repo: str, ticket: dict, lane: str) -> str:
-        if m := pr_model.get((repo, str(ticket["number"]), lane)):
-            return m
-        if m := MODEL_LINE_RE.search(ticket.get("body") or ""):
-            return m.group(1)
-        seen = lane_models.get(lane, set())
-        return next(iter(seen)) if len(seen) == 1 else UNKNOWN_MODEL
-
-    # Pass 2: ticket comments -- what each lane took and how it ended.
-    events_of: dict[tuple[str, int], list[dict]] = {}
-    for r in repos:
-        for t in r["tickets"]:
-            events = ticket_events(t.get("comments") or [], trusted)
-            events_of[(r["repo"], int(t["number"]))] = events
-            for e in events:
-                if not _in(e["at"], window):
-                    continue
-                if e["kind"] == "claim":
-                    row(e["lane"], model_for(r["repo"], t, e["lane"]))["tickets"].add(
-                        (r["repo"], t["number"])
-                    )
-                elif e["kind"] == "failed":
-                    fails = row(e["lane"], model_for(r["repo"], t, e["lane"]))["failures"]
-                    fails[e["class"]] = fails.get(e["class"], 0) + 1
-
-    # Pass 3: the pull requests opened in the window.
-    for r, pr, f in footers:
-        if not _in(pr.get("createdAt", ""), window):
-            continue
-        x = row(f["lane"], f["model"])
-        x["prs_opened"] += 1
-        ref = (r["repo"], int(pr["number"]))
-        events = events_of.get(f["issue"], []) if f["issue"] else []
-        rounds = fix_rounds(events, ref)
-        if pr.get("mergedAt"):
-            x["merged"] += 1
-            x["fix_rounds_on_merged"] += rounds
-            if rounds == 0:
-                x["merged_no_fix"] += 1
-        # Claim to pull request: the lane's last claim on the ticket before
-        # the comment that reported this pull request opened.
-        opened = next((e for e in events if e["kind"] == "opened" and e.get("pr") == ref), None)
-        if opened:
-            claims = [
-                e
-                for e in events
-                if e["kind"] == "claim" and e["lane"] == f["lane"] and e["at"] <= opened["at"]
-            ]
-            if claims:
-                x["claim_to_pr"].append(_minutes(claims[-1]["at"], opened["at"]))
-        found, high = review_findings(r.get("reviews", {}).get(str(pr["number"]), []), bot)
-        x["findings"] += found
-        x["high_findings"] += high
-        if not r["private"]:
-            x["public_prs"].append(f"{ref[0]}#{ref[1]}")
-
-    out = []
-    for (lane, model), x in sorted(rows.items()):
-        opened = x["prs_opened"]
-        out.append(
-            {
-                "lane": lane,
-                "model": model,
-                "tickets_taken": len(x["tickets"]),
-                "prs_opened": opened,
-                "merged": x["merged"],
-                "merged_no_fix": x["merged_no_fix"],
-                "fix_rounds_per_merged": round(x["fix_rounds_on_merged"] / x["merged"], 2)
-                if x["merged"]
-                else None,
-                "failures": dict(sorted(x["failures"].items())),
-                "median_minutes_claim_to_pr": round(statistics.median(x["claim_to_pr"]), 1)
-                if x["claim_to_pr"]
-                else None,
-                "findings_per_pr": round(x["findings"] / opened, 2) if opened else None,
-                "high_findings_per_pr": round(x["high_findings"] / opened, 2) if opened else None,
-                # Public pull requests only. A private repo contributes to the
-                # counts above and to nothing that names it.
-                "prs": sorted(x["public_prs"]),
-            }
-        )
-    return out
+    footers, lane_models, pr_model = _lane_prs(repos, window)
+    events_of = _ticket_rows(repos, window, trusted, lane_models, pr_model, rows)
+    for repo, pr, footer in footers:
+        if _in(pr.get("createdAt", ""), window):
+            _add_pr(rows, repo, pr, footer, events_of, bot)
+    return _result_rows(rows)
 
 
 def publish(

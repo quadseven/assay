@@ -12,7 +12,9 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import lanes_collect
 import lanes_score
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,6 +60,17 @@ class TestFooter(unittest.TestCase):
     def test_the_last_footer_wins(self):
         body = "Loom ticket o.r-1, lane codex, model a.\nquoted\nLoom ticket o.r-1, lane zai, model b."
         self.assertEqual(lanes_score.parse_footer(body)["lane"], "zai")
+
+
+class TestCollectorVisibility(unittest.TestCase):
+    def test_missing_visibility_stops_collection_before_private_data_can_be_published(self):
+        for visibility in (None, {}, {"isPrivate": None}):
+            with (
+                self.subTest(visibility=visibility),
+                patch.object(lanes_collect, "gh_json", return_value=visibility),
+            ):
+                with self.assertRaisesRegex(ValueError, "repository visibility"):
+                    lanes_collect.collect_repo("example/widgets", "2026-10-01", "review-bot")
 
 
 class TestFixRounds(unittest.TestCase):

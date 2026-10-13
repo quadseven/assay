@@ -47,7 +47,10 @@ def gh_json(*args: str):
 
 
 def collect_repo(repo: str, since: str, bot: str) -> dict:
-    private = bool(gh_json("repo", "view", repo, "--json", "isPrivate")["isPrivate"])
+    visibility = gh_json("repo", "view", repo, "--json", "isPrivate")
+    if not isinstance(visibility, dict) or not isinstance(visibility.get("isPrivate"), bool):
+        raise ValueError("gh repo view did not return repository visibility")
+    private = visibility["isPrivate"]
     search = f"updated:>={since[:10]}"
     prs = gh_json(
         "pr",
