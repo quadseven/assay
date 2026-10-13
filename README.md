@@ -25,9 +25,11 @@ blank cell means "not run", never "not good".
 | `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
 | `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
 | `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3 · 91.9 tok/s |
+| `nemotron-3.5-lightning:30b (opencode harness)` | local, Ollama, single node | 4/6, 50.6s/task | -- | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- | -- |
+| `qwen3-coder-next:q4_K_M (opencode harness)` | local, Ollama, single node | 6/6, 20.5s/task | -- | -- | -- |
 | `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
 | `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- | -- |
 | `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | -- | 3/3 · 20.3 tok/s |

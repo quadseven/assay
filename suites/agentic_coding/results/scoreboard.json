@@ -105,6 +105,22 @@
       "measured": "2026-09-27",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "INCOMPLETE: two tasks valid, four VOID. absent_row_vs_error (120s) and two_error_paths (74s) qualified. The other four were voided, not failed: the host's thermal guard refused new connections mid-attempt. Each voided attempt still left a solved, in-scope, non-regressing patch, but a void is not a score. The one re-run started below 60 C (empty_loop_success) voided again after 662s. The second (median_even) drove the node to 96.9 C and the node powered off; the remaining re-runs were abandoned. A dense 27B at Q8 decodes at full memory bandwidth on every token and took the node from 55 C past 85 C within about two minutes of each task. The guard only refuses NEW connections, so an in-flight generation keeps heating. Thinking left at the model default. Compare nemotron-3.5-lightning:30b at 6/6, 35s/task on 2026-09-26."
+    },
+    {
+      "model": "qwen3-coder-next:q4_K_M (opencode harness)",
+      "where": "local, Ollama, single node",
+      "value": "6/6, 20.5s/task",
+      "measured": "2026-10-13",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "Contained runner (reads denied, hidden test unreadable), so this one counts, unlike the earlier void 6/6. Harness is opencode 1.18 run as the agent, not claude-or: comparable to the Nemotron row on the same harness and host, not directly to claude-or rows. Every task solved with existing tests green; slowest 23.8s. The q4_K_M build, not the earlier q8_0. The runner appends claude-or flags (--print --dangerously-skip-permissions) after '--', which opencode passes to the model as words of the prompt, the same for both rows."
+    },
+    {
+      "model": "nemotron-3.5-lightning:30b (opencode harness)",
+      "where": "local, Ollama, single node",
+      "value": "4/6, 50.6s/task",
+      "measured": "2026-10-13",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "Same harness, host and day as the qwen3-coder-next:q4_K_M row. Missed two_error_paths (modified nothing) and write_after_side_effect (hidden test still failing). empty_loop_success and median_even were first voided (the endpoint refused connections mid-attempt) and re-run minutes later; both qualified on the re-run, and those are the times used. Ollama's build of the model, not the NVFP4 checkpoint the spark lane serves on vLLM (vLLM speaks only the OpenAI wire, which the proxy does not forward yet)."
     }
   ]
 }
