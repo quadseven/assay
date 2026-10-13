@@ -1565,6 +1565,10 @@ class TestModelProxy(unittest.TestCase):
         either way, so this tolerance cannot mask a dead proxy."""
         with mock.patch.object(socket, "socket") as mk:
             fake = mk.return_value.__enter__.return_value
+            # Hand-built kernel shapes on purpose: the fake socket never
+            # exists in the kernel, so this exercises the handler branch of
+            # unix_http, not the real race (the live proxy test above covers
+            # that).
             fake.sendall.side_effect = BrokenPipeError(32, "Broken pipe")
             with self.assertRaises(BrokenPipeError):
                 unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n")
