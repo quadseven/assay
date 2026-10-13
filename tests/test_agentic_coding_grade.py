@@ -171,6 +171,41 @@ def raw_http(port: int, request: bytes, *, timeout: float = 5) -> bytes:
         return got
 
 
+def unix_http(path: str, request: bytes, *, refuse_ok: bool = False, timeout: float = 5) -> bytes:
+    """One request over a Unix socket, where the proxy may close first.
+
+    Between attempts the proxy's Unix listener stays open (it is bound into
+    the agent's box once per sweep, so unlike the TCP listener it is never
+    closed and re-bound) and every connection accepted there is closed
+    without being read. That close races the client's send, and the kernel
+    reports the two orders differently: if the proxy's accept-and-close
+    lands first, `sendall` raises BrokenPipeError; if the client's send
+    lands first, the bytes sit in a buffer nobody reads and `recv` sees a
+    clean EOF. Both are the same refusal, and asserting only the EOF form
+    made the between-attempts probe fail whenever scheduling went the other
+    way (seen once in CI and once locally on the same loaded day). With
+    `refuse_ok` the send-side refusal also reads as b""; everywhere else
+    the send must succeed, so a dead listener or a broken proxy still
+    raises instead of passing.
+    """
+    with socket.socket(socket.AF_UNIX) as c:
+        c.settimeout(timeout)
+        c.connect(path)
+        try:
+            c.sendall(request)
+        except (BrokenPipeError, ConnectionResetError):
+            if not refuse_ok:
+                raise
+            return b""
+        got = b""
+        try:
+            while chunk := c.recv(65536):
+                got += chunk
+        except OSError:
+            pass
+        return got
+
+
 TASKS = Path(__file__).resolve().parent.parent / "suites" / "agentic_coding" / "tasks"
 
 
@@ -1492,7 +1527,14 @@ class TestModelProxy(unittest.TestCase):
     def test_a_unix_socket_proxy_refuses_between_attempts_and_serves_the_next(self):
         """The Unix socket is opened once per sweep, so between attempts the
         listener is still there: a connection accepted then is closed
-        without being read, and the next `begin_attempt` serves again."""
+        without being read, and the next `begin_attempt` serves again.
+
+        The attempt transitions themselves are the ready signal: the test
+        moves only on `end_attempt`/`begin_attempt` returning, never on a
+        sleep. What it must not assert is the kernel's mood on the refused
+        connection (see `unix_http`): the middle probe accepts either form
+        of the same refusal, while the served probes stay strict, so a
+        broken proxy still fails them."""
         import runner
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1505,26 +1547,40 @@ class TestModelProxy(unittest.TestCase):
                 body,
             )
 
-            def over_unix(data):
-                with socket.socket(socket.AF_UNIX) as c:
-                    c.settimeout(5)
-                    c.connect(proxy.socket_path)
-                    c.sendall(data)
-                    got = b""
-                    try:
-                        while chunk := c.recv(65536):
-                            got += chunk
-                    except OSError:
-                        pass
-                    return got
-
-            self.assertEqual(over_unix(request), self.model.response)
+            self.assertEqual(unix_http(proxy.socket_path, request), self.model.response)
             proxy.end_attempt()
-            self.assertEqual(over_unix(request), b"")
+            self.assertEqual(unix_http(proxy.socket_path, request, refuse_ok=True), b"")
             self.assertEqual(len(self.model.requests), 1)
             proxy.begin_attempt()
-            self.assertEqual(over_unix(request), self.model.response)
+            self.assertEqual(unix_http(proxy.socket_path, request), self.model.response)
             self.assertEqual(len(self.model.requests), 2)
+
+    def test_the_between_attempts_probe_survives_the_proxy_winning_the_close_race(self):
+        """The forced form of the flake above, with no network: a socket
+        whose send raises BrokenPipeError is exactly what the kernel
+        reports when the proxy's accept-and-close lands before the client's
+        send. The unprotected probe (strict mode, the old behavior)
+        propagates it and the test errors; the between-attempts probe
+        reads it as the refusal it is. A refused listener still raises
+        either way, so this tolerance cannot mask a dead proxy."""
+        with mock.patch.object(socket, "socket") as mk:
+            fake = mk.return_value.__enter__.return_value
+            # Hand-built kernel shapes on purpose: the fake socket never
+            # exists in the kernel, so this exercises the handler branch of
+            # unix_http, not the real race (the live proxy test above covers
+            # that).
+            fake.sendall.side_effect = BrokenPipeError(32, "Broken pipe")
+            with self.assertRaises(BrokenPipeError):
+                unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n")
+            self.assertEqual(unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n", refuse_ok=True), b"")
+            fake.sendall.side_effect = ConnectionResetError(104, "Connection reset by peer")
+            with self.assertRaises(ConnectionResetError):
+                unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n")
+            self.assertEqual(unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n", refuse_ok=True), b"")
+            fake.sendall.side_effect = None
+            fake.connect.side_effect = ConnectionRefusedError(111, "Connection refused")
+            with self.assertRaises(ConnectionRefusedError):
+                unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n", refuse_ok=True)
 
     def test_a_unix_socket_proxy_is_reachable_through_the_in_box_relay(self):
         """On Linux the box has its own network namespace; the proxy listens
