@@ -75,6 +75,16 @@ python3 runner.py --agent 'claude-or <target> qwen3-coder-next:q8_0' \
     --endpoint <model-host>:11434 \
     --env '<HOST_VAR>={endpoint_host}' --env '<PORT_VAR>={endpoint_port}'
 
+# opencode as the agent (no Claude Code, no credential store): copy the
+# opencode binary outside $HOME (the box denies reading $HOME), point its
+# Anthropic provider at the proxy, and double the JSON braces, since the
+# runner expands --env values with str.format.
+python3 runner.py --agent '/path/outside/home/opencode run -m spark/qwen3-coder-next:q4_K_M' \
+    --label 'qwen3-coder-next:q4_K_M (opencode harness)' \
+    --endpoint-model qwen3-coder-next:q4_K_M --endpoint <model-host>:11434 \
+    --env 'OPENCODE_CONFIG_CONTENT={{"model": "spark/qwen3-coder-next:q4_K_M", "autoupdate": false, "provider": {{"spark": {{"npm": "@ai-sdk/anthropic", "options": {{"baseURL": "http://{endpoint_host}:{endpoint_port}/v1", "apiKey": "unused"}}, "models": {{"qwen3-coder-next:q4_K_M": {{}}}}}}}}}}' \
+    --env 'OPENCODE_DISABLE_AUTOUPDATE=1'
+
 # Through a gateway (e.g. to reach a vLLM target over an Anthropic bridge):
 python3 runner.py --agent 'claude-or <target> spark:warm-any' \
     --label 'Qwen3.6-35B-A3B' --out results/qwen3.6.json \

@@ -1,5 +1,25 @@
 # agentic_coding results
 
+## 2026-10-13 -- qwen3-coder-next vs nemotron-3.5-lightning, opencode harness
+
+Both on the same single node through Ollama, the same contained runner, the
+same six-task corpus, one attempt per task (two Nemotron voids re-run).
+
+| model | qualify | mean/task |
+|---|---|---|
+| `qwen3-coder-next:q4_K_M` | **6/6** | **20.5s** |
+| `nemotron-3.5-lightning:30b` | 4/6 | 50.6s |
+
+The coding model is both more correct and about 2.5x faster per task. Nemotron
+left `two_error_paths` untouched and failed the hidden test on
+`write_after_side_effect`.
+
+The harness is opencode run as the agent (no Claude Code), pointed at the
+proxy through its Anthropic provider, because Ollama answers the Anthropic
+`/v1/messages` shape the proxy forwards. That keeps the run free of any
+credential store. vLLM serves only `/v1/chat/completions`, so a vLLM-served
+model cannot be measured here until the proxy forwards that shape too.
+
 Every number here was measured by `runner.py` against a live endpoint on the
 operator's own hardware. Vendor and aggregator benchmark claims are not
 recorded as results.
