@@ -121,6 +121,14 @@
       "measured": "2026-10-13",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "Same harness, host and day as the qwen3-coder-next:q4_K_M row. Missed two_error_paths (modified nothing) and write_after_side_effect (hidden test still failing). empty_loop_success and median_even were first voided (the endpoint refused connections mid-attempt) and re-run minutes later; both qualified on the re-run, and those are the times used. Ollama's build of the model, not the NVFP4 checkpoint the spark lane serves on vLLM (vLLM speaks only the OpenAI wire, which the proxy does not forward yet)."
+    },
+    {
+      "model": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 (opencode harness)",
+      "where": "local, vLLM (the model card's single-GPU recipe: LiLiCorr dflash drafter, 7 speculative tokens, one sequence), single node",
+      "value": "6/6, 47.6s/task",
+      "measured": "2026-10-17",
+      "corpus": "8d61e9c2dbdd8b3a",
+      "caveat": "Contained runner, opencode 1.18.31 against vLLM's OpenAI-compatible endpoint. 120B total / 12B active, NVFP4. Every task solved with its existing tests still green and nothing out of scope; per task 29.5-63.5s. Decode on the serving probe was 53.6 tok/s for one stream. The corpus is saturated at the top (qwen3-coder-next q4 on the same harness: 6/6 at 20.5s), so this row says the model is reliable on these tasks, not that it is the strongest; the model card reports SWE-bench Verified 71.1. A first attempt with opencode 1.18.30 failed before any request reached the server (an opencode client error) and is not recorded."
     }
   ]
 }

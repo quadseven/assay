@@ -26,6 +26,7 @@ blank cell means "not run", never "not good".
 | `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
 | `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3 · 91.9 tok/s |
 | `nemotron-3.5-lightning:30b (opencode harness)` | local, Ollama, single node | 4/6, 50.6s/task | -- | -- | -- |
+| `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 (opencode harness)` | local, vLLM (the model card's single-GPU recipe: LiLiCorr dflash drafter, 7 speculative tokens, one sequence), single node | 6/6, 47.6s/task | -- | -- | -- |
 | `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- | -- |
