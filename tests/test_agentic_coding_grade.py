@@ -1569,14 +1569,16 @@ class TestModelProxy(unittest.TestCase):
             self.assertEqual(unix_http(proxy.socket_path, request), self.model.response)
             self.assertEqual(len(self.model.requests), 2)
 
-    def test_the_between_attempts_probe_survives_the_proxy_winning_the_close_race(self):
-        """The forced form of the flake above, with no network: a socket
-        whose send raises BrokenPipeError is exactly what the kernel
-        reports when the proxy's accept-and-close lands before the client's
-        send. The unprotected probe (strict mode, the old behavior)
-        propagates it and the test errors; the between-attempts probe
-        reads it as the refusal it is. A refused listener still raises
-        either way, so this tolerance cannot mask a dead proxy."""
+    def test_unix_http_handler_reads_a_mocked_send_side_refusal_as_empty(self):
+        """The handler branch of `unix_http`, on a MOCKED socket. A send
+        that raises BrokenPipeError or ConnectionResetError is the shape the
+        kernel produces when the proxy's accept-and-close lands before the
+        client's send; here those exceptions are hand-built, so this proves
+        only the branch: strict mode propagates them and `refuse_ok` reads
+        them as b"". It does not prove the real race (the live proxy test
+        above covers that) and it does not prove a dead listener raises
+        (the mocked `connect` below is only the branch shape; the real
+        kernel refusal is proven by the next test)."""
         with mock.patch.object(socket, "socket") as mk:
             fake = mk.return_value.__enter__.return_value
             # Hand-built kernel shapes on purpose: the fake socket never
@@ -1595,6 +1597,29 @@ class TestModelProxy(unittest.TestCase):
             fake.connect.side_effect = ConnectionRefusedError(111, "Connection refused")
             with self.assertRaises(ConnectionRefusedError):
                 unix_http("/nonexistent/x.sock", b"GET / HTTP/1.0\r\n\r\n", refuse_ok=True)
+
+    def test_unix_http_raises_on_a_real_dead_listener_even_with_refuse_ok(self):
+        """The claim the mocked test above cannot make: a listener that is
+        gone is not a refusal, so `refuse_ok` must not swallow it. Real
+        kernel sockets, no mocks: a path whose socket file outlived its
+        listener refuses the connect, and a path with no socket file at all
+        is missing. Both raise in strict mode and with `refuse_ok`, so the
+        between-attempts tolerance cannot mask a dead proxy."""
+        request = b"GET / HTTP/1.0\r\n\r\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = str(Path(tmp) / "stale.sock")
+            listener = socket.socket(socket.AF_UNIX)
+            listener.bind(stale)
+            listener.listen(1)
+            listener.close()
+            self.assertTrue(Path(stale).exists(), "the stale socket file is the point of this probe")
+            missing = str(Path(tmp) / "missing.sock")
+            for refuse_ok in (False, True):
+                with self.subTest(refuse_ok=refuse_ok):
+                    with self.assertRaises(ConnectionRefusedError):
+                        unix_http(stale, request, refuse_ok=refuse_ok, timeout=2)
+                    with self.assertRaises(FileNotFoundError):
+                        unix_http(missing, request, refuse_ok=refuse_ok, timeout=2)
 
     def test_a_unix_socket_proxy_is_reachable_through_the_in_box_relay(self):
         """On Linux the box has its own network namespace; the proxy listens
