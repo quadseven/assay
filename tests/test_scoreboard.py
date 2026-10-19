@@ -155,6 +155,21 @@ class TestMeasurementsAreReadable(unittest.TestCase):
         models = [line.split("|")[1].strip() for line in table.splitlines() if line.startswith("| `")]
         self.assertEqual(len(models), len(set(models)), f"duplicate model rows: {models}")
 
+    def test_default_model_measurement_states_date_n_seed_and_corpus_hash(self):
+        """The default model's row states date, N, seed and corpus hash so a
+        reader can reproduce and re-grade it without re-running the model."""
+        path = ROOT / "suites" / "nutrition" / "results" / "scoreboard.json"
+        d = _load(path)
+        nemotron = next(
+            (m for m in d["measurements"] if m["model"] == "nemotron-3-nano:30b-a3b-q4_K_M"),
+            None,
+        )
+        self.assertIsNotNone(nemotron, "default model has no published measurement")
+        self.assertTrue(str(nemotron.get("measured", "")).strip(), "missing measured date")
+        self.assertEqual(nemotron.get("n"), 30, "missing row count N")
+        self.assertEqual(nemotron.get("seed"), 17, "missing seed")
+        self.assertTrue(str(nemotron.get("corpus_hash", "")).strip(), "missing corpus hash")
+
 
 if __name__ == "__main__":
     unittest.main()

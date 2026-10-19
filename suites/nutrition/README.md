@@ -59,16 +59,21 @@ All runs 2026-05-08 / 2026-05-09, NutriBench v2, 30 rows unless noted.
 | mistral-small:24b | 26.9% | 32.9% | 30.4% | 50.6% | ~35% |
 | qwen2.5:32b | 51.3% | 49.0% | 48.5% | 64.5% | ~53% |
 | llama3.2:3b (5 rows) | -- | -- | -- | -- | ~53% |
+| nemotron-3-nano:30b-a3b-q4_K_M | 28.4% | 30.9% | 29.1% | 48.7% | 34% |
 
 > These are the numbers as measured in 2026-08 and they are unchanged.
 > `mistral-small:24b` has since been retired and its weights deleted, so
 > its row cannot be reproduced locally. The suite now defaults to
-> `nemotron-3-nano:30b-a3b-q4_K_M`, which has NOT yet been measured on this
-> benchmark -- do not read the row above as applying to it.
+> `nemotron-3-nano:30b-a3b-q4_K_M`, which is measured in the row above
+> on the same base arm and slice (30 rows, seed 17, NutriBench v2) -- do
+> not read the mistral row as applying to it.
 
 Pass rates for mistral-small:24b were 43.3% energy, 40.0% protein, 36.7% carb,
 20.0% fat. Fat is the hardest axis for every model tested; the models
 consistently under-estimate it.
+
+Pass rates for nemotron-3-nano:30b-a3b-q4_K_M were 47.0% energy, 43.0% protein,
+40.0% carb, 20.0% fat. Fat remains the hardest axis.
 
 **qwen2.5:32b was strictly worse than mistral-small:24b** despite being
 larger, anchoring roughly 50% under truth on most rows. Model family beat
