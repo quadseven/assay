@@ -22,7 +22,7 @@ blank cell means "not run", never "not good".
 | `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
-| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
+| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama | 2/6, 33s/task | 34% · energy 28.4%, protein 30.9%, carb 29.1%, fat 48.7% | 4/4, 6.0s/reply | -- |
 | `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
 | `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3 · 91.9 tok/s |
 | `nemotron-3.5-lightning:30b (opencode harness)` | local, Ollama, single node | 4/6, 50.6s/task | -- | -- | -- |
