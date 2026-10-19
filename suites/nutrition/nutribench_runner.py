@@ -27,6 +27,10 @@ Splits available (under data/nutribench/):
   v1/wweia_meal_natural       --  US WWEIA meals, natural language (5,532 rows)
   v2/train                    --  v2 (24 countries, 15,617 rows)
 
+To run the frozen 30-row slice the published tables quote (instead of the
+first N parquet rows), pass --slice-file eval_prompts_nutribench.csv. Same
+base-arm settings; exact corpus.
+
 Reference scores from the HF model card `prathch2/nutrition_openfoodfacts_rag`:
   Base Gemma-3-270M:    carb=0%, energy=40%, fat=40%, protein=20%
   RAG Gemma-3-270M:     carb=0%, energy=80%, fat=80%, protein=34%
@@ -193,15 +197,65 @@ def load_split(split: str, max_rows: int | None) -> list[dict]:
     ]
 
 
-def main() -> int:
+# Columns of the frozen slice CSV (eval_prompts_nutribench.csv) mapped to the
+# row keys the scorer expects.
+_SLICE_COLUMNS = {
+    "meal_description": "meal_description",
+    "expected_energy": "energy",
+    "expected_protein": "protein",
+    "expected_carb": "carb",
+    "expected_fat": "fat",
+}
+
+
+def load_slice_file(path: str | Path) -> list[dict]:
+    """Load the frozen NutriBench slice CSV written by scripts/sample_nutribench.py.
+
+    Returns the same row shape as load_split, so the base arm scores the
+    committed 30-row corpus identically to a parquet read. Use this (not
+    --max-rows, which takes the first N parquet rows) whenever the run must
+    target the exact frozen slice the published tables quote.
+    """
+    import csv
+
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"slice file missing: {p}")
+    with p.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        missing = sorted(set(_SLICE_COLUMNS) - set(reader.fieldnames or []))
+        if missing:
+            raise ValueError(f"slice file {p} missing columns: {missing}")
+        return [
+            {dst: (row[src] if dst == "meal_description" else float(row[src])) for src, dst in _SLICE_COLUMNS.items()}
+            for row in reader
+        ]
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--model", default="llama3.2:3b")
     p.add_argument("--split", default="v2", choices=list(SPLIT_PATHS))
     p.add_argument("--max-rows", type=int, default=20)
-    args = p.parse_args()
+    p.add_argument(
+        "--slice-file",
+        default=None,
+        help="run the frozen slice CSV (e.g. eval_prompts_nutribench.csv) "
+        "instead of --split/--max-rows; same settings, exact corpus",
+    )
+    return p.parse_args(argv)
 
-    rows = load_split(args.split, args.max_rows)
-    print(f"\n=== NutriBench eval  --  model={args.model} split={args.split} rows={len(rows)} ===\n")
+
+def main() -> int:
+    args = parse_args()
+
+    if args.slice_file:
+        rows = load_slice_file(args.slice_file)
+        corpus = f"slice-file={args.slice_file}"
+    else:
+        rows = load_split(args.split, args.max_rows)
+        corpus = f"split={args.split}"
+    print(f"\n=== NutriBench eval  --  model={args.model} {corpus} rows={len(rows)} ===\n")
 
     pass_counts = {"energy": 0, "protein": 0, "carb": 0, "fat": 0}
     abs_errors = {"energy": [], "protein": [], "carb": [], "fat": []}

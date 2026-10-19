@@ -7,9 +7,39 @@ number in the README at once.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import nutribench_runner as runner
 import pytest
 from nutribench_runner import NB_RESPONSE_SCHEMA, within_tolerance
+
+SLICE_CSV = Path(__file__).resolve().parent.parent / "suites" / "nutrition" / "eval_prompts_nutribench.csv"
+
+
+def test_slice_file_loads_the_frozen_thirty_row_corpus():
+    # The frozen stratified slice is committed as CSV with expected_* columns.
+    # load_slice_file must return the same row shape as load_split so the
+    # base arm scores it identically.
+    rows = runner.load_slice_file(SLICE_CSV)
+    assert len(rows) == 30
+    first = rows[0]
+    assert set(first) == {"meal_description", "carb", "fat", "energy", "protein"}
+    assert first["meal_description"].startswith("For lunch, I had")
+    assert first["energy"] == pytest.approx(290.0)
+    assert first["protein"] == pytest.approx(12.33)
+
+
+def test_slice_file_flag_is_accepted_by_the_runner():
+    args = runner.parse_args(["--model", "nemotron-3-nano:30b-a3b-q4_K_M",
+                              "--slice-file", "eval_prompts_nutribench.csv"])
+    assert args.slice_file == "eval_prompts_nutribench.csv"
+
+
+def test_slice_file_with_missing_columns_is_rejected(tmp_path):
+    bad = tmp_path / "slice.csv"
+    bad.write_text("meal_description,wrong\n\"a meal\",1\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="missing columns"):
+        runner.load_slice_file(bad)
 
 
 def test_tolerance_band_is_twenty_percent_inclusive():
