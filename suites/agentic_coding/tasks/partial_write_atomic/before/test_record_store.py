@@ -28,7 +28,7 @@ def test_validate_record():
     rs = RecordStore(store)
 
     rs.write_record("rec1", "a1", "b1", "c1")
-    assert rs.validate_record("rec1") is True
+    assert rs._validate_record("rec1") is True
 
 
 def test_missing_field_returns_none():

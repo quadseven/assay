@@ -3,6 +3,7 @@ from cache import VersionedCache
 
 def test_basic_get_returns_value():
     """Basic get returns the fetched value."""
+
     def fetch(key):
         return f"value-{key}"
 
