@@ -42,7 +42,7 @@ def test_partial_write_does_not_leave_corrupt_record():
 
     # After the failure, the record must be either all-old or all-new,
     # NOT a mix of old and new
-    rec = rs.read_record("rec1")
+    rec = rs._read_record("rec1")
 
     # The buggy code leaves: a=new-a, b=new-b, c=old-c (mixed!)
     # The fixed code must leave: either all old or all new
@@ -69,7 +69,7 @@ def test_validate_record_rejects_corrupt_mixed_record():
         rs.write_record("rec1", "new-a", "new-b", "new-c")
 
     # The corrupt record must not validate
-    assert rs.validate_record("rec1") is False, "corrupt mixed record must not validate"
+    assert rs._validate_record("rec1") is False, "corrupt mixed record must not validate"
 
 
 def test_successful_write_works():
@@ -82,9 +82,9 @@ def test_successful_write_works():
     rs = RecordStore(store)
     rs.write_record("rec1", "new-a", "new-b", "new-c")
 
-    rec = rs.read_record("rec1")
+    rec = rs._read_record("rec1")
     assert rec == {"a": "new-a", "b": "new-b", "c": "new-c"}
-    assert rs.validate_record("rec1") is True
+    assert rs._validate_record("rec1") is True
 
 
 def test_multiple_records_independent():
@@ -100,5 +100,5 @@ def test_multiple_records_independent():
     rs = RecordStore(store)
     rs.write_record("rec1", "new-a1", "new-b1", "new-c1")
 
-    assert rs.read_record("rec1") == {"a": "new-a1", "b": "new-b1", "c": "new-c1"}
-    assert rs.read_record("rec2") == {"a": "a2", "b": "b2", "c": "c2"}
+    assert rs._read_record("rec1") == {"a": "new-a1", "b": "new-b1", "c": "new-c1"}
+    assert rs._read_record("rec2") == {"a": "a2", "b": "b2", "c": "c2"}

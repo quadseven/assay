@@ -8,6 +8,10 @@ class VersionedCache:
         self._data = {}
         self._version = 0
 
+    @property
+    def version(self):
+        return self._version
+
     def get_versioned(self, key):
         """Return (value, version) for key, fetching if needed."""
         entry = self._data.get(key)

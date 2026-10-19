@@ -18,7 +18,7 @@ def test_basic_write_and_read():
     rs = RecordStore(store)
 
     rs.write_record("rec1", "a1", "b1", "c1")
-    rec = rs.read_record("rec1")
+    rec = rs._read_record("rec1")
     assert rec == {"a": "a1", "b": "b1", "c": "c1"}
 
 
@@ -41,9 +41,9 @@ def test_missing_field_returns_none():
     store.set("rec1:b", "b1")
     # c is missing
 
-    rec = rs.read_record("rec1")
+    rec = rs._read_record("rec1")
     assert rec is None
-    assert rs.validate_record("rec1") is False
+    assert rs._validate_record("rec1") is False
 
 
 def test_empty_string_fails_validation():
@@ -52,4 +52,4 @@ def test_empty_string_fails_validation():
     rs = RecordStore(store)
 
     rs.write_record("rec1", "a1", "", "c1")
-    assert rs.validate_record("rec1") is False
+    assert rs._validate_record("rec1") is False

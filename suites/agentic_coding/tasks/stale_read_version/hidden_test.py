@@ -1,6 +1,6 @@
 import threading
-import time
-from cache import CacheMiss, VersionedCache
+
+from cache import VersionedCache
 
 
 def test_invalidate_then_read_sees_new_version():
@@ -83,7 +83,7 @@ def test_concurrent_read_during_invalidate_does_not_poison_cache():
     # The reader must see the NEW value, not the old one
     assert result["value"] == "new-value", f"got stale value: {result['value']}"
     # And it should have cached under the new version
-    assert result["version"] == cache._version
+    assert result["version"] == cache.version
 
 
 def test_multiple_keys_invalidate_independently():

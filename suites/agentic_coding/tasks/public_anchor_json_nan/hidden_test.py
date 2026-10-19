@@ -1,4 +1,5 @@
 import json
+
 from serializer import serialize_metrics
 
 

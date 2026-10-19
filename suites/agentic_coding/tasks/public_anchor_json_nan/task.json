@@ -1,7 +1,7 @@
 {
   "name": "public_anchor_json_nan",
   "summary": "json.dumps crashes on float NaN or Inf, which are valid IEEE 754 values that appear in real telemetry.",
-  "why_this_task": "Public anchor: Python's standard library json module raises ValueError on float('nan') and float('inf') (see CPython issue #9183, documented in json module docs). This is independently reproducible -- anyone can run json.dumps(float('nan')) and see the crash. The fix is to sanitize non-finite floats before serialization, a pattern documented in the json module's allow_nan parameter and widely used in telemetry pipelines.",
+  "why_this_task": "Public anchor: Python's standard library json module raises ValueError on float('nan') and float('inf') (see CPython issue bpo-9183, documented in json module docs). This is independently reproducible -- anyone can run json.dumps(float('nan')) and see the crash. The fix is to sanitize non-finite floats before serialization, a pattern documented in the json module's allow_nan parameter and widely used in telemetry pipelines.",
   "instruction": "serialize_metrics() in serializer.py calls json.dumps on data that may contain float('nan') or float('inf') from sensor readings. This crashes the metrics pipeline. Fix it so non-finite floats are replaced with null before serialization, while finite floats pass through unchanged. Edit serializer.py only -- do not modify any test file.",
   "allowed": ["serializer.py"]
 }

@@ -12,8 +12,8 @@ class RecordStore:
         self._store.set(f"{key}:b", field_b)
         self._store.set(f"{key}:c", field_c)
 
-    def read_record(self, key):
-        """Read a record, returning None if any field is missing."""
+    def _read_record(self, key):
+        """Read a record, returning None if any field is missing. Test helper."""
         a = self._store.get(f"{key}:a")
         b = self._store.get(f"{key}:b")
         c = self._store.get(f"{key}:c")
@@ -21,9 +21,9 @@ class RecordStore:
             return None
         return {"a": a, "b": b, "c": c}
 
-    def validate_record(self, key):
-        """True if record exists and all fields are non-empty strings."""
-        rec = self.read_record(key)
+    def _validate_record(self, key):
+        """True if record exists and all fields are non-empty strings. Test helper."""
+        rec = self._read_record(key)
         if rec is None:
             return False
         return all(isinstance(v, str) and v for v in rec.values())
