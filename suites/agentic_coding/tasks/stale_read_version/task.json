@@ -1,0 +1,7 @@
+{
+  "name": "stale_read_version",
+  "summary": "A cache invalidation marks the entry stale but in-flight reads still return the old value, so a writer sees its own write missing.",
+  "why_this_task": "Harder than absent_row_vs_error: the cache uses a version counter, but invalidation increments the version BEFORE the new value is written. A concurrent reader sees the incremented version, misses in the cache, fetches the OLD value from the backing store, and caches it under the new version -- poisoning the cache with stale data. The fix is to write the new value first, then increment the version (or use a generation number that readers check).",
+  "instruction": "get_versioned() in cache.py uses a version counter for invalidation, but invalidate() increments the version before the new value is computed. A reader that races the invalidation fetches the old value and caches it under the new version. Fix the ordering so the new value is visible before the version advances. Edit cache.py only -- do not modify any test file.",
+  "allowed": ["cache.py"]
+}

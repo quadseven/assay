@@ -1,0 +1,7 @@
+{
+  "name": "partial_write_atomic",
+  "summary": "A multi-field record is written field-by-field without a transaction, so a crash mid-write leaves a corrupt record that reads as valid.",
+  "why_this_task": "Harder than write_after_side_effect: the bug spans multiple fields and a crash (not just an exception). The code writes three fields sequentially. If the process dies after field 1 and 2 but before field 3, the record has field 3 from the OLD write (or default), creating a Frankenstein record that passes all validation but is semantically wrong. The fix requires atomic write: write to a temp file/key then rename/swap, or use a version field that readers check.",
+  "instruction": "write_record() in record_store.py writes three fields sequentially to a dict-like store. If the process crashes after writing the first two fields, the third retains its old value, producing a record that mixes old and new data but passes all validation. Fix it so the record is written atomically -- either all new fields are visible or none are. Use a version field or temp-key-then-swap pattern. Edit record_store.py only -- do not modify any test file.",
+  "allowed": ["record_store.py"]
+}
