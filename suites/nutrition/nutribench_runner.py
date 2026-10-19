@@ -179,11 +179,11 @@ def within_tolerance(actual: float, predicted: float, tol: float = TOLERANCE) ->
 
 
 def load_split(split: str, max_rows: int | None) -> list[dict]:
-    import duckdb
-
     rel = SPLIT_PATHS.get(split)
     if not rel:
         raise ValueError(f"unknown split {split!r}; valid: {list(SPLIT_PATHS)}")
+    import duckdb
+
     path = NB_DATA / rel
     if not path.exists():
         raise FileNotFoundError(f"NutriBench parquet missing: {path}")
