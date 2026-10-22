@@ -29,6 +29,9 @@ _ALLOWED_UNDECLARED = {
     "ddtrace": "declared under [project.optional-dependencies].llmobs",
     # Test-only, declared in the dev dependency group.
     "pytest": "declared in [dependency-groups].dev",
+    # lane_review imports the checks under test from a grug checkout the
+    # caller names with --grug; it is the code being measured, not a dependency.
+    "personas": "loaded from the --grug checkout at run time (suites/lane_review)",
 }
 
 # Modules that live in this repo and are imported by bare name. `tools/` is
