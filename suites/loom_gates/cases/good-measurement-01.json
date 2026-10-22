@@ -1,0 +1,48 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-measurement-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nMeasured model-c: pass 46.7/43.3/40.0/23.3 on N=30; raw rows committed.\n\n## Acceptance criteria\n- [x] The default model is measured on the benchmark sample with the suite's runner.\n- [x] The raw per-row output is committed beside the result.\n- [x] The scoreboard row cites the run.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "{\n  \"nutrition\": [\n    {\"model\": \"model-b\", \"n\": 30, \"pass\": [43.3, 40.0, 36.7, 20.0]},\n    {\"model\": \"model-c\", \"n\": 30, \"pass\": [46.7, 43.3, 40.0, 23.3], \"raw\": \"results/model-c-2026-10-18.jsonl\"}\n  ]\n}\n",
+    "before": "{\n  \"nutrition\": [\n    {\"model\": \"model-b\", \"n\": 30, \"pass\": [43.3, 40.0, 36.7, 20.0]}\n  ]\n}\n",
+    "path": "suites/nutrition/results/scoreboard.json"
+   },
+   {
+    "after": "{\"row\": 0, \"pred\": 100, \"gold\": 100}\n{\"row\": 1, \"pred\": 101, \"gold\": 101}\n{\"row\": 2, \"pred\": 102, \"gold\": 102}\n{\"row\": 3, \"pred\": 103, \"gold\": 100}\n{\"row\": 4, \"pred\": 104, \"gold\": 101}\n{\"row\": 5, \"pred\": 105, \"gold\": 102}\n{\"row\": 6, \"pred\": 106, \"gold\": 100}\n{\"row\": 7, \"pred\": 107, \"gold\": 101}\n{\"row\": 8, \"pred\": 108, \"gold\": 102}\n{\"row\": 9, \"pred\": 109, \"gold\": 100}\n{\"row\": 10, \"pred\": 110, \"gold\": 101}\n{\"row\": 11, \"pred\": 111, \"gold\": 102}\n{\"row\": 12, \"pred\": 112, \"gold\": 100}\n{\"row\": 13, \"pred\": 113, \"gold\": 101}\n{\"row\": 14, \"pred\": 114, \"gold\": 102}\n{\"row\": 15, \"pred\": 115, \"gold\": 100}\n{\"row\": 16, \"pred\": 116, \"gold\": 101}\n{\"row\": 17, \"pred\": 117, \"gold\": 102}\n{\"row\": 18, \"pred\": 118, \"gold\": 100}\n{\"row\": 19, \"pred\": 119, \"gold\": 101}\n{\"row\": 20, \"pred\": 120, \"gold\": 102}\n{\"row\": 21, \"pred\": 121, \"gold\": 100}\n{\"row\": 22, \"pred\": 122, \"gold\": 101}\n{\"row\": 23, \"pred\": 123, \"gold\": 102}\n{\"row\": 24, \"pred\": 124, \"gold\": 100}\n{\"row\": 25, \"pred\": 125, \"gold\": 101}\n{\"row\": 26, \"pred\": 126, \"gold\": 102}\n{\"row\": 27, \"pred\": 127, \"gold\": 100}\n{\"row\": 28, \"pred\": 128, \"gold\": 101}\n{\"row\": 29, \"pred\": 129, \"gold\": 102}\n",
+    "before": null,
+    "path": "suites/nutrition/results/model-c-2026-10-18.jsonl"
+   }
+  ],
+  "head_ref": "loom/65-measure-model-c-on-the-nutrition",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 75,
+  "title": "Measure model-c on the nutrition benchmark"
+ },
+ "provenance": {
+  "merged": "2026-10-17",
+  "merged_by": "operator",
+  "note": "Shape of GOOD measurement PRs: percentages consistent with N, raw per-row output committed.",
+  "repo_kind": "public eval repo",
+  "source_id": "cdf530be01a1"
+ },
+ "scenario": {
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nmodel-c has no nutrition row.\n\n## What\nRun the suite on model-c.\n\n## Acceptance criteria\n- [ ] The default model is measured on the benchmark sample with the suite's runner.\n- [ ] The raw per-row output is committed beside the result.\n- [ ] The scoreboard row cites the run.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 65,
+  "title": "Measure model-c on the nutrition benchmark"
+ }
+}

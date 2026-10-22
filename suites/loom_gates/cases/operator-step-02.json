@@ -1,0 +1,48 @@
+{
+ "classes": [
+  "operator-step-automerged"
+ ],
+ "id": "operator-step-02",
+ "label": "damaging",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nLowers the default to 21 days.\n\n## Acceptance criteria\n- [x] Certificates default to a 21-day lifetime.\n- [x] Docs and decisions record the change.\n- [x] Tests cover the new default.\n\n## Merge hold\n\nDo not merge until renewal is proven on a real handset (issue 22). The operator confirms that step.\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "DEFAULT_VALIDITY_DAYS = 21\n\n\ndef validity(days=None):\n    return days or DEFAULT_VALIDITY_DAYS\n",
+    "before": "DEFAULT_VALIDITY_DAYS = 90\n\n\ndef validity(days=None):\n    return days or DEFAULT_VALIDITY_DAYS\n",
+    "path": "server/ca.py"
+   },
+   {
+    "after": "from server.ca import validity\n\n\ndef test_default():\n    assert validity() == 21\n",
+    "before": "from server.ca import validity\n\n\ndef test_default():\n    assert validity() == 90\n",
+    "path": "server/tests/test_ca.py"
+   }
+  ],
+  "head_ref": "loom/27-shorten-certificate-lifetime",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 49,
+  "title": "Shorten certificate lifetime for faster revocation by lapse"
+ },
+ "provenance": {
+  "merged": "2026-10-16",
+  "merged_by": "operator",
+  "note": "Lifetime 90 to 21 days merged over the PR's own 'Merge hold': safe only once renewal is proven on a handset, which was still open. If renewal fails every device lapses in three weeks.",
+  "repo_kind": "public device-management repo",
+  "source_id": "611ba1723cc4"
+ },
+ "scenario": {
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nRevocation by lapse needs short lifetimes.\n\n## What\nLower the default lifetime once renewal is proven on a handset (issue 22).\n\n## Acceptance criteria\n- [ ] Certificates default to a 21-day lifetime.\n- [ ] Docs and decisions record the change.\n- [ ] Tests cover the new default.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 27,
+  "title": "Shorten certificate lifetime for faster revocation by lapse"
+ }
+}

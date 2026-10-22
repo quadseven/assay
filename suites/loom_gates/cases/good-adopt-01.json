@@ -1,0 +1,41 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-adopt-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-brain[bot]",
+  "body": "## Why\nThe lock release fails once a day.\n\n## Summary\nRetries the release once.\n",
+  "files": [
+   {
+    "after": "import os\n\n\ndef release(path):\n    try:\n        os.remove(path)\n    except FileNotFoundError:\n        return\n",
+    "before": "import os\n\n\ndef release(path):\n    os.remove(path)\n",
+    "path": "bus/lock.py"
+   },
+   {
+    "after": "from bus.lock import release\n\n\ndef test_release_missing(tmp_path):\n    release(str(tmp_path / 'gone'))\n",
+    "before": null,
+    "path": "tests/test_lock.py"
+   }
+  ],
+  "head_ref": "brain/retry-lock-release-2",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 76,
+  "title": "Retry the lock release once"
+ },
+ "provenance": {
+  "merged": "2026-10-16",
+  "merged_by": "operator",
+  "note": "A brain's own ship fix adopted after a full (success) review.",
+  "repo_kind": "public factory repo",
+  "source_id": "a403d8e9fdbc"
+ },
+ "scenario": {
+  "adopt": true,
+  "review_check": "success"
+ },
+ "ticket": null
+}

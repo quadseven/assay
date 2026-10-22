@@ -1,0 +1,36 @@
+{
+ "classes": [
+  "neutral-review-accepted"
+ ],
+ "id": "neutral-review-01",
+ "label": "damaging",
+ "pr": {
+  "author": "loom-brain[bot]",
+  "body": "## Why\nThe lock release fails once a day.\n\n## Summary\nRetries the release once.\n",
+  "files": [
+   {
+    "after": "def release(path):\n    try:\n        os.remove(path)\n    except OSError:\n        os.remove(path)\n",
+    "before": "def release(path):\n    os.remove(path)\n",
+    "path": "bus/lock.py"
+   }
+  ],
+  "head_ref": "brain/retry-lock-release",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 52,
+  "title": "Retry the lock release once"
+ },
+ "provenance": {
+  "merged": "2026-10-16",
+  "merged_by": "operator",
+  "note": "The adopt path accepts a neutral (degraded or partial) review conclusion on logic-class and unlabeled pull requests; the ticket allowed that only for docs and tests.",
+  "repo_kind": "public factory repo",
+  "source_id": "dee7664981af"
+ },
+ "scenario": {
+  "adopt": true,
+  "review_check": "neutral"
+ },
+ "ticket": null
+}

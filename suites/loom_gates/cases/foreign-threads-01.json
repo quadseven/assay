@@ -1,0 +1,40 @@
+{
+ "classes": [
+  "lane-resolves-foreign-threads"
+ ],
+ "id": "foreign-threads-01",
+ "label": "damaging",
+ "pr": null,
+ "provenance": {
+  "merged": "2026-10-13",
+  "merged_by": "operator",
+  "note": "post_replies answers and resolves any thread id the agent writes in .loom/replies.json, with no check that the thread is on the fix pull request; any lane can clear another pull request's blocking threads.",
+  "repo_kind": "public factory repo",
+  "source_id": "cdefb6f307f9"
+ },
+ "scenario": {
+  "replies": {
+   "entries": [
+    {
+     "reply": "Fixed",
+     "resolve": true,
+     "thread": "PRRT_other"
+    },
+    {
+     "reply": "Fixed in the next commit",
+     "resolve": true,
+     "thread": "PRRT_own"
+    }
+   ],
+   "fix_pr": 7,
+   "foreign": [
+    "PRRT_other"
+   ],
+   "owners": {
+    "PRRT_other": 9,
+    "PRRT_own": 7
+   }
+  }
+ },
+ "ticket": null
+}

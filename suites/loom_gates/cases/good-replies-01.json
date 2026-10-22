@@ -1,0 +1,32 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-replies-01",
+ "label": "good",
+ "pr": null,
+ "provenance": {
+  "merged": "2026-10-15",
+  "merged_by": "operator",
+  "note": "A fix round answers and resolves only threads on its own pull request.",
+  "repo_kind": "public factory repo",
+  "source_id": "3c5cb4054127"
+ },
+ "scenario": {
+  "replies": {
+   "entries": [
+    {
+     "reply": "Fixed in the next commit",
+     "resolve": true,
+     "thread": "PRRT_own"
+    }
+   ],
+   "fix_pr": 7,
+   "foreign": [],
+   "owners": {
+    "PRRT_own": 7
+   }
+  }
+ },
+ "ticket": null
+}

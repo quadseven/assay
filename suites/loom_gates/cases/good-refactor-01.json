@@ -1,0 +1,50 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-refactor-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nPure rename.\n\n## Acceptance criteria\n- [x] text_util.slug behaves as util.slug did.\n- [x] The test moves with the module, unchanged.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "def slug(s):\n    return s.lower().replace(' ', '-')\n",
+    "before": "def slug(s):\n    return s.lower().replace(' ', '-')\n",
+    "path": "text_util.py",
+    "renamed_from": "util.py"
+   },
+   {
+    "after": "from text_util import slug\n\n\ndef test_slug():\n    assert slug('A B') == 'a-b'\n",
+    "before": "from util import slug\n\n\ndef test_slug():\n    assert slug('A B') == 'a-b'\n",
+    "path": "tests/test_text_util.py",
+    "renamed_from": "tests/test_util.py"
+   }
+  ],
+  "head_ref": "loom/63-util-moves-to-text-util",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 73,
+  "title": "util moves to text_util"
+ },
+ "provenance": {
+  "merged": "2026-10-17",
+  "merged_by": "operator",
+  "note": "Shape of GOOD refactors: a test file renamed with its module, assertions unchanged.",
+  "repo_kind": "public repo",
+  "source_id": "47f603f504ea"
+ },
+ "scenario": {
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nutil is a grab bag.\n\n## What\nRename util.py to text_util.py and its test with it.\n\n## Acceptance criteria\n- [ ] text_util.slug behaves as util.slug did.\n- [ ] The test moves with the module, unchanged.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 63,
+  "title": "util moves to text_util"
+ }
+}
