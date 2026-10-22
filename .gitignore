@@ -23,3 +23,6 @@ tools/leakscan.local.txt
 # The loom_gates replay records ARE tracked: each is a few dozen KB of gate
 # verdicts, and the test suite re-grades them to their recorded summary.
 !suites/loom_gates/results/*.json
+
+# lane_review --pipeline model reply cache (lr_pipeline.py).
+.cache/

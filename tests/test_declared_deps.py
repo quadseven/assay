@@ -32,6 +32,9 @@ _ALLOWED_UNDECLARED = {
     # lane_review imports the checks under test from a grug checkout the
     # caller names with --grug; it is the code being measured, not a dependency.
     "personas": "loaded from the --grug checkout at run time (suites/lane_review)",
+    "llm_client": "loaded from the --grug checkout at run time (suites/lane_review --pipeline)",
+    "adapters": "loaded from the --grug checkout at run time (suites/lane_review --pipeline)",
+    "github_app_auth": "loaded from the --grug checkout at run time (suites/lane_review --pipeline)",
 }
 
 # Modules that live in this repo and are imported by bare name. `tools/` is
