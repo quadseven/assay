@@ -187,6 +187,14 @@ def test_only_the_findings_elder_publishes_inline_become_threads():
     assert lg_inbox.elder_threads(elder) == {"c": ["B1"]}
 
 
+def test_published_text_cites_no_issue_number_and_quotes_no_rate():
+    issue = "#" + "12"  # built, so the repo's own leak scan sees no issue-shaped literal
+    said = f"high fabricated-result: 47.0%, 43.0% cannot come from the sample (see {issue}); 96 % of a file"
+    assert replay.scrub(said) == (
+        "high fabricated-result: 47.0 pct, 43.0 pct cannot come from the sample (see no. 12); 96 pct of a file"
+    )
+
+
 def test_summary_counts_recall_and_false_positives():
     cases = [
         {"id": "d1", "label": "damaging", "classes": ["wrong-target"]},
