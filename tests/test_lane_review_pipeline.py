@@ -32,13 +32,19 @@ _STUBS = {
         CALLS = []
         HEADERS = []
         @dataclasses.dataclass(frozen=True)
+        class Backend:
+            value: str
+        @dataclasses.dataclass(frozen=True)
         class BackendConfig:
+            backend: Backend
             url: str
             model: str
             extra_headers: dict = dataclasses.field(default_factory=dict)
         def _call_backend(config, messages, cancel_event=None):
-            CALLS.append(messages)
+            CALLS.append((config.backend.value, messages))
             HEADERS.append(config.extra_headers)
+            if config.backend.value == "free-pool":
+                return httpx.Response(429, text="busy", request=httpx.Request("POST", config.url))
             return httpx.Response(200, json={"model": "stub-model", "n": len(CALLS)},
                                   request=httpx.Request("POST", config.url))
         def _load_poolside_key(): return "real-key"
@@ -89,8 +95,12 @@ _STUBS = {
                 except httpx.ConnectError:
                     pass
             assert llm_client._load_openrouter_key() == ""
-            config = llm_client.BackendConfig("https://gw.invalid/v1", "m", {"X-Spark-Priority": "interactive"})
-            llm_client._call_backend(config, [{"role": "user", "content": diff}])
+            messages = [{"role": "user", "content": diff}]
+            free = llm_client.BackendConfig(llm_client.Backend("free-pool"), "https://gw.invalid/free/v1", "f")
+            if llm_client._call_backend(free, messages).status_code == 429:
+                cave = llm_client.BackendConfig(llm_client.Backend("cave"), "https://gw.invalid/v1", "m",
+                                                {"X-Spark-Priority": "interactive"})
+                llm_client._call_backend(cave, messages)
             post_check_run("t")
             findings = []
             if "def new" in diff:
@@ -159,15 +169,14 @@ def test_routing_comes_from_the_manifest_without_keys_or_cluster_addresses(tmp_p
     }
 
 
-def test_replay_is_isolated_scores_what_dispatch_published_and_reruns_from_cache(grug, tmp_path):
-    corpus = [_fixture("a"), _fixture("b", "GOOD")]
-    verdicts, cache = lr_pipeline.replay_pipeline(
-        grug,
-        corpus,
-        gateway_url="https://gw.invalid",
-        cache_dir=tmp_path / "c",
-        workers=2,
+def _replay(grug, tmp_path, corpus):
+    return lr_pipeline.replay_pipeline(
+        grug, corpus, gateway_url="https://gw.invalid", cache_dir=tmp_path / "c", workers=2
     )
+
+
+def test_replay_is_isolated_and_scores_what_dispatch_published(grug, tmp_path):
+    verdicts, _cache = _replay(grug, tmp_path, [_fixture("a"), _fixture("b", "GOOD")])
     import llm_client
     from personas.code_reviewer import dispatch
 
@@ -175,23 +184,23 @@ def test_replay_is_isolated_scores_what_dispatch_published_and_reruns_from_cache
     assert [v.error for v in verdicts] == ["", ""]
     assert verdicts[0].findings == (("seen-new", "high"), ("seen-context", "medium"))
     assert verdicts[0].blocked and verdicts[1].blocked
-    # Two fixtures, identical diffs: the second is the same messages' next
-    # occurrence, so a reply of its own.
-    assert (cache.hits, cache.misses) == (0, 2)
-    assert len(llm_client.CALLS) == 2
     # Replay never jumps the gateway queue ahead of live reviews.
     assert {h["X-Spark-Priority"] for h in llm_client.HEADERS} == {"batch"}
     assert os.environ["AWS_ACCESS_KEY_ID"] == "replay"
 
-    rerun, cache = lr_pipeline.replay_pipeline(
-        grug,
-        corpus,
-        gateway_url="https://gw.invalid",
-        cache_dir=tmp_path / "c",
-        workers=2,
-    )
-    assert (cache.hits, cache.misses) == (2, 0)
-    assert len(llm_client.CALLS) == 2
+
+def test_a_rerun_walks_the_chain_from_the_cache_failures_included(grug, tmp_path):
+    corpus = [_fixture("a"), _fixture("b", "GOOD")]
+    verdicts, cache = _replay(grug, tmp_path, corpus)
+    import llm_client
+
+    # Per fixture: the free pool's 429, then the Cave's reply. The second
+    # fixture repeats the first's messages: each call is its own occurrence.
+    assert [tier for tier, _ in llm_client.CALLS] == ["free-pool", "cave"] * 2
+    assert (cache.hits, cache.misses) == (0, 4)
+    rerun, cache = _replay(grug, tmp_path, corpus)
+    assert len(llm_client.CALLS) == 4  # no new call
+    assert (cache.hits, cache.misses) == (4, 0)
     assert [v.findings for v in rerun] == [v.findings for v in verdicts]
     assert cache.models == {"stub-model": 2}
 
@@ -205,17 +214,26 @@ def test_sample_is_fixed_and_balanced():
     assert lr_runner.sample(list(reversed(corpus)), 2) == picked
 
 
-def test_cache_replays_repeated_messages_in_order(tmp_path):
+def test_cache_replays_outcomes_per_tier_in_order(tmp_path):
+    import httpx
+
     cache = lr_pipeline.ReplyCache(tmp_path / "r.jsonl")
-    d = cache.digest([{"role": "user", "content": "x"}])
-    cache.put(cache.next_key(d), {"n": 1}, "m1")
-    cache.put(cache.next_key(d), {"n": 2}, "m2")
+    messages = [{"role": "user", "content": "x"}]
+    cave, free = cache.digest("cave:/v1", messages), cache.digest("free-pool:/free/v1", messages)
+    assert cave != free
+    cache.put(cache.next_key(cave), {"body": {"n": 1}, "model": "m1"})
+    cache.put(cache.next_key(cave), {"body": {"n": 2}, "model": "m2"})
+    cache.put(cache.next_key(free), {"error": "ReadTimeout"})
     again = lr_pipeline.ReplyCache(tmp_path / "r.jsonl")
-    assert again.get(again.next_key(d))["body"] == {"n": 1}
-    assert again.get(again.next_key(d))["body"] == {"n": 2}
-    assert again.get(again.next_key(d)) is None
-    rows = [json.loads(line) for line in (tmp_path / "r.jsonl").read_text().splitlines()]
-    assert [r["key"].rsplit(":", 1)[1] for r in rows] == ["0", "1"]
+    first = lr_pipeline._replayed(again.get(again.next_key(cave)), "https://gw.invalid/v1")
+    assert first.json() == {"n": 1}
+    assert again.get(again.next_key(cave))["body"] == {"n": 2}
+    assert again.get(again.next_key(cave)) is None
+    with pytest.raises(httpx.ReadTimeout):
+        lr_pipeline._replayed(again.get(again.next_key(free)), "https://gw.invalid/free/v1")
+    status = lr_pipeline._replayed({"status": 503, "text": "down"}, "https://gw.invalid/v1")
+    assert status.status_code == 503
+    assert again.models == {"m1": 1, "m2": 1}
 
 
 def test_issue_and_added_files_are_rebuilt_from_the_fixture():

@@ -220,7 +220,7 @@ def _write(out: Path, name: str, s: lr_score.Score, verdicts: list[lr_score.Verd
     out.write_text(json.dumps({"source": name, "score": s.as_dict(), "verdicts": rows}, indent=1) + "\n")
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--grug", type=Path, help="a grug checkout to replay")
@@ -239,19 +239,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=2, help="--pipeline: fixtures reviewed at once")
     ap.add_argument("--only", help="comma-separated fixture ids to replay")
     ap.add_argument("--sample", type=int, help="replay a fixed sample of N fixtures of each label")
-    args = ap.parse_args(argv)
+    return ap
+
+
+def _check(ap: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.grug and not (args.grug / "services" / "_shared" / "personas" / "code_reviewer").is_dir():
         ap.error(f"{args.grug} is not a grug checkout (no services/_shared/personas/code_reviewer)")
     if args.pipeline and not args.grug:
         ap.error("--pipeline replays a grug checkout: pass --grug")
     if args.pipeline and not os.environ.get("LR_GATEWAY_URL"):
         ap.error("--pipeline needs LR_GATEWAY_URL, the inference gateway's base URL")
+
+
+def _selected(args: argparse.Namespace) -> list[dict]:
     corpus = load_corpus(args.corpus)
     if args.only:
         wanted = set(args.only.split(","))
         corpus = [f for f in corpus if f["id"] in wanted]
-    if args.sample:
-        corpus = sample(corpus, args.sample)
+    return sample(corpus, args.sample) if args.sample else corpus
+
+
+def _verdicts(args: argparse.Namespace, corpus: list[dict]) -> tuple[list[lr_score.Verdict], str]:
     if args.live:
         verdicts, name = [lr_score.live_verdict(f) for f in corpus], "Elder at merge (recorded check run)"
     elif args.pipeline:
@@ -262,6 +270,14 @@ def main(argv: list[str] | None = None) -> int:
         name += f" on {args.corpus.name}"
     if args.sample:
         name += f", fixed sample of {args.sample} per label"
+    return verdicts, name
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = _parser()
+    args = ap.parse_args(argv)
+    _check(ap, args)
+    verdicts, name = _verdicts(args, _selected(args))
     s = lr_score.score(verdicts)
     print(_report(name, s))
     if args.show:

@@ -91,11 +91,14 @@ example `uv run --with-requirements ../grug/services/webhook/requirements.txt
 - Isolation: every HTTP request to a host other than the gateway fails as a
   connection error, which dispatch already treats as missing context. No
   GitHub token, database or cloud credential is used.
-- Cache: each model reply is stored under `.cache/lane_review/` (ignored by
-  git), keyed by the exact messages and their occurrence. A rerun with the
-  same prompts calls no model, so a change to the deterministic checks is
-  scored against the same model output. `--cache` moves it; `--workers`
-  sets how many fixtures are reviewed at once.
+- Cache: each model call's outcome, failures included, is stored under
+  `.cache/lane_review/` (ignored by git), keyed by the tier (backend and
+  route), the exact messages and their occurrence. A rerun with the same
+  prompts walks the review chain exactly as the first run did and calls no
+  model, so a change to the deterministic checks is scored against the
+  same model output. Keying by messages alone let one tier's stored reply
+  answer another tier's call and changed what a rerun reviewed. `--cache`
+  moves it; `--workers` sets how many fixtures are reviewed at once.
 - A fixture whose review degraded (every model failed, partial coverage)
   is an error, left out of every denominator and counted apart.
 - The fixtures' repositories were private, so the replay marks them

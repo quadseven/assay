@@ -28,11 +28,12 @@ reviewed at once. The GPU hosts run one generation at a time; a full
 corpus takes hours. `--sample N` replays a fixed sample of N damaging and N
 good fixtures.
 
-Cache: every successful model reply is stored under `--cache` (default
-`.cache/lane_review`, not committed), keyed by the exact messages sent and
-how many replies to those messages came before. A rerun with the same
-prompts replays the stored replies in order and calls no model, so a change
-to the deterministic checks is measured against the same model output.
+Cache: every model call's outcome, failures included, is stored under
+`--cache` (default `.cache/lane_review`, not committed), keyed by the tier
+(backend and route), the exact messages sent, and how many calls to that
+tier with those messages came before. A rerun with the same prompts walks
+the chain exactly as the first run did and calls no model, so a change to
+the deterministic checks is measured against the same model output.
 """
 
 from __future__ import annotations
@@ -92,14 +93,19 @@ def production_env(grug: Path, gateway_url: str) -> dict[str, str]:
 
 
 class ReplyCache:
-    """Model replies keyed by (messages, occurrence). Thread-safe; appends
-    one JSON line per new reply, so an interrupted run keeps what it paid
-    for."""
+    """Model call outcomes keyed by (tier, messages, occurrence).
+
+    A tier is the backend and route a call went to. Every outcome is kept,
+    failures too (a status, or the transport error's name), so a rerun
+    walks the review chain exactly as the first run did: a tier that
+    answered 429 answers 429 again and the next tier's stored reply is
+    used. Thread-safe; appends one JSON line per new outcome, so an
+    interrupted run keeps what it paid for."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
         self._lock = threading.Lock()
-        self._replies: dict[str, dict] = {}
+        self._rows: dict[str, dict] = {}
         self._seen: Counter = Counter()
         self.hits = 0
         self.misses = 0
@@ -108,35 +114,63 @@ class ReplyCache:
             for line in path.read_text().splitlines():
                 if line.strip():
                     row = json.loads(line)
-                    self._replies[row["key"]] = row
+                    self._rows[row["key"]] = row
         path.parent.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
-    def digest(messages: list[dict]) -> str:
-        return hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
+    def digest(tier: str, messages: list[dict]) -> str:
+        raw = json.dumps([tier, messages], sort_keys=True).encode()
+        return hashlib.sha256(raw).hexdigest()
 
     def next_key(self, digest: str) -> str:
         with self._lock:
             return f"{digest}:{self._seen[digest]}"
 
+    def _count(self, key: str, row: dict) -> None:
+        self._seen[key.rsplit(":", 1)[0]] += 1
+        if "body" in row:
+            self.models[row.get("model") or "?"] += 1
+
     def get(self, key: str) -> dict | None:
         with self._lock:
-            row = self._replies.get(key)
+            row = self._rows.get(key)
             if row is not None:
-                self._seen[key.rsplit(":", 1)[0]] += 1
+                self._count(key, row)
                 self.hits += 1
-                self.models[row.get("model") or "?"] += 1
             return row
 
-    def put(self, key: str, body: dict, model: str) -> None:
-        row = {"key": key, "model": model, "body": body}
+    def put(self, key: str, row: dict) -> None:
+        row = {"key": key, **row}
         with self._lock:
-            self._replies[key] = row
-            self._seen[key.rsplit(":", 1)[0]] += 1
+            self._rows[key] = row
+            self._count(key, row)
             self.misses += 1
-            self.models[model or "?"] += 1
             with self.path.open("a") as f:
                 f.write(json.dumps(row) + "\n")
+
+
+def _outcome(resp, config) -> dict:
+    """What to store for one HTTP answer."""
+    if resp.status_code == 200:
+        try:
+            body = resp.json()
+        except ValueError:
+            return {"status": 200, "text": resp.text[:20_000]}
+        return {"body": body, "model": str(body.get("model") or config.model)}
+    return {"status": resp.status_code, "text": resp.text[:2_000]}
+
+
+def _replayed(row: dict, url: str):
+    """The stored outcome as the call returns or raises it."""
+    import httpx
+
+    request = httpx.Request("POST", url)
+    if "body" in row:
+        return httpx.Response(200, json=row["body"], request=request)
+    if "error" in row:
+        error = getattr(httpx, row["error"], httpx.ConnectError)
+        raise error(f"replayed {row['error']}", request=request)
+    return httpx.Response(row["status"], text=row["text"], request=request)
 
 
 def _added_contents(fixture: dict) -> dict[str, str]:
@@ -226,32 +260,23 @@ def _patched(gateway_host: str, runs: dict[int, _Run], cache: ReplyCache) -> Ite
     real_call = llm_client._call_backend
 
     def cached_call(config, messages, cancel_event=None):
-        key = cache.next_key(cache.digest(messages))
+        tier = f"{config.backend.value}:{urlparse(config.url).path}"
+        key = cache.next_key(cache.digest(tier, messages))
         row = cache.get(key)
         if row is not None:
-            return httpx.Response(200, json=row["body"], request=httpx.Request("POST", config.url))
+            return _replayed(row, config.url)
         # Replay traffic queues behind live reviews at the gateway.
         config = dataclasses.replace(config, extra_headers={**config.extra_headers, **_BATCH_HEADERS})
         try:
             resp = real_call(config, messages, cancel_event=cancel_event)
-        except Exception as e:  # noqa: BLE001 - traced, then re-raised unchanged
-            if os.environ.get("LR_DEBUG"):
-                print(
-                    f"LRDBG {config.backend.value} {urlparse(config.url).path} {type(e).__name__}: {e}",
-                    file=sys.stderr,
-                )
+        except httpx.RequestError as e:
+            _trace(tier, type(e).__name__)
+            cache.put(key, {"error": type(e).__name__})
             raise
-        if os.environ.get("LR_DEBUG"):
-            print(
-                f"LRDBG {config.backend.value} {urlparse(config.url).path} {resp.status_code} {resp.text[:200]}",
-                file=sys.stderr,
-            )
-        if resp.status_code == 200:
-            try:
-                body = resp.json()
-            except ValueError:
-                return resp
-            cache.put(key, body, str(body.get("model") or config.model))
+        # Anything else (an unconfigured tier, a local rate limiter) is
+        # decided in this process and happens again on its own.
+        _trace(tier, f"{resp.status_code} {resp.text[:200]}")
+        cache.put(key, _outcome(resp, config))
         return resp
 
     def run_of(number) -> _Run:
@@ -306,6 +331,11 @@ def _patched(gateway_host: str, runs: dict[int, _Run], cache: ReplyCache) -> Ite
 
 
 _CURRENT = threading.local()
+
+
+def _trace(tier: str, what: str) -> None:
+    if os.environ.get("LR_DEBUG"):
+        print(f"LRDBG {tier} {what}", file=sys.stderr)
 
 
 def _review(run: _Run) -> lr_score.Verdict:
