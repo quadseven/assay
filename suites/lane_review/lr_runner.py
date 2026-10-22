@@ -153,6 +153,35 @@ def _report(name: str, s: lr_score.Score) -> str:
     return "\n".join(lines)
 
 
+def _replay_checkout(grug: Path, corpus: list[dict]) -> tuple[list[lr_score.Verdict], str]:
+    """Verdicts from a grug checkout, and a source name carrying its
+    commit, never its local path (a path names a user)."""
+    sys.path.insert(0, str(grug.resolve() / "services" / "_shared"))
+    verdicts = [replay(f) for f in corpus]
+    sha = subprocess.run(
+        ["git", "-C", str(grug), "rev-parse", "--short=8", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    return verdicts, f"deterministic replay of grug {sha or 'unknown'}"
+
+
+def _show(verdicts: list[lr_score.Verdict], which: str) -> None:
+    for v in verdicts:
+        missed = v.label == "DAMAGING" and not v.blocked
+        fp = v.label == "GOOD" and v.blocked
+        if which == "all" or (which == "missed" and missed) or (which == "fp" and fp):
+            print(f"{v.fixture_id} {v.label} {','.join(v.classes)} -> {v.findings} {v.error}")
+
+
+def _write(out: Path, name: str, s: lr_score.Score, verdicts: list[lr_score.Verdict]) -> None:
+    rows = [
+        {"id": v.fixture_id, "label": v.label, "findings": v.findings, "error": v.error} for v in verdicts
+    ]
+    out.write_text(json.dumps({"source": name, "score": s.as_dict(), "verdicts": rows}, indent=1) + "\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
@@ -162,52 +191,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, help="write the score and per-fixture verdicts as JSON")
     ap.add_argument("--show", choices=["missed", "fp", "all"], help="list fixtures")
     args = ap.parse_args(argv)
+    if args.grug and not (args.grug / "services" / "_shared" / "personas" / "code_reviewer").is_dir():
+        ap.error(f"{args.grug} is not a grug checkout (no services/_shared/personas/code_reviewer)")
     corpus = load_corpus(args.corpus)
     if args.live:
-        verdicts = [lr_score.live_verdict(f) for f in corpus]
-        name = "Elder at merge (recorded check run)"
+        verdicts, name = [lr_score.live_verdict(f) for f in corpus], "Elder at merge (recorded check run)"
     else:
-        shared = args.grug.resolve() / "services" / "_shared"
-        if not (shared / "personas" / "code_reviewer").is_dir():
-            ap.error(f"{args.grug} is not a grug checkout (no services/_shared/personas/code_reviewer)")
-        sys.path.insert(0, str(shared))
-        verdicts = [replay(f) for f in corpus]
-        sha = (
-            subprocess.run(
-                ["git", "-C", str(args.grug), "rev-parse", "--short=8", "HEAD"],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout.strip()
-            or "unknown"
-        )
-        # The checkout's commit, never its local path (a path names a user).
-        name = f"deterministic replay of grug {sha}"
+        verdicts, name = _replay_checkout(args.grug, corpus)
     if args.corpus.resolve() != CORPUS.resolve():
         name += f" on {args.corpus.name}"
     s = lr_score.score(verdicts)
     print(_report(name, s))
     if args.show:
-        for v in verdicts:
-            missed = v.label == "DAMAGING" and not v.blocked
-            fp = v.label == "GOOD" and v.blocked
-            if args.show == "all" or (args.show == "missed" and missed) or (args.show == "fp" and fp):
-                print(f"{v.fixture_id} {v.label} {','.join(v.classes)} -> {v.findings} {v.error}")
+        _show(verdicts, args.show)
     if args.out:
-        args.out.write_text(
-            json.dumps(
-                {
-                    "source": name,
-                    "score": s.as_dict(),
-                    "verdicts": [
-                        {"id": v.fixture_id, "label": v.label, "findings": v.findings, "error": v.error}
-                        for v in verdicts
-                    ],
-                },
-                indent=1,
-            )
-            + "\n"
-        )
+        _write(args.out, name, s, verdicts)
     return 0
 
 
