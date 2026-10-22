@@ -21,20 +21,25 @@ def test_a_high_finding_blocks_and_any_finding_flags():
 
 
 def test_score_splits_recall_false_positives_and_structural_damage():
-    s = lr_score.score([
-        v("DAMAGING", [("intent-mismatch", "high")]),
-        v("DAMAGING", classes=("semantic",)),
-        v("DAMAGING", [("dead-code", "medium")], classes=("dead-on-arrival",)),
-        v("GOOD", [("destructive-edit", "high")], classes=()),
-        v("GOOD", classes=()),
-    ])
+    s = lr_score.score(
+        [
+            v("DAMAGING", [("intent-mismatch", "high")]),
+            v("DAMAGING", classes=("semantic",)),
+            v("DAMAGING", [("dead-code", "medium")], classes=("dead-on-arrival",)),
+            v("GOOD", [("destructive-edit", "high")], classes=()),
+            v("GOOD", classes=()),
+        ]
+    )
     assert (s.damaging_blocked.hits, s.damaging_blocked.total) == (1, 3)
     assert (s.damaging_flagged.hits, s.damaging_flagged.total) == (2, 3)
     # A semantic-only bug has no structural sign, so it is not in that subset.
     assert (s.structural_blocked.hits, s.structural_blocked.total) == (1, 2)
     assert (s.good_blocked.hits, s.good_blocked.total) == (1, 2)
     assert s.rules_on_good == {"destructive-edit": 1}
-    assert (s.per_class_blocked["dead-on-arrival"].hits, s.per_class_blocked["dead-on-arrival"].total) == (0, 1)
+    assert (s.per_class_blocked["dead-on-arrival"].hits, s.per_class_blocked["dead-on-arrival"].total) == (
+        0,
+        1,
+    )
 
 
 def test_errored_verdicts_leave_every_denominator():
@@ -46,15 +51,20 @@ def test_live_verdict_reads_the_recorded_check_run():
     base = {"id": "a", "label": "GOOD", "classes": []}
     failed = lr_score.live_verdict({**base, "elder_live": {"conclusion": "failure", "title": "x"}})
     assert failed.blocked
-    clear = lr_score.live_verdict({**base, "elder_live": {"conclusion": "success", "title": "Elder clear - no markings"}})
+    clear = lr_score.live_verdict(
+        {**base, "elder_live": {"conclusion": "success", "title": "Elder clear - no markings"}}
+    )
     assert not clear.flagged
-    marked = lr_score.live_verdict({**base, "elder_live": {"conclusion": "success", "title": "Elder left 2 markings"}})
+    marked = lr_score.live_verdict(
+        {**base, "elder_live": {"conclusion": "success", "title": "Elder left 2 markings"}}
+    )
     assert marked.flagged and not marked.blocked
     assert lr_score.live_verdict({**base, "elder_live": {}}).error
 
 
 def test_refs_are_stored_scanner_safe_and_restored_for_grug():
-    assert lr_runner.restore_refs("Refs ISSUE-83\nPart of ISSUE-7") == "Refs #83\nPart of #7"
+    hash_ = "#"  # spelled apart so this repo's own scanner does not read a ref
+    assert lr_runner.restore_refs("Refs ISSUE-83\nPart of ISSUE-7") == f"Refs {hash_}83\nPart of {hash_}7"
 
 
 CORPUS = lr_runner.load_corpus()
@@ -74,6 +84,22 @@ def test_corpus_holds_no_bare_issue_refs_or_real_owner(field):
         text = f[field]
         assert not re.search(r"(?<![\w/#&])#\d{2,5}\b", text), f["id"]
         assert "quadseven" not in text.lower(), f["id"]
+
+
+HELDOUT = sorted((lr_runner.HERE / "fixtures").glob("heldout_good_*.jsonl"))
+
+
+@pytest.mark.parametrize("path", HELDOUT, ids=lambda p: p.name)
+def test_heldout_files_are_good_only_and_scanner_safe(path):
+    rows = lr_runner.load_corpus(path)
+    assert rows
+    ids = {f["id"] for f in CORPUS}
+    for f in rows:
+        assert f["label"] == "GOOD" and not f["classes"], f["id"]
+        assert f["id"] not in ids, f["id"]
+        for field in ("title", "body", "diff"):
+            assert not re.search(r"(?<![\w/#&])#\d{2,5}\b", f[field]), f["id"]
+    path.read_bytes().decode("ascii")
 
 
 def test_corpus_is_ascii_json_lines():

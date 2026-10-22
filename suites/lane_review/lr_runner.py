@@ -18,6 +18,7 @@ the PR closes.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import re
 import subprocess
@@ -51,7 +52,9 @@ def _added_file_contents(diff: str, paths: set[str]) -> dict[str, str]:
         body = block.split("\n@@", 1)
         if len(body) < 2:
             continue
-        lines = [ln[1:] for ln in ("@@" + body[1]).splitlines() if ln.startswith("+") and not ln.startswith("+++")]
+        lines = [
+            ln[1:] for ln in ("@@" + body[1]).splitlines() if ln.startswith("+") and not ln.startswith("+++")
+        ]
         out[m.group(2)] = "\n".join(lines) + "\n"
     return out
 
@@ -99,10 +102,22 @@ def replay(fixture: dict) -> lr_score.Verdict:
         except ImportError:
             lane_work_findings = None
         if lane_work_findings is not None:
+            extra = {}
+            if "health_issues" in inspect.signature(lane_work_findings).parameters:
+                # Later checkouts also read which linked issues are health findings.
+                extra["health_issues"] = tuple(
+                    li["number"] for li in fixture.get("linked", []) if li.get("health")
+                )
             found = lane_work_findings(
-                diff_text=diff, hunks=hunks, file_contents=contents,
-                base_line_counts=base, boxes=_boxes(fixture),
-                pr_title=title, pr_body=body, changes=_changes(fixture),
+                diff_text=diff,
+                hunks=hunks,
+                file_contents=contents,
+                base_line_counts=base,
+                boxes=_boxes(fixture),
+                pr_title=title,
+                pr_body=body,
+                changes=_changes(fixture),
+                **extra,
             )
         else:
             from personas.code_reviewer.criteria_coverage import LinkedCriterion, scan_criteria_coverage
@@ -116,7 +131,9 @@ def replay(fixture: dict) -> lr_score.Verdict:
     except Exception as e:  # noqa: BLE001 - one bad fixture must not hide the rest
         return lr_score.Verdict(fixture["id"], fixture["label"], classes, error=f"{type(e).__name__}: {e}")
     return lr_score.Verdict(
-        fixture["id"], fixture["label"], classes,
+        fixture["id"],
+        fixture["label"],
+        classes,
         tuple((f.rule_name, f.severity) for f in found),
     )
 
@@ -150,14 +167,24 @@ def main(argv: list[str] | None = None) -> int:
         verdicts = [lr_score.live_verdict(f) for f in corpus]
         name = "Elder at merge (recorded check run)"
     else:
-        sys.path.insert(0, str(args.grug.resolve() / "services" / "_shared"))
+        shared = args.grug.resolve() / "services" / "_shared"
+        if not (shared / "personas" / "code_reviewer").is_dir():
+            ap.error(f"{args.grug} is not a grug checkout (no services/_shared/personas/code_reviewer)")
+        sys.path.insert(0, str(shared))
         verdicts = [replay(f) for f in corpus]
-        sha = subprocess.run(
-            ["git", "-C", str(args.grug), "rev-parse", "--short=8", "HEAD"],
-            capture_output=True, text=True, check=False,
-        ).stdout.strip() or "unknown"
+        sha = (
+            subprocess.run(
+                ["git", "-C", str(args.grug), "rev-parse", "--short=8", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.strip()
+            or "unknown"
+        )
         # The checkout's commit, never its local path (a path names a user).
         name = f"deterministic replay of grug {sha}"
+    if args.corpus.resolve() != CORPUS.resolve():
+        name += f" on {args.corpus.name}"
     s = lr_score.score(verdicts)
     print(_report(name, s))
     if args.show:
@@ -167,14 +194,20 @@ def main(argv: list[str] | None = None) -> int:
             if args.show == "all" or (args.show == "missed" and missed) or (args.show == "fp" and fp):
                 print(f"{v.fixture_id} {v.label} {','.join(v.classes)} -> {v.findings} {v.error}")
     if args.out:
-        args.out.write_text(json.dumps({
-            "source": name,
-            "score": s.as_dict(),
-            "verdicts": [
-                {"id": v.fixture_id, "label": v.label, "findings": v.findings, "error": v.error}
-                for v in verdicts
-            ],
-        }, indent=1) + "\n")
+        args.out.write_text(
+            json.dumps(
+                {
+                    "source": name,
+                    "score": s.as_dict(),
+                    "verdicts": [
+                        {"id": v.fixture_id, "label": v.label, "findings": v.findings, "error": v.error}
+                        for v in verdicts
+                    ],
+                },
+                indent=1,
+            )
+            + "\n"
+        )
     return 0
 
 

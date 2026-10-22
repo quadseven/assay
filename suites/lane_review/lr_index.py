@@ -1,6 +1,6 @@
 """Rewrite results/index.md from the result JSON files next to it.
 
-    python suites/lane_review/lr_index.py
+python suites/lane_review/lr_index.py
 """
 
 from __future__ import annotations
@@ -14,6 +14,8 @@ _FIRST = ("elder-at-merge", "grug-main")
 
 
 def _rate(score: dict, key: str) -> str:
+    if not score[key]["total"]:
+        return "-"
     return f"{score[key]['hits']}/{score[key]['total']}"
 
 
@@ -23,10 +25,21 @@ def render(results: Path = RESULTS) -> str:
         data = json.loads(path.read_text())
         s = data["score"]
         rank = next((i for i, k in enumerate(_FIRST) if k in path.name), len(_FIRST))
-        rows.append((rank, path.name, [
-            path.name, data["source"], _rate(s, "damaging_blocked"), _rate(s, "structural_blocked"),
-            _rate(s, "damaging_flagged"), _rate(s, "good_blocked"), _rate(s, "good_flagged"),
-        ]))
+        rows.append(
+            (
+                rank,
+                path.name,
+                [
+                    path.name,
+                    data["source"],
+                    _rate(s, "damaging_blocked"),
+                    _rate(s, "structural_blocked"),
+                    _rate(s, "damaging_flagged"),
+                    _rate(s, "good_blocked"),
+                    _rate(s, "good_flagged"),
+                ],
+            )
+        )
     rows.sort(key=lambda r: (r[0], r[1]))
     out = [
         "# lane_review results",

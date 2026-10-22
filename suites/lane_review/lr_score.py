@@ -139,7 +139,9 @@ def live_verdict(fixture: dict) -> Verdict:
     live = fixture.get("elder_live") or {}
     conclusion = live.get("conclusion")
     if not conclusion:
-        return Verdict(fixture["id"], fixture["label"], tuple(fixture.get("classes", ())), error="no live run")
+        return Verdict(
+            fixture["id"], fixture["label"], tuple(fixture.get("classes", ())), error="no live run"
+        )
     title = (live.get("title") or "").lower()
     findings: tuple[tuple[str, str], ...] = ()
     if conclusion == "failure":

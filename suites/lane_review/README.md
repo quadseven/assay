@@ -40,6 +40,13 @@ service codenames are replaced, and issue references are spelled `ISSUE-N`
 so the public leak scanners never read them as cross-repository references.
 The private mapping back to the real pull requests is not published.
 
+Two held-out files, `fixtures/heldout_good_1.jsonl` and
+`fixtures/heldout_good_2.jsonl`, each hold 100 more GOOD lane pull requests
+from the same audit, sampled after the checks were first written. Replay
+them with `--corpus` to measure false positives on work the checks were not
+written against. Both have since been used to fix the checks they tripped,
+so a new sample is the honest test of the next change.
+
 ## Running it
 
 ```
