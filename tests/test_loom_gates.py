@@ -114,7 +114,9 @@ def _adapter(name):
 
 
 def _graphql(fake, query="query { repository { pullRequest(number: 1) { id } } }"):
-    status, _, body = fake("POST", "https://api.github.com/graphql", {}, json.dumps({"query": query}).encode())
+    status, _, body = fake(
+        "POST", "https://api.github.com/graphql", {}, json.dumps({"query": query}).encode()
+    )
     return status, json.loads(body)
 
 
@@ -149,15 +151,39 @@ def test_the_fake_answers_the_merge_cap_count_and_records_an_unknown_query():
 def test_only_the_findings_elder_publishes_inline_become_threads():
     import lg_inbox
 
-    elder = {"results": [
-        {"case": "c", "gate": "elder.lane_work.lane_work_findings", "findings": [
-            {"severity": "medium", "rule": "dead-code", "message": "m", "file": "a.py", "line": 3, "body": "B1"},
-            {"severity": "high", "rule": "x", "message": "m", "file": "", "line": 0, "body": "B2"},
-        ]},
-        {"case": "c", "gate": "elder.dead_on_arrival.scan_dead_on_arrival", "findings": [
-            {"severity": "high", "rule": "dead-code", "message": "m", "file": "a.py", "line": 3, "body": "B3"},
-        ]},
-    ]}
+    elder = {
+        "results": [
+            {
+                "case": "c",
+                "gate": "elder.lane_work.lane_work_findings",
+                "findings": [
+                    {
+                        "severity": "medium",
+                        "rule": "dead-code",
+                        "message": "m",
+                        "file": "a.py",
+                        "line": 3,
+                        "body": "B1",
+                    },
+                    {"severity": "high", "rule": "x", "message": "m", "file": "", "line": 0, "body": "B2"},
+                ],
+            },
+            {
+                "case": "c",
+                "gate": "elder.dead_on_arrival.scan_dead_on_arrival",
+                "findings": [
+                    {
+                        "severity": "high",
+                        "rule": "dead-code",
+                        "message": "m",
+                        "file": "a.py",
+                        "line": 3,
+                        "body": "B3",
+                    },
+                ],
+            },
+        ]
+    }
     assert lg_inbox.elder_threads(elder) == {"c": ["B1"]}
 
 

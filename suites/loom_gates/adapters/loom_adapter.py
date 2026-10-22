@@ -427,8 +427,9 @@ def gate_close(case, station):
             case,
             "loom.close",
             "blocked",
-            "kept open: no evidence for %d live or operator criteria (%s)"
-            % (len(gaps), "; ".join(f"{k}: {t[:80]}" for k, t in gaps[:3])),
+            f"kept open: no evidence for {len(gaps)} live or operator criteria ("
+            + "; ".join(f"{k}: {t[:80]}" for k, t in gaps[:3])
+            + ")",
         )
     return result(case, "loom.close", "passed", "closes now: " + why)
 

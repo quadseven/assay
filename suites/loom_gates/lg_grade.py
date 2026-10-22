@@ -32,7 +32,13 @@ from collections.abc import Iterable
 from typing import Any
 
 BLOCKED, HELD, FLAGGED, PASSED, ABSENT, NA, ERROR = (
-    "blocked", "held", "flagged", "passed", "absent", "n/a", "error"
+    "blocked",
+    "held",
+    "flagged",
+    "passed",
+    "absent",
+    "n/a",
+    "error",
 )
 STATUSES = (BLOCKED, HELD, FLAGGED, PASSED, ABSENT, NA, ERROR)
 STOPPED = (BLOCKED, HELD)

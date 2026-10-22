@@ -47,7 +47,9 @@ def elder_threads(elder: dict) -> dict[str, list[str]]:
         if row["gate"] not in PUBLISHED:
             continue
         for f in row.get("findings") or []:
-            body = f.get("body") or "{} | _general_ | `{}`\n\n{}".format(f["severity"], f["rule"], f["message"])
+            body = f.get("body") or "{} | _general_ | `{}`\n\n{}".format(
+                f["severity"], f["rule"], f["message"]
+            )
             if f.get("file") and f.get("line") and body not in out.get(row["case"], []):
                 out.setdefault(row["case"], []).append(body)
     return out
