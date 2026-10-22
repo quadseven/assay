@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
+import os
 import re
 import subprocess
 import sys
@@ -34,6 +35,20 @@ _REF_RE = re.compile(r"\bISSUE-(\d+)\b")
 
 def load_corpus(path: Path = CORPUS) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def sample(corpus: list[dict], n: int) -> list[dict]:
+    """A fixed sample: the first N fixtures of each label, ordered by a hash
+    of their id, so every run and every checkout replays the same ones."""
+    import hashlib
+
+    def key(f: dict) -> str:
+        return hashlib.sha256(f["id"].encode()).hexdigest()
+
+    out: list[dict] = []
+    for label in lr_score.LABELS:
+        out += sorted((f for f in corpus if f["label"] == label), key=key)[:n]
+    return out
 
 
 def restore_refs(text: str) -> str:
@@ -167,6 +182,29 @@ def _replay_checkout(grug: Path, corpus: list[dict]) -> tuple[list[lr_score.Verd
     return verdicts, f"deterministic replay of grug {sha or 'unknown'}"
 
 
+def _replay_pipeline(args, corpus: list[dict]) -> tuple[list[lr_score.Verdict], str]:
+    """Verdicts of the checkout's whole review; the source names the
+    commit and the models that answered, never a host or path."""
+    import lr_pipeline
+
+    verdicts, cache = lr_pipeline.replay_pipeline(
+        args.grug,
+        corpus,
+        gateway_url=os.environ["LR_GATEWAY_URL"],
+        cache_dir=args.cache or lr_pipeline.DEFAULT_CACHE,
+        workers=args.workers,
+    )
+    sha = subprocess.run(
+        ["git", "-C", str(args.grug), "rev-parse", "--short=8", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    models = ", ".join(f"{m} {n}" for m, n in cache.models.most_common(4))
+    print(f"model replies: {cache.hits} cached, {cache.misses} new; {models}")
+    return verdicts, f"full pipeline replay of grug {sha or 'unknown'}"
+
+
 def _show(verdicts: list[lr_score.Verdict], which: str) -> None:
     for v in verdicts:
         missed = v.label == "DAMAGING" and not v.blocked
@@ -182,7 +220,7 @@ def _write(out: Path, name: str, s: lr_score.Score, verdicts: list[lr_score.Verd
     out.write_text(json.dumps({"source": name, "score": s.as_dict(), "verdicts": rows}, indent=1) + "\n")
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--grug", type=Path, help="a grug checkout to replay")
@@ -190,16 +228,56 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--corpus", type=Path, default=CORPUS)
     ap.add_argument("--out", type=Path, help="write the score and per-fixture verdicts as JSON")
     ap.add_argument("--show", choices=["missed", "fp", "all"], help="list fixtures")
-    args = ap.parse_args(argv)
+    ap.add_argument(
+        "--pipeline",
+        action="store_true",
+        help="with --grug: replay the whole review, model included (lr_pipeline.py; needs LR_GATEWAY_URL)",
+    )
+    ap.add_argument(
+        "--cache", type=Path, default=None, help="model reply cache dir (default .cache/lane_review)"
+    )
+    ap.add_argument("--workers", type=int, default=2, help="--pipeline: fixtures reviewed at once")
+    ap.add_argument("--only", help="comma-separated fixture ids to replay")
+    ap.add_argument("--sample", type=int, help="replay a fixed sample of N fixtures of each label")
+    return ap
+
+
+def _check(ap: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.grug and not (args.grug / "services" / "_shared" / "personas" / "code_reviewer").is_dir():
         ap.error(f"{args.grug} is not a grug checkout (no services/_shared/personas/code_reviewer)")
+    if args.pipeline and not args.grug:
+        ap.error("--pipeline replays a grug checkout: pass --grug")
+    if args.pipeline and not os.environ.get("LR_GATEWAY_URL"):
+        ap.error("--pipeline needs LR_GATEWAY_URL, the inference gateway's base URL")
+
+
+def _selected(args: argparse.Namespace) -> list[dict]:
     corpus = load_corpus(args.corpus)
+    if args.only:
+        wanted = set(args.only.split(","))
+        corpus = [f for f in corpus if f["id"] in wanted]
+    return sample(corpus, args.sample) if args.sample else corpus
+
+
+def _verdicts(args: argparse.Namespace, corpus: list[dict]) -> tuple[list[lr_score.Verdict], str]:
     if args.live:
         verdicts, name = [lr_score.live_verdict(f) for f in corpus], "Elder at merge (recorded check run)"
+    elif args.pipeline:
+        verdicts, name = _replay_pipeline(args, corpus)
     else:
         verdicts, name = _replay_checkout(args.grug, corpus)
     if args.corpus.resolve() != CORPUS.resolve():
         name += f" on {args.corpus.name}"
+    if args.sample:
+        name += f", fixed sample of {args.sample} per label"
+    return verdicts, name
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = _parser()
+    args = ap.parse_args(argv)
+    _check(ap, args)
+    verdicts, name = _verdicts(args, _selected(args))
     s = lr_score.score(verdicts)
     print(_report(name, s))
     if args.show:
