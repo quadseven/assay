@@ -47,6 +47,11 @@ on work the checks were not written against. Samples 1 and 2 were then used
 to fix the checks they tripped; sample 3 was drawn after those fixes and was
 not used to tune anything, so it is the honest false-positive figure.
 
+`fixtures/reported_good.jsonl` holds GOOD pull requests the review bot
+wrongly marked after the audit, as people reported them. Each one is a
+regression case for the fix it prompted, not a sample: replay it with
+`--corpus` and expect no finding.
+
 ## Running it
 
 ```
