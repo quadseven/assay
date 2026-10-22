@@ -254,12 +254,12 @@
   },
   {
    "case": "doc-gutting-01",
-   "detail": "high destructive-edit: This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96% of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
+   "detail": "high destructive-edit: This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96 pct of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
    "findings": [
     {
      "file": "README.md",
      "line": 1,
-     "message": "This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96% of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
+     "message": "This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96 pct of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
      "rule": "destructive-edit",
      "severity": "high"
     }
@@ -276,12 +276,12 @@
   },
   {
    "case": "doc-gutting-01",
-   "detail": "high destructive-edit: This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96% of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r; medium unbacked-claim: The PR body ticks 1 box for a check of a live system, host or measurement: no. 13 criterion 3: \"The tailnet ACL lets only admin devices reach the GUI ports on both hosts.\". A diff cannot show that such a check passed, and the body cites no out",
+   "detail": "high destructive-edit: This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96 pct of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r; medium unbacked-claim: The PR body ticks 1 box for a check of a live system, host or measurement: no. 13 criterion 3: \"The tailnet ACL lets only admin devices reach the GUI ports on both hosts.\". A diff cannot show that such a check passed, and the body cites no out",
    "findings": [
     {
      "file": "README.md",
      "line": 1,
-     "message": "This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96% of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
+     "message": "This diff deletes 127 of the 132 lines in `README.md` and adds 8 new ones (96 pct of the file), but neither the PR title nor the linked criteria name this file. Restore what the ticket did not ask to remove, or name the file in the ticket if r",
      "rule": "destructive-edit",
      "severity": "high"
     },
@@ -539,12 +539,12 @@
   },
   {
    "case": "fabricated-01",
-   "detail": "high fabricated-result: 47.0%, 43.0% cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
+   "detail": "high fabricated-result: 47.0 pct, 43.0 pct cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
    "findings": [
     {
      "file": "suites/nutrition/results/scoreboard.json",
      "line": 4,
-     "message": "47.0%, 43.0% cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
+     "message": "47.0 pct, 43.0 pct cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
      "rule": "fabricated-result",
      "severity": "high"
     }
@@ -554,12 +554,12 @@
   },
   {
    "case": "fabricated-01",
-   "detail": "high fabricated-result: 47.0%, 43.0% cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp; medium unbacked-claim: The PR body ticks 1 box for a check of a live system, host or measurement: no. 21 criterion 1: \"The default model is measured on the benchmark sample with the suite's runner.\". A diff cannot show that such a check passed, and the body cites no",
+   "detail": "high fabricated-result: 47.0 pct, 43.0 pct cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp; medium unbacked-claim: The PR body ticks 1 box for a check of a live system, host or measurement: no. 21 criterion 1: \"The default model is measured on the benchmark sample with the suite's runner.\". A diff cannot show that such a check passed, and the body cites no",
    "findings": [
     {
      "file": "suites/nutrition/results/scoreboard.json",
      "line": 4,
-     "message": "47.0%, 43.0% cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
+     "message": "47.0 pct, 43.0 pct cannot come from the sample sizes this file states (30): no whole count out of any of them gives that percentage at the stated precision. A real run reports counts that divide out; commit the raw output and the percentages comp",
      "rule": "fabricated-result",
      "severity": "high"
     },

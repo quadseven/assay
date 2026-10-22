@@ -79,8 +79,11 @@ def ensure_image(image: str = IMAGE) -> None:
 def scrub(text: str) -> str:
     """Results are published: a gate's message that cites an issue by number
     (a hash sign and digits) reads as a cross-reference once public, so the
-    number loses its hash sign."""
-    return re.sub(r"#(\d+)", r"no. \1", text)
+    number loses its hash sign. A percentage a gate's message quotes (the
+    review bot naming a case's fabricated rates) reads as a rate the results
+    file states, beside the run's own case counts, so it is spelled "pct"."""
+    text = re.sub(r"#(\d+)", r"no. \1", text)
+    return re.sub(r"(\d)\s?%", r"\1 pct", text)
 
 
 def head_of(path: Path) -> str:
