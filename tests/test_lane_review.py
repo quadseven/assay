@@ -86,7 +86,9 @@ def test_corpus_holds_no_bare_issue_refs_or_real_owner(field):
         assert "quadseven" not in text.lower(), f["id"]
 
 
-HELDOUT = sorted((lr_runner.HERE / "fixtures").glob("heldout_good_*.jsonl"))
+HELDOUT = sorted((lr_runner.HERE / "fixtures").glob("heldout_good_*.jsonl")) + [
+    lr_runner.HERE / "fixtures" / "reported_good.jsonl"
+]
 
 
 @pytest.mark.parametrize("path", HELDOUT, ids=lambda p: p.name)
