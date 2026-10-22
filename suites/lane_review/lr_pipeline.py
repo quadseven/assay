@@ -160,6 +160,15 @@ def _outcome(resp, config) -> dict:
     return {"status": resp.status_code, "text": resp.text[:2_000]}
 
 
+def _replayable(row: dict) -> bool:
+    """A stored error can be raised again only as an httpx class. Another
+    `RequestError` subclass (a local rate limiter's) is raised by this
+    process on its own, so the call is made again, not replayed."""
+    import httpx
+
+    return "error" not in row or isinstance(getattr(httpx, row["error"], None), type)
+
+
 def _replayed(row: dict, url: str):
     """The stored outcome as the call returns or raises it."""
     import httpx
@@ -263,7 +272,7 @@ def _patched(gateway_host: str, runs: dict[int, _Run], cache: ReplyCache) -> Ite
         tier = f"{config.backend.value}:{urlparse(config.url).path}"
         key = cache.next_key(cache.digest(tier, messages))
         row = cache.get(key)
-        if row is not None:
+        if row is not None and _replayable(row):
             return _replayed(row, config.url)
         # Replay traffic queues behind live reviews at the gateway.
         config = dataclasses.replace(config, extra_headers={**config.extra_headers, **_BATCH_HEADERS})
@@ -271,12 +280,14 @@ def _patched(gateway_host: str, runs: dict[int, _Run], cache: ReplyCache) -> Ite
             resp = real_call(config, messages, cancel_event=cancel_event)
         except httpx.RequestError as e:
             _trace(tier, type(e).__name__)
-            cache.put(key, {"error": type(e).__name__})
+            if row is None and _replayable({"error": type(e).__name__}):
+                cache.put(key, {"error": type(e).__name__})
             raise
         # Anything else (an unconfigured tier, a local rate limiter) is
         # decided in this process and happens again on its own.
         _trace(tier, f"{resp.status_code} {resp.text[:200]}")
-        cache.put(key, _outcome(resp, config))
+        if row is None:
+            cache.put(key, _outcome(resp, config))
         return resp
 
     def run_of(number) -> _Run:

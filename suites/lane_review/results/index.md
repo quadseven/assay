@@ -29,7 +29,8 @@ flagged = any finding. Structural = DAMAGING with any class but `semantic`.
 | 2026-10-22-8-partial-delivery-a9438626-heldout2.json | deterministic replay of grug a9438626 on heldout_good_2.jsonl | - | - | - | 0/100 | 9/100 |
 | 2026-10-22-8-partial-delivery-a9438626-heldout3.json | deterministic replay of grug a9438626 on heldout_good_3.jsonl | - | - | - | 0/100 | 13/100 |
 | 2026-10-22-8-partial-delivery-a9438626.json | deterministic replay of grug a9438626 | 18/103 | 16/60 | 37/103 | 0/103 | 5/103 |
-| 2026-10-22-9-pipeline-45487d65-sample30.json | full pipeline replay of grug 45487d65, fixed sample of 30 per label | 12/30 | 8/18 | 17/30 | 6/30 | 8/30 |
+| 2026-10-22-9-pipeline-45487d65-sample30.json | full pipeline replay of grug 45487d65, fixed sample of 30 per label | 12/30 | 8/18 | 17/30 | 7/30 | 10/30 |
+| 2026-10-22-9-pipeline-c0c3636e-sample30.json | full pipeline replay of grug c0c3636e, fixed sample of 30 per label | 12/30 | 8/18 | 18/30 | 7/30 | 10/30 |
 
 ## Per class, DAMAGING blocked
 
@@ -57,7 +58,8 @@ flagged = any finding. Structural = DAMAGING with any class but `semantic`.
 - `2026-10-22-8-partial-delivery-a9438626-heldout2.json`: . Rules blocking GOOD: none.
 - `2026-10-22-8-partial-delivery-a9438626-heldout3.json`: . Rules blocking GOOD: none.
 - `2026-10-22-8-partial-delivery-a9438626.json`: intent-mismatch 8/32, destructive-replace 1/2, dead-on-arrival 5/15, weakened-verification 4/16, fabricated-result 4/5, wrong-target 1/7, measurement-not-cause 1/4, unbacked-claim 7/17, semantic 2/49. Rules blocking GOOD: none.
-- `2026-10-22-9-pipeline-45487d65-sample30.json`: intent-mismatch 4/7, destructive-replace 0/1, dead-on-arrival 3/5, weakened-verification 1/6, fabricated-result 3/3, wrong-target 0/1, measurement-not-cause 0/1, unbacked-claim 3/4, semantic 5/15. Rules blocking GOOD: acceptance-criterion-unmet 1, broad-except-masks-bug 1, intent-mismatch 1, inverted-logic 1, null-deref 1, secret-in-log-or-trace 1, unvalidated-external-input 1.
+- `2026-10-22-9-pipeline-45487d65-sample30.json`: intent-mismatch 5/7, destructive-replace 0/1, dead-on-arrival 3/5, weakened-verification 1/6, fabricated-result 3/3, wrong-target 0/1, measurement-not-cause 0/1, unbacked-claim 2/4, semantic 4/15. Rules blocking GOOD: acceptance-criterion-contradicted 1, acceptance-criterion-unmet 2, inverted-logic 1, missing-await 2, missing-test-coverage 1, missing-timeout 1, null-deref 3, off-by-one-or-bounds 1, unvalidated-external-input 1.
+- `2026-10-22-9-pipeline-c0c3636e-sample30.json`: intent-mismatch 5/7, destructive-replace 0/1, dead-on-arrival 3/5, weakened-verification 1/6, fabricated-result 3/3, wrong-target 0/1, measurement-not-cause 0/1, unbacked-claim 2/4, semantic 4/15. Rules blocking GOOD: acceptance-criterion-contradicted 1, acceptance-criterion-unmet 2, inverted-logic 1, missing-await 2, missing-test-coverage 1, missing-timeout 1, null-deref 3, off-by-one-or-bounds 1, unvalidated-external-input 1.
 
 The run JSON files are not committed (see .gitignore); this page is the record.
 Regenerate it with `python suites/lane_review/lr_index.py` after a run with `--out`;

@@ -233,6 +233,9 @@ def test_cache_replays_outcomes_per_tier_in_order(tmp_path):
         lr_pipeline._replayed(again.get(again.next_key(free)), "https://gw.invalid/free/v1")
     status = lr_pipeline._replayed({"status": 503, "text": "down"}, "https://gw.invalid/v1")
     assert status.status_code == 503
+    # A local limiter's error is not an httpx class: made again, not replayed.
+    assert lr_pipeline._replayable({"error": "ReadTimeout"})
+    assert not lr_pipeline._replayable({"error": "RateLimitTimeoutError"})
     assert again.models == {"m1": 1, "m2": 1}
 
 
