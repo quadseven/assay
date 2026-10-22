@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import io
 import json
-import os
-import socket
+import shutil
 import subprocess
-import sys
-import tempfile
+import tarfile
 from pathlib import Path
 
 import lg_corpus as corpus
 import lg_grade as grade
-import lg_sandbox as sandbox
+import lg_guard as guard
+import lg_replay as replay
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,52 +118,60 @@ def test_committed_results_regrade_to_their_recorded_summary():
 
 PROBE = """
 import json, os, shutil, socket, sys
-out = {"home": os.environ.get("HOME"), "secret": os.environ.get("LG_TEST_SECRET"),
-       "curl": shutil.which("curl"), "gh": shutil.which("gh")}
+sys.path.insert(0, "/tmp/in/harness")
+import lg_guard
+out = {"guard": lg_guard.problems(), "uid": os.getuid(), "secret": os.environ.get("LG_TEST_SECRET"),
+       "host_home_visible": os.path.exists(HOST_HOME), "curl": shutil.which("curl")}
 try:
-    open(sys.argv[1]).read()
-    out["canary"] = "read"
-except OSError as exc:
-    out["canary"] = type(exc).__name__
-try:
-    socket.create_connection(("127.0.0.1", int(sys.argv[2])), timeout=3).close()
+    socket.create_connection(("1.1.1.1", 53), timeout=3).close()
     out["socket"] = "connected"
 except OSError as exc:
     out["socket"] = type(exc).__name__
+writes = {}
+for path in ("/etc/lg-canary", "/usr/lg-canary", "/var/lg-canary", "/home/lg-canary", "/lg-canary", "/tmp/lg-canary"):
+    try:
+        with open(path, "w") as fh:
+            fh.write("x")
+        writes[path] = "written"
+    except OSError as exc:
+        writes[path] = type(exc).__name__
+out["writes"] = writes
 print(json.dumps(out))
 """
 
 
-@pytest.mark.skipif(not Path(sandbox.SANDBOX_EXEC).exists(), reason="needs macOS sandbox-exec")
-def test_a_boxed_child_cannot_read_the_real_home_open_a_socket_or_see_secrets(tmp_path, monkeypatch):
-    fd, canary = tempfile.mkstemp(dir=Path.home(), prefix=".loom-gates-canary-")
-    os.write(fd, b"secret")
-    os.close(fd)
-    listener = socket.socket()
-    listener.bind(("127.0.0.1", 0))
-    listener.listen(1)
+def _image_ready() -> bool:
+    if not shutil.which("docker"):
+        return False
+    return subprocess.run(["docker", "image", "inspect", replay.IMAGE], capture_output=True).returncode == 0
+
+
+def test_the_guard_refuses_outside_the_container():
+    if not guard.problems():
+        pytest.skip("this test process is itself inside a replay container")
+    with pytest.raises(SystemExit, match="outside the replay container"):
+        guard.assert_contained()
+
+
+@pytest.mark.skipif(not _image_ready(), reason="needs docker and the replay image (container/Dockerfile)")
+def test_the_replay_container_has_no_network_no_host_home_and_writes_only_to_tmp(monkeypatch):
     monkeypatch.setenv("LG_TEST_SECRET", "must-not-pass")
-    try:
-        probe = tmp_path / "probe.py"
-        probe.write_text(PROBE)
-        work = tmp_path / "work"
-        work.mkdir()
-        cmd, env = sandbox.command(
-            [sys.executable, "-I", str(probe), canary, str(listener.getsockname()[1])], work, [tmp_path]
-        )
-        out = json.loads(subprocess.run(cmd, env=env, capture_output=True, text=True, check=True).stdout)
-    finally:
-        listener.close()
-        os.unlink(canary)
-    assert out["canary"] == "PermissionError"
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for name, text in (
+            ("harness/lg_inbox.py", PROBE.replace("HOST_HOME", repr(str(Path.home())))),
+            ("harness/lg_guard.py", (ROOT / "suites" / "loom_gates" / "lg_guard.py").read_text()),
+        ):
+            data = text.encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    proc = subprocess.run(replay.container_argv(), input=buf.getvalue(), capture_output=True, timeout=300)
+    assert proc.returncode == 0, proc.stderr.decode()[-2000:]
+    out = json.loads(proc.stdout)
+    assert out["guard"] == []
     assert out["socket"] != "connected"
-    assert out["home"] != str(Path.home()) and out["secret"] is None
-    assert out["curl"] is None and out["gh"] is None
-
-
-def test_without_an_os_sandbox_the_box_refuses_unless_told(tmp_path, monkeypatch):
-    monkeypatch.setattr(sandbox, "SANDBOX_EXEC", str(tmp_path / "missing"))
-    with pytest.raises(sandbox.SandboxUnavailable):
-        sandbox.command(["true"], tmp_path, [])
-    cmd, env = sandbox.command(["true"], tmp_path, [], unsandboxed=True)
-    assert cmd == ["true"] and env["HOME"] != str(Path.home()) and "/usr/bin" not in env["PATH"]
+    assert out["uid"] != 0 and out["secret"] is None and not out["host_home_visible"]
+    assert out["curl"] is None
+    assert out["writes"].pop("/tmp/lg-canary") == "written"
+    assert set(out["writes"].values()) <= {"PermissionError", "OSError"}, out["writes"]

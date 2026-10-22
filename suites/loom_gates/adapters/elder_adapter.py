@@ -1,6 +1,6 @@
 """Replay each case's diff through the review bot's deterministic Elder scanners.
 
-Run by lg_replay.py in its own process (`python -I`), with a checkout of the
+Run by lg_inbox.py inside the replay container, in its own process (`python -I`), with a checkout of the
 review-bot repo:
 
     elder_adapter.py --checkout PATH --cases materialized.json
@@ -14,9 +14,9 @@ are left out: they need tools or network and are not lane-work detectors. A
 new detector is picked up with no change here as long as it is a `scan_*`
 function with such parameters; one it cannot call is listed as unreplayable.
 
-The LLM review is not replayed. lg_replay.py runs this process inside
-lg_sandbox's box (no network, no reads of the real home on macOS); the socket
-module refuses connections here as a second layer.
+The LLM review is not replayed. This process runs only inside the replay
+container (lg_guard refuses anywhere else); the socket module refuses
+connections here as a second layer.
 
 Output: JSON {"gates": [...], "results": [...]} on stdout.
 """
@@ -33,6 +33,9 @@ import socket
 import sys
 from collections import namedtuple
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import lg_guard  # noqa: E402
 
 GENERAL = {"lint", "sast", "sca", "complexity", "secret_scan", "iac_scan"}
 SUPPLIED = {
@@ -60,7 +63,7 @@ def block_network() -> None:
     def refuse(*_a, **_k):
         raise OSError("network is off in the loom gates replay")
 
-    # A second layer under the OS sandbox lg_replay.py runs this process in:
+    # A second layer under the container's --network none:
     # the checkout's code is imported here, so the socket module refuses too.
     for owner, name in (
         (socket.socket, "connect"),
@@ -124,6 +127,7 @@ def main() -> int:
     args = ap.parse_args()
     root = Path(args.checkout)
     sys.path[:0] = [str(root / "services" / "_shared"), str(root / "services" / "webhook")]
+    lg_guard.assert_contained()
     block_network()
     # Imported by name from the checkout under test, never from this repo.
     diff_parser = importlib.import_module("personas.code_reviewer.diff_parser")

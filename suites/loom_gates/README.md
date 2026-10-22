@@ -61,42 +61,44 @@ a **false positive** when any gate except `loom.close` blocked it.
 python3 suites/loom_gates/lg_replay.py \
   --grug <review-bot checkout> --loom <factory checkout> \
   --infra <deployment repo checkout> \
-  --leak-scanner <public leak scanner script> \
+  --leak-scanner <public leak scanner script file> \
   --out suites/loom_gates/results/<yyyy-mm-dd>-main
 ```
 
 Each checkout is a local clone or worktree at the revision being measured:
 main, or a pull request's head to see what it would add. Python 3.11+, `git`,
-`bash` and `jq` on PATH, and macOS for the OS sandbox.
+and a docker runtime on the host (the first run builds the image, which
+needs network once; every replay runs with none).
 
-### The box it runs the checkouts in
+### Where the checkouts' code runs
 
-The replay executes code from other repositories' checkouts, so it treats
-them as untrusted. `lg_sandbox.py` runs every gate family as a child process
-with:
+The replay executes code from other repositories, so none of it runs on the
+machine that starts it. `lg_replay.py` only packs a tar on the host (this
+harness, the materialized cases, `git archive` of the committed HEAD of the
+parts of each checkout the gates use, and the leak scanner file alone) and
+streams it on stdin into a fresh container from `container/Dockerfile`:
 
-- an environment built from an allowlist (locale, PYTHON* except
-  PYTHONPATH), HOME pointed at a fresh empty directory, git's global and
-  system config off, and a placeholder cloud region with no config or
-  credential file;
-- a PATH holding only symlinks to git, bash, python3, jq and core text
-  utilities, so curl, ssh, gh and cloud CLIs are not on it;
-- on macOS, a `sandbox-exec` profile that denies all network access, denies
-  reads and writes under the real home directory except the checkouts (read
-  only), this suite, the interpreter and the work directory, and denies
-  running curl, ssh, gh, aws, security and osascript by path.
+```bash
+docker run --rm -i --network none --read-only --tmpfs /tmp:rw,exec,nosuid,size=1g \
+  --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 512 --memory 2g loom-gates-replay:2 ...
+```
 
-Without `sandbox-exec` the replay refuses to run unless `--unsandboxed` is
-passed, which keeps only the environment and PATH limits.
-`tests/test_loom_gates.py` proves a boxed child cannot read a canary file in
-the real home, cannot connect to a listening local socket, and sees neither
-the parent's environment nor curl or gh.
+Nothing from the host is mounted and no host environment variable is passed:
+the image sets HOME under the tmpfs and holds no credential. Inside,
+`lg_inbox.py` and both adapters call `lg_guard.assert_contained()` first and
+exit unless they see that box (the container marker, a non-root user, only a
+loopback interface, a read-only root). The JSON comes back on stdout; grading
+and the result files happen on the host. `tests/test_loom_gates.py` proves the
+guard refuses outside the container, and that inside it a probe cannot open a
+socket, cannot write outside /tmp, cannot see the host's home or environment,
+and finds no curl.
 
-Inside the box the factory's GitHub client gets a fake transport that answers
-from the case and records the merge call instead of making it, the socket
-module refuses connections as a second layer, and the shell gates see a fake
-`gh` and a `file://` remote. The replay never opens a pull request, merges,
-closes an issue or pushes to a real remote.
+Inside the container the factory's GitHub client gets a fake transport that
+answers from the case and records the merge call instead of making it, the
+socket module refuses connections as a second layer, and the shell gates see
+a fake `gh` and a `file://` remote. The replay never opens a pull request,
+merges, closes an issue or pushes to a real remote.
 
 ## What the numbers are not
 

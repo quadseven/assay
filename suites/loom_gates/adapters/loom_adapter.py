@@ -1,6 +1,6 @@
 """Replay each case through the factory's own code paths, in dry run.
 
-Run by lg_replay.py in its own process (`python -I`), with a checkout of the
+Run by lg_inbox.py inside the replay container, in its own process (`python -I`), with a checkout of the
 factory repo:
 
     loom_adapter.py --checkout PATH --cases materialized.json --work DIR [--leak-scanner PATH]
@@ -21,12 +21,11 @@ Gates, each the checkout's real code:
 - loom.side_branch   lanes/run_lane.sh preserve_timedout, pushing to a local
                  bare repository.
 
-Safety: lg_replay.py runs this process inside lg_sandbox's box (allowlisted
-environment, empty HOME, a PATH of a few tool symlinks, and on macOS a
-sandbox-exec profile with no network and no reads of the real home). Inside
-it, the GitHub client gets a fake transport and a fake token, the socket
-module refuses connections, and the shell gates see a fake `gh` first on the
-inherited PATH and a file:// remote.
+Safety: this process runs only inside the replay container (lg_guard
+refuses anywhere else): no network, read-only root, tmpfs /tmp, non-root,
+nothing from the host. Inside it, the GitHub client gets a fake transport and
+a fake token, the socket module refuses connections, and the shell gates see
+a fake `gh` first on PATH and a file:// remote.
 
 Output: JSON {"modules": {...}, "results": [...]} on stdout.
 """
@@ -47,6 +46,9 @@ import tempfile
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import lg_guard  # noqa: E402
+
 REPO = "example/repo"
 HEAD_SHA = "a" * 40
 BASE_SHA = "b" * 40
@@ -61,7 +63,7 @@ def block_network() -> None:
     def refuse(*_a, **_k):
         raise OSError("network is off in the loom gates replay")
 
-    # A second layer under the OS sandbox lg_replay.py runs this process in:
+    # A second layer under the container's --network none:
     # the checkout's code is imported here, so the socket module refuses too.
     for owner, name in (
         (socket.socket, "connect"),
@@ -408,8 +410,7 @@ def base_env(work: Path, checkout: Path):
     gh = fakebin / "gh"
     gh.write_text(FAKE_GH)
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    # This process already runs in lg_sandbox's box: its HOME is an empty
-    # directory and its PATH holds only the tool symlinks. The fake gh goes first.
+    # Inside the replay container HOME is on the tmpfs; the fake gh goes first.
     env = {k: v for k, v in os.environ.items() if k in ("HOME", "LANG", "LC_ALL", "TMPDIR")}
     env.update(
         PATH=f"{fakebin}:{os.environ.get('PATH', '')}",
@@ -538,6 +539,7 @@ def main() -> int:
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
     sys.path.insert(0, str(checkout))
+    lg_guard.assert_contained()
     block_network()
     for key in [k for k in os.environ if k.startswith(("GH_", "GITHUB_", "LOOM_"))]:
         del os.environ[key]
