@@ -221,71 +221,77 @@ class FakeGitHub:
             "user": {"login": "loom-brain[bot]"},
         }
 
+    def _check_runs(self):
+        def run(name, conclusion):
+            return {
+                "name": name,
+                "status": "completed",
+                "conclusion": conclusion,
+                "completed_at": "2026-10-22T10:05:00Z",
+                "output": {"title": "", "summary": ""},
+            }
+
+        runs = [
+            run(REVIEW_CHECK, self.case["scenario"].get("review_check", "success")),
+            run("Grug - Chief", "success"),
+        ]
+        return {"total_count": len(runs), "check_runs": runs}
+
+    def _exact_reads(self):
+        """GET answers keyed by exact path."""
+        base, pr_n = f"/repos/{REPO}", self.pr["number"]
+        routes = {
+            base: lambda: {"full_name": REPO, "private": False, "default_branch": "main"},
+            f"{base}/pulls/{pr_n}": self._pr_json,
+            f"{base}/pulls/{pr_n}/files": self._files,
+            f"{base}/issues/{pr_n}": lambda: dict(self._pr_json(), pull_request={"url": ""}),
+        }
+        for empty in ("pulls/{n}/reviews", "pulls/{n}/comments", "issues/{n}/comments", "issues/{n}/events"):
+            routes[f"{base}/{empty.format(n=pr_n)}"] = list
+        t_n = (self.ticket or {}).get("number")
+        if t_n:
+            routes[f"{base}/issues/{t_n}"] = self._ticket_json
+            routes[f"{base}/issues/{t_n}/comments"] = lambda: self.comments
+            routes[f"{base}/issues/{t_n}/events"] = list
+        return routes
+
+    def _read(self, path):
+        """The answer to a GET, or None for a 404."""
+        base = f"/repos/{REPO}"
+        exact = self._exact_reads().get(path)
+        if exact is not None:
+            return exact()
+        if re.fullmatch(f"{re.escape(base)}/commits/[0-9a-f]+/check-runs", path):
+            return self._check_runs()
+        if re.fullmatch(f"{re.escape(base)}/commits/[0-9a-f]+/status", path):
+            return {"state": "success", "statuses": []}
+        if path.startswith(f"{base}/contents/"):
+            return self._contents(unquote(path[len(f"{base}/contents/") :]))
+        if path.startswith(f"{base}/compare/"):
+            return {"behind_by": 0, "ahead_by": 1, "files": self._files()}
+        return None
+
+    def _write(self, method, path):
+        """Writes are recorded, never sent; the merge PUT is the one the replay measures."""
+        if method == "PUT" and path == f"/repos/{REPO}/pulls/{self.pr['number']}/merge":
+            self.merged = True
+            return {"merged": True, "sha": "c" * 40}
+        return {} if method in ("POST", "PUT", "PATCH", "DELETE") else None
+
     def __call__(self, method, url, headers, body):
         path = urlsplit(url).path
-        payload = json.loads(body) if body else None
         self.calls.append((method, path))
-        pr_n, t_n = self.pr["number"], (self.ticket or {}).get("number")
-        base = f"/repos/{REPO}"
-        answer = None
         if method == "POST" and path == "/graphql":
-            query = (payload or {}).get("query", "")
+            query = (json.loads(body) if body else {}).get("query", "")
             answer = (
                 {"data": {"repository": {"pullRequest": self._details()}}}
                 if "pullRequest(" in query
                 else {"data": {}}
             )
         elif method == "GET":
-            if path == base:
-                answer = {"full_name": REPO, "private": False, "default_branch": "main"}
-            elif path == f"{base}/pulls/{pr_n:d}":
-                answer = self._pr_json()
-            elif path == f"{base}/pulls/{pr_n:d}/files":
-                answer = self._files()
-            elif path in (
-                f"{base}/pulls/{pr_n:d}/reviews",
-                f"{base}/pulls/{pr_n:d}/comments",
-                f"{base}/issues/{pr_n:d}/comments",
-                f"{base}/issues/{pr_n:d}/events",
-            ):
-                answer = []
-            elif path == f"{base}/issues/{pr_n:d}":
-                answer = dict(self._pr_json(), pull_request={"url": url})
-            elif t_n and path == f"{base}/issues/{t_n:d}":
-                answer = self._ticket_json()
-            elif t_n and path == f"{base}/issues/{t_n:d}/comments":
-                answer = self.comments
-            elif t_n and path == f"{base}/issues/{t_n:d}/events":
-                answer = []
-            elif re.fullmatch(f"{re.escape(base)}/commits/[0-9a-f]+/check-runs", path):
-                runs = [
-                    {
-                        "name": REVIEW_CHECK,
-                        "status": "completed",
-                        "conclusion": self.case["scenario"].get("review_check", "success"),
-                        "completed_at": "2026-10-22T10:05:00Z",
-                        "output": {"title": "", "summary": ""},
-                    },
-                    {
-                        "name": "Grug - Chief",
-                        "status": "completed",
-                        "conclusion": "success",
-                        "completed_at": "2026-10-22T10:05:00Z",
-                        "output": {"title": "", "summary": ""},
-                    },
-                ]
-                answer = {"total_count": len(runs), "check_runs": runs}
-            elif re.fullmatch(f"{re.escape(base)}/commits/[0-9a-f]+/status", path):
-                answer = {"state": "success", "statuses": []}
-            elif path.startswith(f"{base}/contents/"):
-                answer = self._contents(unquote(path[len(f"{base}/contents/") :]))
-            elif path.startswith(f"{base}/compare/"):
-                answer = {"behind_by": 0, "ahead_by": 1, "files": self._files()}
-        elif method == "PUT" and path == f"{base}/pulls/{pr_n:d}/merge":
-            self.merged = True
-            answer = {"merged": True, "sha": "c" * 40}
-        elif method in ("POST", "PUT", "PATCH", "DELETE"):
-            answer = {}
+            answer = self._read(path)
+        else:
+            answer = self._write(method, path)
         if answer is None:
             self.unanswered.append(f"{method} {path}")
             return 404, {}, json.dumps({"message": "Not Found"}).encode()
@@ -430,6 +436,17 @@ def base_env(work: Path, checkout: Path):
     return env
 
 
+def thread_writes(ghlog: Path, spec: dict) -> tuple[list[str], list[str], list[str]]:
+    """From the fake gh's call log: foreign threads that got a reply or a
+    resolve, the fix PR's own threads, and the own threads resolved."""
+    calls = [json.loads(x) for x in ghlog.read_text().splitlines() if x.strip()]
+    writes = [" ".join(c) for c in calls if any("Reply" in a or "resolveReviewThread" in a for a in c)]
+    foreign = [t for t in spec.get("foreign", []) if any(t in w for w in writes)]
+    own = [t for t, n in spec["owners"].items() if n == spec["fix_pr"]]
+    resolved = [t for t in own if any("resolveReviewThread" in w and t in w for w in writes)]
+    return foreign, own, resolved
+
+
 def gate_lane_replies(case, checkout: Path, prelude: str, work: Path):
     spec = case["scenario"].get("replies")
     if not spec:
@@ -452,11 +469,7 @@ def gate_lane_replies(case, checkout: Path, prelude: str, work: Path):
     if "post_replies" not in prelude:
         return result(case, "loom.lane_replies", "absent", "post_replies not in lanes/run_lane.sh")
     proc = run_bash(prelude + "\npost_replies\n", env, str(d))
-    calls = [json.loads(x) for x in ghlog.read_text().splitlines() if x.strip()]
-    writes = [" ".join(c) for c in calls if any("Reply" in a or "resolveReviewThread" in a for a in c)]
-    foreign = [t for t in spec.get("foreign", []) if any(t in w for w in writes)]
-    own = [t for t, n in spec["owners"].items() if n == spec["fix_pr"]]
-    own_resolved = [t for t in own if any("resolveReviewThread" in w and t in w for w in writes)]
+    foreign, own, own_resolved = thread_writes(ghlog, spec)
     detail = (
         f"foreign threads written: {foreign}; own threads resolved: {own_resolved}; rc {proc.returncode:d}"
     )

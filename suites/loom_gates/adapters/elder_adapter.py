@@ -120,6 +120,61 @@ def discover():
     return usable, unreplayable
 
 
+def supplied_inputs(case: dict, parse_diff, file_changes, linked_criterion) -> dict:
+    """Every input a scanner may ask for, built from one case."""
+    pr, ticket = case["pr"], case.get("ticket") or {}
+    criteria = ticket_criteria(ticket.get("body", ""))
+    files = pr["files"]
+    supplied = {
+        "hunks": parse_diff(pr["diff"]),
+        "file_contents": dict(pr["head_files"]),
+        "criteria": tuple(
+            linked_criterion(issue=ticket.get("number", 0), number=i + 1, text=t)
+            for i, t in enumerate(criteria)
+        ),
+        "pr_title": pr["title"],
+        "pr_body": pr["body"],
+        "ticket_title": ticket.get("title", ""),
+        "ticket_body": ticket.get("body", ""),
+        "labels": tuple(pr.get("labels") or ()),
+        "base_contents": {f["path"]: f["before"] for f in files if f.get("before") is not None},
+        "diff_text": pr["diff"],
+        "base_line_counts": {
+            (f.get("renamed_from") or f["path"]): f["before"].count("\n")
+            for f in files
+            if f.get("before") is not None
+        },
+        "boxes": tuple((ticket.get("number", 0), i + 1, "open", t) for i, t in enumerate(criteria)),
+    }
+    if file_changes is not None:
+        supplied["changes"] = file_changes(pr["diff"])
+    return supplied
+
+
+def run_scanner(row: dict, fn, wanted: set, supplied: dict) -> None:
+    """Call one scanner and record blocked, flagged, passed or error on `row`."""
+    missing = wanted - set(supplied)
+    if missing:
+        row.update(status="error", detail=f"this checkout cannot supply {sorted(missing)}")
+        return
+    try:
+        findings = fn(**{k: supplied[k] for k in wanted})
+    except Exception as exc:  # noqa: BLE001 - recorded as a replay error, never a catch
+        row.update(status="error", detail=f"{type(exc).__name__}: {exc}")
+        return
+    row["findings"] = [
+        {
+            "severity": str(getattr(f, "severity", "")).lower(),
+            "rule": getattr(f, "rule_name", ""),
+            "message": str(getattr(f, "message", ""))[:240],
+        }
+        for f in findings
+    ]
+    severities = {x["severity"] for x in row["findings"]}
+    row["status"] = "blocked" if severities & {"high", "critical"} else "flagged" if findings else "passed"
+    row["detail"] = "; ".join(f"{x['severity']} {x['rule']}: {x['message']}" for x in row["findings"])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkout", required=True)
@@ -131,73 +186,24 @@ def main() -> int:
     block_network()
     # Imported by name from the checkout under test, never from this repo.
     diff_parser = importlib.import_module("personas.code_reviewer.diff_parser")
-    parse_diff = diff_parser.parse_diff
-    file_changes = getattr(diff_parser, "file_changes", None)
     try:
-        LinkedCriterion = importlib.import_module("personas.code_reviewer.criteria_coverage").LinkedCriterion  # noqa: N806
+        linked = importlib.import_module("personas.code_reviewer.criteria_coverage").LinkedCriterion
     except (ImportError, AttributeError):
-        LinkedCriterion = namedtuple("LinkedCriterion", "issue number text")  # noqa: N806
+        linked = namedtuple("LinkedCriterion", "issue number text")
     usable, unreplayable = discover()
-    cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
     results = []
-    for case in cases:
-        pr = case.get("pr")
+    for case in json.loads(Path(args.cases).read_text(encoding="utf-8")):
+        has_diff = bool((case.get("pr") or {}).get("diff"))
+        supplied = (
+            supplied_inputs(case, diff_parser.parse_diff, getattr(diff_parser, "file_changes", None), linked)
+            if has_diff
+            else {}
+        )
         for gate, fn, wanted in usable:
             row = {"case": case["id"], "gate": gate, "status": "n/a", "detail": ""}
             results.append(row)
-            if not pr or not pr.get("diff"):
-                continue
-            ticket = case.get("ticket") or {}
-            supplied = {
-                "hunks": parse_diff(pr["diff"]),
-                "file_contents": dict(pr["head_files"]),
-                "criteria": tuple(
-                    LinkedCriterion(issue=ticket.get("number", 0), number=i + 1, text=t)
-                    for i, t in enumerate(ticket_criteria(ticket.get("body", "")))
-                ),
-                "pr_title": pr["title"],
-                "pr_body": pr["body"],
-                "ticket_title": ticket.get("title", ""),
-                "ticket_body": ticket.get("body", ""),
-                "labels": tuple(pr.get("labels") or ()),
-                "base_contents": {f["path"]: f["before"] for f in pr["files"] if f.get("before") is not None},
-                "diff_text": pr["diff"],
-                "base_line_counts": {
-                    (f.get("renamed_from") or f["path"]): f["before"].count("\n")
-                    for f in pr["files"]
-                    if f.get("before") is not None
-                },
-                "boxes": tuple(
-                    (ticket.get("number", 0), i + 1, "open", t)
-                    for i, t in enumerate(ticket_criteria(ticket.get("body", "")))
-                ),
-            }
-            if "changes" in wanted:
-                if file_changes is None:
-                    row.update(status="error", detail="needs changes but diff_parser.file_changes is absent")
-                    continue
-                supplied["changes"] = file_changes(pr["diff"])
-            try:
-                findings = fn(**{k: supplied[k] for k in wanted})
-            except Exception as exc:  # noqa: BLE001 - recorded as a replay error, never a catch
-                row.update(status="error", detail=f"{type(exc).__name__}: {exc}")
-                continue
-            sev = [str(getattr(f, "severity", "")).lower() for f in findings]
-            row["findings"] = [
-                {
-                    "severity": s,
-                    "rule": getattr(f, "rule_name", ""),
-                    "message": str(getattr(f, "message", ""))[:240],
-                }
-                for s, f in zip(sev, findings, strict=True)
-            ]
-            if any(s in ("high", "critical") for s in sev):
-                row["status"] = "blocked"
-            elif findings:
-                row["status"] = "flagged"
-            else:
-                row["status"] = "passed"
-            row["detail"] = "; ".join(f"{x['severity']} {x['rule']}: {x['message']}" for x in row["findings"])
+            if has_diff:
+                run_scanner(row, fn, wanted, supplied)
     json.dump(
         {"gates": [g for g, _, _ in usable], "unreplayable": unreplayable, "results": results}, sys.stdout
     )

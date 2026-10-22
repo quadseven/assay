@@ -5,7 +5,7 @@
    "infra": "1e789f075c1d",
    "loom": "c6ac8848d640"
   },
-  "date": "2026-10-22 14:24Z",
+  "date": "2026-10-22 14:26Z",
   "elder_gates": [
    "elder.claim_check.scan_claim_checks",
    "elder.criteria_coverage.scan_criteria_coverage"
@@ -1082,7 +1082,7 @@
   },
   {
    "case": "good-side-branch-01",
-   "detail": "side branch pushed: True; said: the edits are on branch loom/42-replay-timedout-1792679066",
+   "detail": "side branch pushed: True; said: the edits are on branch loom/42-replay-timedout-1792679184",
    "gate": "loom.side_branch",
    "status": "passed"
   },
@@ -1112,7 +1112,7 @@
   },
   {
    "case": "leak-bypass-01",
-   "detail": "side branch pushed: True; said: the edits are on branch loom/42-replay-timedout-1792679066",
+   "detail": "side branch pushed: True; said: the edits are on branch loom/42-replay-timedout-1792679184",
    "gate": "loom.side_branch",
    "status": "passed"
   },
