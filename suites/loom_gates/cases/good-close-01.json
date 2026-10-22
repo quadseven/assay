@@ -1,0 +1,55 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-close-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nLogs the version on start.\n\n## Acceptance criteria\n- [x] The worker logs `worker version=` on start.\n- [ ] Live: the worker log shows `worker version=` after the deploy.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "import logging\n\nVERSION = '1.2.0'\n\n\ndef start():\n    logging.info('worker started')\n    logging.info('worker version=%s', VERSION)\n",
+    "before": "import logging\n\nVERSION = '1.2.0'\n\n\ndef start():\n    logging.info('worker started')\n",
+    "path": "worker.py"
+   },
+   {
+    "after": "import logging\n\nfrom worker import start\n\n\ndef test_logs_version(caplog):\n    caplog.set_level(logging.INFO)\n    start()\n    assert 'worker version=1.2.0' in caplog.text\n",
+    "before": null,
+    "path": "tests/test_worker.py"
+   }
+  ],
+  "head_ref": "loom/66-the-worker-logs-its-version",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 77,
+  "title": "The worker logs its version on start"
+ },
+ "provenance": {
+  "merged": "2026-10-19",
+  "merged_by": "operator",
+  "note": "A ticket with a searchable Live line, shipped and verified: closing it is correct.",
+  "repo_kind": "public repo",
+  "source_id": "453aec082ee2"
+ },
+ "scenario": {
+  "close": {
+   "labels": [
+    "loom:ticket",
+    "loom:shipped",
+    "loom:verified"
+   ]
+  },
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nNobody can tell which build runs.\n\n## What\nLog the version on start.\n\n## Acceptance criteria\n- [ ] The worker logs `worker version=` on start.\n- [ ] Live: the worker log shows `worker version=` after the deploy.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 66,
+  "title": "The worker logs its version on start"
+ }
+}

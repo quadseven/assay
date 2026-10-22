@@ -1,0 +1,48 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-health-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nCause: refund() computed the amount but never paid it (65 members owed a total of 412g).\n\n## Acceptance criteria\n- [x] The pull request names the cause with the numbers that show it.\n- [x] A test fails without the fix and passes with it.\n- [ ] Live: the finding is absent from the health endpoint for 24 hours.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "def refund(member, fund):\n    if fund.balance <= 0:\n        return 0\n    amount = min(member.owed, fund.balance)\n    fund.balance -= amount\n    member.gold += amount\n    return amount\n",
+    "before": "def refund(member, fund):\n    if fund.balance <= 0:\n        return 0\n    return min(member.owed, fund.balance)\n",
+    "path": "fund.py"
+   },
+   {
+    "after": "from types import SimpleNamespace as N\n\nfrom fund import refund\n\n\ndef test_refund_pays_member():\n    m, f = N(owed=5, gold=0), N(balance=10)\n    assert refund(m, f) == 5 and m.gold == 5 and f.balance == 5\n",
+    "before": null,
+    "path": "tests/test_fund.py"
+   }
+  ],
+  "head_ref": "loom/64-health-members-hold-under-a-gold",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 74,
+  "title": "Health: members hold under a gold"
+ },
+ "provenance": {
+  "merged": "2026-10-18",
+  "merged_by": "operator",
+  "note": "Shape of GOOD health fixes: the cause (refunds computed but never paid) fixed where it lives, measurement untouched.",
+  "repo_kind": "public game-service repo",
+  "source_id": "3267d505cbc3"
+ },
+ "scenario": {
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\n65 of 76 members hold under a gold each.\n\n## What\nFind why and fix the cause.\n\n## Acceptance criteria\n- [ ] The pull request names the cause with the numbers that show it.\n- [ ] A test fails without the fix and passes with it.\n- [ ] Live: the finding is absent from the health endpoint for 24 hours.\n\n## Size\nM\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 64,
+  "title": "Health: members hold under a gold"
+ }
+}

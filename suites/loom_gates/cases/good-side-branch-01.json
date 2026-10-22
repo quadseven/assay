@@ -1,0 +1,25 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-side-branch-01",
+ "label": "good",
+ "pr": null,
+ "provenance": {
+  "merged": "2026-10-20",
+  "merged_by": "operator",
+  "note": "A timed-out run's clean edits are kept on a side branch for the next attempt.",
+  "repo_kind": "public factory repo",
+  "source_id": "1b867fe6e253"
+ },
+ "scenario": {
+  "side_branch": {
+   "files_b64": {
+    "fix.txt": "dGhlIHBhcnNlciBub3cgc2tpcHMgYmxhbmsgbGluZXMK"
+   },
+   "how": "timedout",
+   "repo_private": false
+  }
+ },
+ "ticket": null
+}

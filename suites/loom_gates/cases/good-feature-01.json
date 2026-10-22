@@ -1,0 +1,59 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-feature-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nparse_all skips blank lines; run() calls it.\n\n## Acceptance criteria\n- [x] Blank lines are skipped.\n- [x] Fields are stripped of spaces.\n- [x] A test fails without the change and passes with it.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "def parse(line):\n    return [field.strip() for field in line.split(',')]\n\n\ndef parse_all(lines):\n    return [parse(line) for line in lines if line.strip()]\n",
+    "before": "def parse(line):\n    return line.split(',')\n",
+    "path": "parser.py"
+   },
+   {
+    "after": "from parser import parse_all\n\n\ndef run(lines):\n    return parse_all(lines)\n",
+    "before": "from parser import parse\n\n\ndef run(lines):\n    return [parse(line) for line in lines]\n",
+    "path": "main.py"
+   },
+   {
+    "after": "from parser import parse, parse_all\n\n\ndef test_parse():\n    assert parse('a, b') == ['a', 'b']\n\n\ndef test_blank_lines_skipped():\n    assert parse_all(['a,b', '  ']) == [['a', 'b']]\n",
+    "before": "from parser import parse\n\n\ndef test_parse():\n    assert parse('a,b') == ['a', 'b']\n",
+    "path": "tests/test_parser.py"
+   }
+  ],
+  "head_ref": "loom/60-the-importer-skips-blank-lines",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 70,
+  "title": "The importer skips blank lines and strips fields"
+ },
+ "provenance": {
+  "merged": "2026-10-14",
+  "merged_by": "operator",
+  "note": "Shape of the GOOD audited lane PRs: a change wired into its caller with a test that fails without it.",
+  "repo_kind": "public repo",
+  "source_id": "35bc04742b22"
+ },
+ "scenario": {
+  "close": {
+   "labels": [
+    "loom:ticket",
+    "loom:shipped"
+   ]
+  },
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nBlank lines crash the importer.\n\n## What\nSkip blank lines and strip fields.\n\n## Acceptance criteria\n- [ ] Blank lines are skipped.\n- [ ] Fields are stripped of spaces.\n- [ ] A test fails without the change and passes with it.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 60,
+  "title": "The importer skips blank lines and strips fields"
+ }
+}

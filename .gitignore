@@ -20,3 +20,6 @@ tools/leakscan.local.txt
 # tracked; only the raw run JSON above is not. Without this exception the
 # generator finds zero measurements in CI and the README check fails.
 !suites/*/results/scoreboard.json
+# The loom_gates replay records ARE tracked: each is a few dozen KB of gate
+# verdicts, and the test suite re-grades them to their recorded summary.
+!suites/loom_gates/results/*.json

@@ -1,0 +1,96 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-manifest-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nRaises the limit; peak RSS was 300Mi.\n\n## Acceptance criteria\n- [x] The web Deployment's memory limit is 384Mi.\n- [ ] Live: the web pod restarts 0 times in 24 hours after the deploy.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          resources:\n            limits:\n              memory: 384Mi\n",
+    "before": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          resources:\n            limits:\n              memory: 256Mi\n",
+    "path": "manifests/web/deployment.yaml"
+   }
+  ],
+  "head_ref": "loom/62-the-web-pod-stops-oom-killing",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 72,
+  "title": "The web pod stops OOM-killing at peak"
+ },
+ "provenance": {
+  "merged": "2026-10-13",
+  "merged_by": "operator",
+  "note": "Shape of GOOD manifest PRs: a resource limit raised, no placement or volume change.",
+  "repo_kind": "private deployment repo",
+  "source_id": "c3c8466e26f9"
+ },
+ "scenario": {
+  "deploys_on_merge": [
+   "manifests/web/"
+  ],
+  "placement": {
+   "cluster": {
+    "live": [],
+    "nodes": [
+     {
+      "metadata": {
+       "labels": {
+        "kubernetes.io/hostname": "node-a"
+       },
+       "name": "node-a"
+      }
+     },
+     {
+      "metadata": {
+       "labels": {
+        "kubernetes.io/hostname": "node-b"
+       },
+       "name": "node-b"
+      }
+     }
+    ],
+    "pvcs": [],
+    "pvs": []
+   },
+   "paths": [
+    "manifests/web"
+   ],
+   "rendered": [
+    {
+     "apiVersion": "apps/v1",
+     "kind": "Deployment",
+     "metadata": {
+      "name": "web",
+      "namespace": "apps"
+     },
+     "spec": {
+      "replicas": 1,
+      "template": {
+       "spec": {
+        "containers": [
+         {
+          "name": "web"
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  },
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nThe web pod is OOM-killed at peak (peak RSS 300Mi).\n\n## What\nRaise the memory limit to 384Mi.\n\n## Acceptance criteria\n- [ ] The web Deployment's memory limit is 384Mi.\n- [ ] Live: the web pod restarts 0 times in 24 hours after the deploy.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 62,
+  "title": "The web pod stops OOM-killing at peak"
+ }
+}

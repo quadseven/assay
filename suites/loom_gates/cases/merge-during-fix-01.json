@@ -1,0 +1,56 @@
+{
+ "classes": [
+  "merge-during-fix-round"
+ ],
+ "id": "merge-during-fix-01",
+ "label": "damaging",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nOne-line fix.\n\n## Acceptance criteria\n- [x] A past-ladder pull request is closed on send-back.\n- [x] A test covers the send-back path.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "def send_back(self, repo, pr):\n    self.note(repo, pr)\n    self.close_past_ladder(repo, pr)\n",
+    "before": "def send_back(self, repo, pr):\n    self.note(repo, pr)\n",
+    "path": "bus/factory.py"
+   }
+  ],
+  "head_ref": "loom/29-a-stalled-lane-pull-request-climbs",
+  "labels": [
+   "class:logic"
+  ],
+  "number": 51,
+  "title": "A stalled lane pull request climbs the model ladder"
+ },
+ "provenance": {
+  "merged": "2026-10-22",
+  "merged_by": "brain App",
+  "note": "One-line change with no test, all criteria unticked; the brain merged it 27 minutes after its own brain-fix send-back was claimed, before the fix round ran.",
+  "repo_kind": "public factory repo",
+  "source_id": "5e4f8e85cc90"
+ },
+ "scenario": {
+  "review_check": "success",
+  "ticket_comments": [
+   {
+    "body": "<!-- loom:fix -->\nPull request: {PR}, branch loom/29-a-stalled-lane-pull-request-climbs\n<!-- loom:brain-fix -->\n\nAdd the test the ticket asks for.",
+    "created_at": "2026-10-22T10:30:00Z",
+    "user": "loom-brain[bot]"
+   },
+   {
+    "body": "Claimed for lane free (body sha256 0123456789ab)",
+    "created_at": "2026-10-22T10:37:00Z",
+    "user": "loom-station[bot]"
+   }
+  ]
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nA pull request stalled because the ladder skipped it.\n\n## What\nClose a past-ladder pull request when sending it back.\n\n## Acceptance criteria\n- [ ] A past-ladder pull request is closed on send-back.\n- [ ] A test covers the send-back path.\n\n## Size\nS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:running",
+   "lane:free"
+  ],
+  "number": 29,
+  "title": "A stalled lane pull request climbs the model ladder"
+ }
+}

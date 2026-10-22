@@ -1,0 +1,43 @@
+{
+ "classes": [
+  "good"
+ ],
+ "id": "good-docs-01",
+ "label": "good",
+ "pr": {
+  "author": "loom-lanes[bot]",
+  "body": "## Why\nAdds the Release section.\n\n## Acceptance criteria\n- [x] README.md has a Release section naming the tag format.\n\n\n{REFS}\n\nLoom ticket {TICKET}, lane spark\n",
+  "files": [
+   {
+    "after": "# tool\n\nRun `make check`.\n\n## Setup\n\nInstall the toolchain.\n\n## Release\n\nTag `vX.Y.Z` on main; CI publishes the image.\n",
+    "before": "# tool\n\nRun `make check`.\n\n## Setup\n\nInstall the toolchain.\n",
+    "path": "README.md"
+   }
+  ],
+  "head_ref": "loom/61-readme-names-the-release-step",
+  "labels": [
+   "class:docs"
+  ],
+  "number": 71,
+  "title": "README names the release step"
+ },
+ "provenance": {
+  "merged": "2026-10-12",
+  "merged_by": "operator",
+  "note": "Shape of GOOD README edits: additive section the ticket names, nothing removed.",
+  "repo_kind": "public repo",
+  "source_id": "e8a2f4a150c1"
+ },
+ "scenario": {
+  "review_check": "success"
+ },
+ "ticket": {
+  "body": "Difficulty: medium\n\n## Why\nNobody knows how to release.\n\n## What\nAdd a Release section to README.md.\n\n## Acceptance criteria\n- [ ] README.md has a Release section naming the tag format.\n\n## Size\nXS\n\n## Out of scope\n- Anything else.\n",
+  "labels": [
+   "loom:ticket",
+   "loom:pr"
+  ],
+  "number": 61,
+  "title": "README names the release step"
+ }
+}
