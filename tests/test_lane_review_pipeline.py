@@ -225,3 +225,19 @@ def test_issue_and_added_files_are_rebuilt_from_the_fixture():
     assert "## Acceptance criteria" in issue["body"]
     assert "- [ ] Ship it" in issue["body"] and "- [x] Close #3" in issue["body"]
     assert lr_pipeline._added_contents(fx) == {"new.py": "def new(): pass\n"}
+
+
+def test_index_keeps_rows_whose_run_json_is_gone(tmp_path):
+    import lr_index
+    import lr_score
+
+    old_row = "| 2026-01-01-old.json | an old run | 1/2 | 1/1 | 2/2 | 0/2 | 0/2 |"
+    old_bullet = "- `2026-01-01-old.json`: intent-mismatch 1/2. Rules blocking GOOD: none."
+    (tmp_path / "index.md").write_text(f"# lane_review results\n\n{old_row}\n\n{old_bullet}\n")
+    verdicts = [lr_score.Verdict("a", "DAMAGING", ("semantic",), (("r", "high"),))]
+    score = lr_score.score(verdicts).as_dict()
+    (tmp_path / "2026-02-02-new.json").write_text(json.dumps({"source": "a new run", "score": score}))
+    page = lr_index.render(tmp_path)
+    assert old_row in page and old_bullet in page
+    assert "| 2026-02-02-new.json | a new run | 1/1 |" in page
+    assert page.index(old_row) < page.index("2026-02-02-new.json")

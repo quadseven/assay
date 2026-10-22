@@ -260,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
         verdicts, name = _replay_checkout(args.grug, corpus)
     if args.corpus.resolve() != CORPUS.resolve():
         name += f" on {args.corpus.name}"
+    if args.sample:
+        name += f", fixed sample of {args.sample} per label"
     s = lr_score.score(verdicts)
     print(_report(name, s))
     if args.show:
