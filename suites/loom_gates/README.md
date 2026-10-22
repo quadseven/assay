@@ -67,7 +67,7 @@ python3 suites/loom_gates/lg_replay.py \
 
 Each checkout is a local clone or worktree at the revision being measured:
 main, or a pull request's head to see what it would add. Python 3.11+, `git`,
-`bash` and `jq` on PATH.
+`bash` and `jq` on PATH, and macOS for the OS sandbox.
 
 ### The box it runs the checkouts in
 
