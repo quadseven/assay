@@ -196,7 +196,8 @@ def test_a_rerun_walks_the_chain_from_the_cache_failures_included(grug, tmp_path
 
     # Per fixture: the free pool's 429, then the Cave's reply. The second
     # fixture repeats the first's messages: each call is its own occurrence.
-    assert [tier for tier, _ in llm_client.CALLS] == ["free-pool", "cave"] * 2
+    tiers = [tier for tier, _ in llm_client.CALLS]
+    assert sorted(tiers) == ["cave", "cave", "free-pool", "free-pool"]  # two workers interleave
     assert (cache.hits, cache.misses) == (0, 4)
     rerun, cache = _replay(grug, tmp_path, corpus)
     assert len(llm_client.CALLS) == 4  # no new call
