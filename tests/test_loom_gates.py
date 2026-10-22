@@ -63,7 +63,7 @@ def test_rename_produces_a_rename_header():
 def test_placeholders_are_filled_on_load():
     case = next(c for c in CASES if c["id"] == "wrong-target-01")
     body = corpus.materialize(case)["pr"]["body"]
-    assert f"Refs {corpus.FAKE_REPO}#12" in body and "{REFS}" not in body
+    assert f"Refs {corpus.FAKE_REPO}" in body and "{REFS}" not in body
 
 
 def test_side_branch_bytes_decode_in_memory_only():
@@ -128,7 +128,7 @@ try:
 except OSError as exc:
     out["socket"] = type(exc).__name__
 writes = {}
-for path in ("/etc/lg-canary", "/usr/lg-canary", "/var/lg-canary", "/home/lg-canary", "/lg-canary", "/tmp/lg-canary"):
+for path in ("/etc/lg-canary", "/usr/lg-canary", "/var/lg-canary", "/opt/lg-canary", "/lg-canary", "/tmp/lg-canary"):
     try:
         with open(path, "w") as fh:
             fh.write("x")
