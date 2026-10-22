@@ -172,6 +172,7 @@ def main() -> int:
         "checkouts": {name: head_of(path) for name, path in checkouts.items()},
         "elder_gates": elder["gates"],
         "elder_unreplayable": elder["unreplayable"],
+        "elder_comment_renderer": elder.get("renderer", False),
         "loom_planned_modules": loom["modules"],
     }
     summary = grade.summarize(cases, results)
