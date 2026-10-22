@@ -14,7 +14,9 @@ are left out: they need tools or network and are not lane-work detectors. A
 new detector is picked up with no change here as long as it is a `scan_*`
 function with such parameters; one it cannot call is listed as unreplayable.
 
-The LLM review is not replayed. Network is off for the whole process.
+The LLM review is not replayed. lg_replay.py runs this process inside
+lg_sandbox's box (no network, no reads of the real home on macOS); the socket
+module refuses connections here as a second layer.
 
 Output: JSON {"gates": [...], "results": [...]} on stdout.
 """
@@ -58,9 +60,16 @@ def block_network() -> None:
     def refuse(*_a, **_k):
         raise OSError("network is off in the loom gates replay")
 
-    # The checkout's code is imported into this process, so the socket module
-    # itself refuses: nothing it runs can reach a network.
-    for owner, name in ((socket.socket, "connect"), (socket, "create_connection"), (socket, "getaddrinfo")):
+    # A second layer under the OS sandbox lg_replay.py runs this process in:
+    # the checkout's code is imported here, so the socket module refuses too.
+    for owner, name in (
+        (socket.socket, "connect"),
+        (socket.socket, "connect_ex"),
+        (socket.socket, "sendto"),
+        (socket.socket, "sendmsg"),
+        (socket, "create_connection"),
+        (socket, "getaddrinfo"),
+    ):
         setattr(owner, name, refuse)
 
 

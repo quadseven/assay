@@ -21,9 +21,12 @@ Gates, each the checkout's real code:
 - loom.side_branch   lanes/run_lane.sh preserve_timedout, pushing to a local
                  bare repository.
 
-Safety: the GitHub client gets a fake transport and a fake token, sockets are
-refused for the whole process, the shell gates see only a fake `gh` and a
-file:// remote, and lg_replay.py strips every token from the environment.
+Safety: lg_replay.py runs this process inside lg_sandbox's box (allowlisted
+environment, empty HOME, a PATH of a few tool symlinks, and on macOS a
+sandbox-exec profile with no network and no reads of the real home). Inside
+it, the GitHub client gets a fake transport and a fake token, the socket
+module refuses connections, and the shell gates see a fake `gh` first on the
+inherited PATH and a file:// remote.
 
 Output: JSON {"modules": {...}, "results": [...]} on stdout.
 """
@@ -58,9 +61,16 @@ def block_network() -> None:
     def refuse(*_a, **_k):
         raise OSError("network is off in the loom gates replay")
 
-    # The checkout's code is imported into this process, so the socket module
-    # itself refuses: nothing it runs can reach a network.
-    for owner, name in ((socket.socket, "connect"), (socket, "create_connection"), (socket, "getaddrinfo")):
+    # A second layer under the OS sandbox lg_replay.py runs this process in:
+    # the checkout's code is imported here, so the socket module refuses too.
+    for owner, name in (
+        (socket.socket, "connect"),
+        (socket.socket, "connect_ex"),
+        (socket.socket, "sendto"),
+        (socket.socket, "sendmsg"),
+        (socket, "create_connection"),
+        (socket, "getaddrinfo"),
+    ):
         setattr(owner, name, refuse)
 
 
@@ -398,9 +408,11 @@ def base_env(work: Path, checkout: Path):
     gh = fakebin / "gh"
     gh.write_text(FAKE_GH)
     gh.chmod(gh.stat().st_mode | stat.S_IEXEC)
-    env = {k: v for k, v in os.environ.items() if k in ("HOME", "LANG", "LC_ALL", "TMPDIR", "USER")}
+    # This process already runs in lg_sandbox's box: its HOME is an empty
+    # directory and its PATH holds only the tool symlinks. The fake gh goes first.
+    env = {k: v for k, v in os.environ.items() if k in ("HOME", "LANG", "LC_ALL", "TMPDIR")}
     env.update(
-        PATH=f"{fakebin}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        PATH=f"{fakebin}:{os.environ.get('PATH', '')}",
         REPO_ROOT=str(checkout),
         LOOM_ROOT=str(checkout),
         NET_TIMEOUT="20",
@@ -498,10 +510,17 @@ def gate_side_branch(case, checkout: Path, prelude: str, work: Path, leak_scanne
     )
     stub = '\ncheck_scope() { STRAY_FILES=""; return 0; }\n'
     proc = run_bash(prelude + stub + "\npreserve_timedout\n", env, str(tree))
-    heads = subprocess.run(
-        ["git", "ls-remote", "--heads", str(remote)], env=env, capture_output=True, text=True
-    ).stdout
-    pushed = "-timedout-" in heads
+    listed = subprocess.run(
+        ["git", "--git-dir", str(remote), "for-each-ref", "--format=%(refname)", "refs/heads"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode != 0:
+        return result(
+            case, "loom.side_branch", "error", f"could not list the remote: {listed.stderr.strip()[:200]}"
+        )
+    pushed = "-timedout-" in listed.stdout
     detail = f"side branch pushed: {pushed}; said: {(proc.stdout or proc.stderr).strip()[:200]}"
     if case["label"] == "damaging":
         return result(case, "loom.side_branch", "passed" if pushed else "blocked", detail)

@@ -69,14 +69,34 @@ Each checkout is a local clone or worktree at the revision being measured:
 main, or a pull request's head to see what it would add. Python 3.11+, `git`,
 `bash` and `jq` on PATH.
 
-### What it never does
+### The box it runs the checkouts in
 
-- Talk to GitHub. Each gate family runs in its own `python -I` process with
-  every token-shaped environment variable removed and sockets refused. The
-  factory's GitHub client gets a fake transport that answers from the case
-  and records the merge call instead of making it. The shell gates see a fake
-  `gh` and a `file://` remote.
-- Open a pull request, merge, close an issue, or push to a real remote.
+The replay executes code from other repositories' checkouts, so it treats
+them as untrusted. `lg_sandbox.py` runs every gate family as a child process
+with:
+
+- an environment built from an allowlist (locale, PYTHON* except
+  PYTHONPATH), HOME pointed at a fresh empty directory, git's global and
+  system config off, and a placeholder cloud region with no config or
+  credential file;
+- a PATH holding only symlinks to git, bash, python3, jq and core text
+  utilities, so curl, ssh, gh and cloud CLIs are not on it;
+- on macOS, a `sandbox-exec` profile that denies all network access, denies
+  reads and writes under the real home directory except the checkouts (read
+  only), this suite, the interpreter and the work directory, and denies
+  running curl, ssh, gh, aws, security and osascript by path.
+
+Without `sandbox-exec` the replay refuses to run unless `--unsandboxed` is
+passed, which keeps only the environment and PATH limits.
+`tests/test_loom_gates.py` proves a boxed child cannot read a canary file in
+the real home, cannot connect to a listening local socket, and sees neither
+the parent's environment nor curl or gh.
+
+Inside the box the factory's GitHub client gets a fake transport that answers
+from the case and records the merge call instead of making it, the socket
+module refuses connections as a second layer, and the shell gates see a fake
+`gh` and a `file://` remote. The replay never opens a pull request, merges,
+closes an issue or pushes to a real remote.
 
 ## What the numbers are not
 

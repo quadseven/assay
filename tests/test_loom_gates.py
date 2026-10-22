@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 import lg_corpus as corpus
 import lg_grade as grade
+import lg_sandbox as sandbox
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -107,3 +114,56 @@ def test_committed_results_regrade_to_their_recorded_summary():
     for path in paths:
         report = json.loads(path.read_text(encoding="utf-8"))
         assert grade.summarize(CASES, report["results"]) == report["summary"], path.name
+
+
+PROBE = """
+import json, os, shutil, socket, sys
+out = {"home": os.environ.get("HOME"), "secret": os.environ.get("LG_TEST_SECRET"),
+       "curl": shutil.which("curl"), "gh": shutil.which("gh")}
+try:
+    open(sys.argv[1]).read()
+    out["canary"] = "read"
+except OSError as exc:
+    out["canary"] = type(exc).__name__
+try:
+    socket.create_connection(("127.0.0.1", int(sys.argv[2])), timeout=3).close()
+    out["socket"] = "connected"
+except OSError as exc:
+    out["socket"] = type(exc).__name__
+print(json.dumps(out))
+"""
+
+
+@pytest.mark.skipif(not Path(sandbox.SANDBOX_EXEC).exists(), reason="needs macOS sandbox-exec")
+def test_a_boxed_child_cannot_read_the_real_home_open_a_socket_or_see_secrets(tmp_path, monkeypatch):
+    fd, canary = tempfile.mkstemp(dir=Path.home(), prefix=".loom-gates-canary-")
+    os.write(fd, b"secret")
+    os.close(fd)
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    monkeypatch.setenv("LG_TEST_SECRET", "must-not-pass")
+    try:
+        probe = tmp_path / "probe.py"
+        probe.write_text(PROBE)
+        work = tmp_path / "work"
+        work.mkdir()
+        cmd, env = sandbox.command(
+            [sys.executable, "-I", str(probe), canary, str(listener.getsockname()[1])], work, [tmp_path]
+        )
+        out = json.loads(subprocess.run(cmd, env=env, capture_output=True, text=True, check=True).stdout)
+    finally:
+        listener.close()
+        os.unlink(canary)
+    assert out["canary"] == "PermissionError"
+    assert out["socket"] != "connected"
+    assert out["home"] != str(Path.home()) and out["secret"] is None
+    assert out["curl"] is None and out["gh"] is None
+
+
+def test_without_an_os_sandbox_the_box_refuses_unless_told(tmp_path, monkeypatch):
+    monkeypatch.setattr(sandbox, "SANDBOX_EXEC", str(tmp_path / "missing"))
+    with pytest.raises(sandbox.SandboxUnavailable):
+        sandbox.command(["true"], tmp_path, [])
+    cmd, env = sandbox.command(["true"], tmp_path, [], unsandboxed=True)
+    assert cmd == ["true"] and env["HOME"] != str(Path.home()) and "/usr/bin" not in env["PATH"]

@@ -4,11 +4,15 @@
         [--leak-scanner PATH] [--out suites/loom_gates/results/<name>]
 
 PATH is a local checkout of each repo at the revision being measured (a clean
-worktree of main, or of a pull request's head). The replay never talks to
-GitHub: each family of gates runs in its own `python -I` process with every
-token stripped from its environment, sockets refused, a fake GitHub
-transport, a fake `gh`, and a file:// remote. It never opens a pull request
-and never merges anything.
+worktree of main, or of a pull request's head). The replay executes code from
+those checkouts, so every gate family runs as a child process inside the box
+lg_sandbox.py builds: an allowlisted environment with a fresh empty HOME, a
+PATH of symlinks to the few tools the gates need, and on macOS a sandbox-exec
+profile that denies all network access and every read under the real home
+directory except the checkouts, this suite and the interpreter. Inside it the
+factory's GitHub client gets a fake transport, the lane runner a fake `gh` and
+a file:// remote. Without sandbox-exec the replay refuses to run unless
+--unsandboxed is passed. It never opens a pull request and never merges.
 
 Writes <out>.json (every gate result) and <out>.md (the tables), and voids the
 run if the corpus does not match corpus.sha256.
@@ -19,7 +23,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import os
 import re
 import subprocess
 import sys
@@ -31,8 +34,7 @@ sys.path.insert(0, str(HERE))
 
 import lg_corpus as corpus  # noqa: E402
 import lg_grade as grade  # noqa: E402
-
-SECRET_PREFIXES = ("GH_", "GITHUB_", "LOOM_", "AWS_", "GRUG_", "ANTHROPIC_", "OPENAI_", "OPENROUTER_")
+import lg_sandbox as sandbox  # noqa: E402
 
 
 def scrub(text: str) -> str:
@@ -42,12 +44,6 @@ def scrub(text: str) -> str:
     return re.sub(r"#(\d+)", r"no. \1", text)
 
 
-def clean_env() -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if not k.startswith(SECRET_PREFIXES)}
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return env
-
-
 def head_of(path: Path) -> str:
     out = subprocess.run(
         ["git", "-C", str(path), "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True
@@ -55,20 +51,25 @@ def head_of(path: Path) -> str:
     return out.stdout.strip() or "unknown"
 
 
-def run_adapter(script: str, args: list[str]) -> dict:
-    proc = subprocess.run(
-        [sys.executable, "-I", str(HERE / "adapters" / script), *args],
-        capture_output=True,
-        text=True,
-        env=clean_env(),
-        timeout=1800,
-    )
+class Box:
+    """Runs children inside lg_sandbox's box, reading only `readable` of the home directory."""
+
+    def __init__(self, work: Path, readable: list[Path], unsandboxed: bool) -> None:
+        self.work, self.readable, self.unsandboxed = work, readable, unsandboxed
+
+    def run(self, argv: list[str], *, cwd: Path | None = None, timeout: int = 1800):
+        cmd, env = sandbox.command(argv, self.work, self.readable, unsandboxed=self.unsandboxed)
+        return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+
+
+def run_adapter(box: Box, script: str, args: list[str]) -> dict:
+    proc = box.run([sys.executable, "-I", str(HERE / "adapters" / script), *args])
     if proc.returncode != 0:
         raise SystemExit(f"{script} failed ({proc.returncode:d}):\n{proc.stderr[-4000:]}")
     return json.loads(proc.stdout)
 
 
-def placement_results(cases: list[dict], infra: Path | None, work: Path) -> list[dict]:
+def placement_results(box: Box, cases: list[dict], infra: Path | None, work: Path) -> list[dict]:
     """infra.pv_placement: the deployment repo's own placement guard, run on
     each case's recorded render and cluster state."""
     rows = []
@@ -85,7 +86,7 @@ def placement_results(cases: list[dict], infra: Path | None, work: Path) -> list
         d = Path(tempfile.mkdtemp(dir=work))
         (d / "rendered.json").write_text(json.dumps(spec["rendered"]))
         (d / "cluster.json").write_text(json.dumps(spec["cluster"]))
-        proc = subprocess.run(
+        proc = box.run(
             [
                 sys.executable,
                 "-I",
@@ -96,10 +97,7 @@ def placement_results(cases: list[dict], infra: Path | None, work: Path) -> list
                 str(d / "cluster.json"),
                 *spec["paths"],
             ],
-            cwd=str(infra),
-            capture_output=True,
-            text=True,
-            env=clean_env(),
+            cwd=infra,
             timeout=120,
         )
         said = (proc.stdout + proc.stderr).strip().replace("\n", " ")[:300]
@@ -116,6 +114,11 @@ def main() -> int:
     ap.add_argument("--leak-scanner", default="", help="public leak scanner script for the side-branch gate")
     ap.add_argument("--out", type=Path, help="results path without extension")
     ap.add_argument(
+        "--unsandboxed",
+        action="store_true",
+        help="run without sandbox-exec (no OS network or file-read limits; environment and PATH limits only)",
+    )
+    ap.add_argument(
         "--allow-unfrozen", action="store_true", help="run on a corpus that differs from corpus.sha256"
     )
     args = ap.parse_args()
@@ -130,10 +133,14 @@ def main() -> int:
     materialized = work / "cases.json"
     materialized.write_text(json.dumps([corpus.materialize(c) for c in cases]))
 
+    checkouts = [p.resolve() for p in (args.grug, args.loom, args.infra) if p]
+    scanner = Path(args.leak_scanner).resolve().parent if args.leak_scanner else None
+    box = Box(work, [*checkouts, HERE, *([scanner] if scanner else [])], args.unsandboxed)
     elder = run_adapter(
-        "elder_adapter.py", ["--checkout", str(args.grug.resolve()), "--cases", str(materialized)]
+        box, "elder_adapter.py", ["--checkout", str(args.grug.resolve()), "--cases", str(materialized)]
     )
     loom = run_adapter(
+        box,
         "loom_adapter.py",
         [
             "--checkout",
@@ -149,7 +156,7 @@ def main() -> int:
     results = (
         elder["results"]
         + loom["results"]
-        + placement_results(cases, args.infra.resolve() if args.infra else None, work)
+        + placement_results(box, cases, args.infra.resolve() if args.infra else None, work)
     )
 
     meta = {
