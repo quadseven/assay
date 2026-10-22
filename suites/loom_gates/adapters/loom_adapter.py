@@ -54,6 +54,12 @@ HEAD_SHA = "a" * 40
 BASE_SHA = "b" * 40
 TRUSTED = "loom-lanes[bot] loom-brain[bot] loom-station[bot]"
 REVIEW_CHECK = "Grug - Elder"
+# The review bot as GitHub's GraphQL names it: a Bot whose login has no
+# "[bot]" suffix (the factory's DEFAULT_REVIEW_BOT).
+REVIEW_BOT = {"__typename": "Bot", "login": "grug-tribe"}
+COMMITTED = "2026-10-22T10:00:00Z"
+HELD_PREFIX = "held for the operator:"
+REVIEWED = "2026-10-22T10:05:00Z"
 # Modules the safeguard epic adds. Reported so a reader can see which of them
 # the replayed checkout holds; their effect is measured through the gates.
 PLANNED = {"operator_hold": "bus/operator_hold.py", "merge_tier": "bus/merge_tier.py"}
@@ -88,8 +94,9 @@ def result(case, gate, status, detail="", **extra):
 class FakeGitHub:
     """A transport for bus.github.GitHub that answers from one case."""
 
-    def __init__(self, case, comments):
+    def __init__(self, case, comments, elder_threads=()):
         self.case = case
+        self.elder_threads = list(elder_threads)
         self.pr = case["pr"]
         self.ticket = case.get("ticket")
         self.comments = comments
@@ -130,15 +137,47 @@ class FakeGitHub:
                     {
                         "commit": {
                             "oid": HEAD_SHA,
-                            "committedDate": "2026-10-22T10:00:00Z",
+                            "committedDate": COMMITTED,
                             "statusCheckRollup": {"state": "SUCCESS"},
                         }
                     }
                 ]
             },
-            "reviewThreads": {"nodes": self.case["scenario"].get("threads") or []},
-            "files": {"nodes": [{"path": f["path"]} for f in pr["files"]]},
+            "reviewThreads": self._threads(),
+            "files": self._file_nodes(),
         }
+
+    def _file_nodes(self):
+        """The changed files as GraphQL's PullRequest.files names them, from
+        the same entries the REST files API answers with."""
+        kinds = {"added": "ADDED", "removed": "DELETED", "modified": "MODIFIED", "renamed": "RENAMED"}
+        nodes = [
+            {
+                "path": f["filename"],
+                "additions": f["additions"],
+                "deletions": f["deletions"],
+                "changeType": kinds[f["status"]],
+            }
+            for f in self._files()
+        ]
+        return {"totalCount": len(nodes), "nodes": nodes}
+
+    def _threads(self):
+        """Every review thread, one page: the scenario's own, then each
+        finding the replayed Elder posts on the head commit, which the lane
+        then resolved with no fix pushed after it. That is the worst a lane
+        can do with a finding, so a catch here does not rely on the lane
+        leaving the thread open, and a good case passes only when no finding
+        that must hold a merge was raised."""
+        nodes = list(self.case["scenario"].get("threads") or [])
+        nodes += [
+            {
+                "isResolved": True,
+                "comments": {"nodes": [{"author": dict(REVIEW_BOT), "body": body, "createdAt": REVIEWED}]},
+            }
+            for body in self.elder_threads
+        ]
+        return {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}
 
     def _patches(self):
         """Each file's patch as GitHub's files API sends it: the hunks only."""
@@ -267,6 +306,10 @@ class FakeGitHub:
             return {"state": "success", "statuses": []}
         if path.startswith(f"{base}/contents/"):
             return self._contents(unquote(path[len(f"{base}/contents/") :]))
+        if path == "/search/issues":
+            # The hourly auto-merge caps count recent merges by search: none
+            # in the replay, so a refusal is never the cap's.
+            return {"total_count": 0, "incomplete_results": False, "items": []}
         if path.startswith(f"{base}/compare/"):
             return {"behind_by": 0, "ahead_by": 1, "files": self._files()}
         return None
@@ -288,6 +331,8 @@ class FakeGitHub:
                 if "pullRequest(" in query
                 else {"data": {}}
             )
+            if "pullRequest(" not in query:
+                self.unanswered.append(f"{method} {path} {query[:60]}")
         elif method == "GET":
             answer = self._read(path)
         else:
@@ -320,11 +365,11 @@ def ticket_comments(case, brain, tickets):
     return out
 
 
-def gate_merge(case, brain, tickets, github):
+def gate_merge(case, brain, tickets, github, elder_threads=()):
     pr = case.get("pr")
     if not pr:
         return result(case, "loom.merge", "n/a")
-    fake = FakeGitHub(case, ticket_comments(case, brain, tickets))
+    fake = FakeGitHub(case, ticket_comments(case, brain, tickets), elder_threads)
     gh = github.GitHub("fake-token-for-replay", transport=fake)
     env = {"LOOM_BRIEF_AUTHORS": TRUSTED, "LOOM_REVIEW_CHECK": REVIEW_CHECK, "LOOM_MERGE_SETTLE_SECONDS": "0"}
     os.environ.update(env)
@@ -334,7 +379,11 @@ def gate_merge(case, brain, tickets, github):
     try:
         brain.merge(gh, REPO, pr["number"], ticket=ticket, adopt=adopt, env=env)
     except (ValueError, github.GitHubError) as exc:
-        return result(case, "loom.merge", "blocked", f"refused: {exc}", unanswered=fake.unanswered)
+        # "held for the operator" is the factory's hold: the operator merges
+        # it by hand (bus/operator_hold.py, bus/merge_tier.py). Any other
+        # refusal, a read that failed closed among them, is a block.
+        status = "held" if str(exc).startswith(HELD_PREFIX) else "blocked"
+        return result(case, "loom.merge", status, f"refused: {exc}", unanswered=fake.unanswered)
     except Exception as exc:  # noqa: BLE001 - recorded, never a catch
         return result(case, "loom.merge", "error", f"{type(exc).__name__}: {exc}", unanswered=fake.unanswered)
     if fake.merged:
@@ -370,9 +419,34 @@ def gate_close(case, station):
         "labels": [{"name": x} for x in close["labels"]],
     }
     why = rule(issue)
-    if why:
-        return result(case, "loom.close", "passed", "closes now: " + why)
-    return result(case, "loom.close", "blocked", "kept open for a verify run")
+    if not why:
+        return result(case, "loom.close", "blocked", "kept open for a verify run")
+    gaps = evidence_gaps(issue["body"], station)
+    if gaps:
+        return result(
+            case,
+            "loom.close",
+            "blocked",
+            "kept open: no evidence for %d live or operator criteria (%s)"
+            % (len(gaps), "; ".join(f"{k}: {t[:80]}" for k, t in gaps[:3])),
+        )
+    return result(case, "loom.close", "passed", "closes now: " + why)
+
+
+def evidence_gaps(body, station):
+    """The station's second close rule (Station._evidence_holds): a done
+    ticket stays open while a live or operator criterion has no station
+    evidence. The replay's station has run no live check, so its only
+    evidence is the Live line when that names log strings, as in
+    Station._live_passed. A checkout without bus/criteria_gate.py has no
+    such rule: no gaps."""
+    try:
+        gate = importlib.import_module("bus.criteria_gate")
+    except ImportError:
+        return []
+    brain = importlib.import_module("bus.brain")
+    passed = [gate.key(brain.live_criterion(body, limit=None))] if station.live_needles(body) else []
+    return gate.unverified(body, passed)
 
 
 # ------------------------------------------------------------------- shell --
@@ -547,7 +621,9 @@ def main() -> int:
     ap.add_argument("--cases", required=True)
     ap.add_argument("--work", required=True)
     ap.add_argument("--leak-scanner", default="")
+    ap.add_argument("--elder-threads", default="", help="JSON: case id -> Elder thread bodies")
     args = ap.parse_args()
+    threads = json.loads(Path(args.elder_threads).read_text()) if args.elder_threads else {}
     checkout = Path(args.checkout).resolve()
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
@@ -570,7 +646,7 @@ def main() -> int:
     results = []
     for case in cases:
         results.append(gate_factory(case, factory))
-        results.append(gate_merge(case, brain, tickets, github))
+        results.append(gate_merge(case, brain, tickets, github, threads.get(case["id"], ())))
         results.append(gate_close(case, station))
         results.append(gate_lane_replies(case, checkout, prelude, work))
         results.append(gate_side_branch(case, checkout, prelude, work, scanner))

@@ -45,15 +45,26 @@ case, record the new fingerprint with
 |---|---|---|
 | `elder.<module>.<scan_*>` | every deterministic `scan_*` in the review bot's `personas/code_reviewer/`, except the general lint, SAST, dependency, secret, IaC and complexity scanners | a high or critical finding (the review check fails, so no merge path can merge). A medium or low finding is `flagged`: it opens a thread a lane can answer. |
 | `loom.factory` | the factory's pre-land checks (unticked criteria, code without a test) | sent back. Partial: the brain's own merges skip these checks. |
-| `loom.merge` | `bus.brain.merge`, the call both the factory and the brain merge through, against a fake GitHub transport | the merge is refused. Any hold wired into it later is measured with no change here. |
-| `loom.close` | the station's done-ticket rule | the shipped ticket stays open for a verify run. Never a false positive. |
+| `loom.merge` | `bus.brain.merge`, the call both the factory and the brain merge through, against a fake GitHub transport | the merge is refused (`blocked`), or held for the operator by an operator tier or an operator hold (`held`). Any hold wired into it later is measured with no change here. |
+| `loom.close` | the station's done-ticket rule and its evidence rule (`Station._done_reason`, then `bus/criteria_gate.py`'s unverified criteria, with no live check run) | the shipped ticket stays open for a verify run or for evidence. Never a false positive. |
 | `loom.lane_replies` | `run_lane.sh` `post_replies` with a fake `gh` | no reply or resolve reached a thread on another pull request. |
 | `loom.side_branch` | `run_lane.sh` `preserve_timedout`, pushing to a local bare repo | the timed-out edits were not pushed. |
 | `infra.pv_placement` | the deployment repo's placement guard, on the case's render and cluster state | the guard refused the change. |
 
-A damaging case is **caught** when a gate other than a partial one blocked it,
+The merge replay serves what the merge reads as GitHub would: every changed
+file with its change type, and every review thread. Each finding the
+replayed Elder publishes inline (`lane_work_findings` and the claim check,
+rendered by the checkout's own comment formatter) is served as a review-bot
+thread that the lane resolved with no fix pushed after it: the worst a lane
+can do with a finding, so a catch there does not rely on the lane leaving a
+thread open. The hourly merge caps count no recent merges.
+
+A damaging case is **caught** when a gate other than a partial one blocked or
+held it (a held change reaches main only through the operator's own review),
 **partial** when only `loom.factory` did, **missed** otherwise. A good case is
-a **false positive** when any gate except `loom.close` blocked it.
+a **false positive** when any gate except `loom.close` blocked it, and **held**
+when its only stop is a hold for the operator: a review the operator gives,
+not a wrong refusal, counted on its own line.
 
 ## Run it
 

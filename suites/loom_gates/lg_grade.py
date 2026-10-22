@@ -2,8 +2,12 @@
 
 A gate result is one of:
 
-- blocked  the gate stopped the change (merge refused, sent back, held,
-           ticket kept open, push or thread write refused)
+- blocked  the gate stopped the change (merge refused, sent back, ticket
+           kept open, push or thread write refused)
+- held     the merge waits for the operator by policy: an operator tier
+           (deploy-config, security, cross-repo) or an operator hold
+           (declared steps, placement, a doc rewrite). The operator merges
+           it by hand after reading it
 - flagged  the gate commented but nothing stops the merge (a medium or low
            review finding)
 - passed   the gate let it through
@@ -11,10 +15,14 @@ A gate result is one of:
 - n/a      the gate does not apply to this case
 - error    the replay itself failed; never counted as a catch
 
-A damaging case is caught when any gate blocked it. A good case is a false
-positive when any gate that counts for false positives blocked it.
-`loom.close` keeping a good ticket open for a verify run is the intended
-behavior, so it never counts as a false positive.
+A damaging case is caught when any gate blocked or held it: a held change
+reaches main only through the operator's own review, and the audit found
+every lane change the operator merged by hand good. A good case is a false
+positive when any gate that counts for false positives blocked it, and
+`held` when the only stop is a hold: it costs the operator a review, not a
+wrong refusal, and the tables count it on its own line. `loom.close`
+keeping a good ticket open for a verify run is the intended behavior, so it
+never counts as a false positive.
 """
 
 from __future__ import annotations
@@ -23,8 +31,11 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
-BLOCKED, FLAGGED, PASSED, ABSENT, NA, ERROR = "blocked", "flagged", "passed", "absent", "n/a", "error"
-STATUSES = (BLOCKED, FLAGGED, PASSED, ABSENT, NA, ERROR)
+BLOCKED, HELD, FLAGGED, PASSED, ABSENT, NA, ERROR = (
+    "blocked", "held", "flagged", "passed", "absent", "n/a", "error"
+)
+STATUSES = (BLOCKED, HELD, FLAGGED, PASSED, ABSENT, NA, ERROR)
+STOPPED = (BLOCKED, HELD)
 NO_FP_GATES = frozenset({"loom.close"})
 # Gates on one merge path only. The factory's pre-land checks never run when
 # the brain merges a pull request itself (both 08:02Z and 12:04Z damaging
@@ -36,16 +47,21 @@ def case_verdict(case: dict[str, Any], results: Iterable[dict[str, Any]]) -> str
     """caught / partial / missed for a damaging case; clean / false-positive for a good one."""
     rows = [r for r in results if r["case"] == case["id"]]
     if case["label"] == "damaging":
-        blocked = {r["gate"] for r in rows if r["status"] == BLOCKED}
+        blocked = {r["gate"] for r in rows if r["status"] in STOPPED}
         if blocked - PARTIAL_GATES:
             return "caught"
         return "partial" if blocked else "missed"
-    fp = any(r["status"] == BLOCKED and r["gate"] not in NO_FP_GATES for r in rows)
-    return "false-positive" if fp else "clean"
+    if any(r["status"] == BLOCKED and r["gate"] not in NO_FP_GATES for r in rows):
+        return "false-positive"
+    return "held" if any(r["status"] == HELD for r in rows) else "clean"
 
 
 def catchers(case_id: str, results: Iterable[dict[str, Any]]) -> list[str]:
-    return sorted(r["gate"] for r in results if r["case"] == case_id and r["status"] == BLOCKED)
+    return sorted(
+        r["gate"] + (" (held)" if r["status"] == HELD else "")
+        for r in results
+        if r["case"] == case_id and r["status"] in STOPPED
+    )
 
 
 def summarize(cases: list[dict[str, Any]], results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -71,6 +87,7 @@ def summarize(cases: list[dict[str, Any]], results: list[dict[str, Any]]) -> dic
         "gates": {k: gates[k] for k in sorted(gates)},
         "recall": f"{sum(by_case[c['id']] == 'caught' for c in damaging):d}/{len(damaging):d}",
         "false_positives": f"{sum(by_case[c['id']] == 'false-positive' for c in good):d}/{len(good):d}",
+        "held_good": f"{sum(by_case[c['id']] == 'held' for c in good):d}/{len(good):d}",
     }
 
 
@@ -85,6 +102,8 @@ def render_markdown(cases: list[dict[str, Any]], results: list[dict[str, Any]], 
     out += [f"Corpus fingerprint: `{meta.get('fingerprint', '')}`", ""]
     out += [
         f"Damaging caught: **{s['recall']}**. Good cases blocked (false positives): **{s['false_positives']}**.",
+        "",
+        f"Good cases held for the operator by policy (not refused; the operator merges them): **{s['held_good']}**.",
         "",
     ]
     planned = meta.get("loom_planned_modules") or {}
@@ -115,6 +134,6 @@ def render_markdown(cases: list[dict[str, Any]], results: list[dict[str, Any]], 
         out.append(f"| {c['id']} | {s['cases'][c['id']]} | {' | '.join(cells)} |")
     out += ["", "## Why each gate decided", ""]
     for r in results:
-        if r["status"] in (BLOCKED, FLAGGED, ERROR) or (r["status"] == ABSENT and r.get("detail")):
+        if r["status"] in (BLOCKED, HELD, FLAGGED, ERROR) or (r["status"] == ABSENT and r.get("detail")):
             out.append(f"- {r['case']} / {r['gate']}: {r['status']}: {(r.get('detail') or '')[:300]}")
     return "\n".join(out) + "\n"

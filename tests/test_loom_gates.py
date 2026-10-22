@@ -90,6 +90,77 @@ def test_a_good_case_kept_open_for_verify_is_not_a_false_positive():
     assert grade.case_verdict(case, [_r("g", "loom.merge", "blocked")]) == "false-positive"
 
 
+def test_a_hold_for_the_operator_catches_damage_and_is_no_false_positive():
+    bad = {"id": "x", "label": "damaging", "classes": ["wrong-target"]}
+    good = {"id": "g", "label": "good", "classes": ["good"]}
+    assert grade.case_verdict(bad, [_r("x", "loom.merge", "held")]) == "caught"
+    assert grade.case_verdict(good, [_r("g", "loom.merge", "held")]) == "held"
+    # A refusal that is not a hold is still a false positive.
+    rows = [_r("g", "loom.merge", "held"), _r("g", "elder.a.scan_a", "blocked")]
+    assert grade.case_verdict(good, rows) == "false-positive"
+    s = grade.summarize([bad, good], [_r("x", "loom.merge", "held"), _r("g", "loom.merge", "held")])
+    assert s["recall"] == "1/1" and s["false_positives"] == "0/1" and s["held_good"] == "1/1"
+    assert s["classes"]["wrong-target"]["caught"] == ["x (loom.merge (held))"]
+
+
+def _adapter(name):
+    import importlib.util
+
+    path = ROOT / "suites" / "loom_gates" / "adapters" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"lg_test_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _graphql(fake, query="query { repository { pullRequest(number: 1) { id } } }"):
+    status, _, body = fake("POST", "https://api.github.com/graphql", {}, json.dumps({"query": query}).encode())
+    return status, json.loads(body)
+
+
+def test_the_fake_serves_every_review_thread_and_each_file_as_graphql_names_it():
+    loom = _adapter("loom_adapter")
+    case = corpus.materialize(next(c for c in CASES if c["id"] == "doc-gutting-02"))
+    elder = ["\U0001f7e0 medium | _test fidelity_ | `weakened-test` | x\n\nIt deletes a test."]
+    fake = loom.FakeGitHub(case, [], elder)
+    status, answer = _graphql(fake)
+    pull = answer["data"]["repository"]["pullRequest"]
+    threads = pull["reviewThreads"]
+    assert status == 200 and threads["pageInfo"] == {"hasNextPage": False, "endCursor": None}
+    (thread,) = threads["nodes"]
+    root = thread["comments"]["nodes"][0]
+    # The lane resolved it with no fix after: the worst a lane can do.
+    assert thread["isResolved"] and root["createdAt"] > loom.COMMITTED
+    assert root["author"] == {"__typename": "Bot", "login": "grug-tribe"} and root["body"] == elder[0]
+    kinds = {n["path"]: n["changeType"] for n in pull["files"]["nodes"]}
+    assert kinds["docs/archive/AGENTS-old.md"] == "RENAMED" and kinds["AGENTS.md"] == "ADDED"
+    assert pull["files"]["totalCount"] == len(pull["files"]["nodes"])
+
+
+def test_the_fake_answers_the_merge_cap_count_and_records_an_unknown_query():
+    loom = _adapter("loom_adapter")
+    fake = loom.FakeGitHub(corpus.materialize(CASES[0]), [])
+    status, _, body = fake("GET", "https://api.github.com/search/issues?q=is%3Apr", {}, b"")
+    assert status == 200 and json.loads(body)["total_count"] == 0
+    _graphql(fake, "query { viewer { login } }")
+    assert any("viewer" in u for u in fake.unanswered)
+
+
+def test_only_the_findings_elder_publishes_inline_become_threads():
+    import lg_inbox
+
+    elder = {"results": [
+        {"case": "c", "gate": "elder.lane_work.lane_work_findings", "findings": [
+            {"severity": "medium", "rule": "dead-code", "message": "m", "file": "a.py", "line": 3, "body": "B1"},
+            {"severity": "high", "rule": "x", "message": "m", "file": "", "line": 0, "body": "B2"},
+        ]},
+        {"case": "c", "gate": "elder.dead_on_arrival.scan_dead_on_arrival", "findings": [
+            {"severity": "high", "rule": "dead-code", "message": "m", "file": "a.py", "line": 3, "body": "B3"},
+        ]},
+    ]}
+    assert lg_inbox.elder_threads(elder) == {"c": ["B1"]}
+
+
 def test_summary_counts_recall_and_false_positives():
     cases = [
         {"id": "d1", "label": "damaging", "classes": ["wrong-target"]},

@@ -35,6 +35,24 @@ def adapter(script: str, args: list[str]) -> dict:
     return json.loads(proc.stdout)
 
 
+PUBLISHED = ("elder.lane_work.lane_work_findings", "elder.claim_check.scan_claim_checks")
+
+
+def elder_threads(elder: dict) -> dict[str, list[str]]:
+    """Per case, the inline thread bodies Elder would post: every finding of
+    the calls dispatch publishes that is anchored to a file and line. The
+    merge gate reads them as open review-bot threads."""
+    out: dict[str, list[str]] = {}
+    for row in elder["results"]:
+        if row["gate"] not in PUBLISHED:
+            continue
+        for f in row.get("findings") or []:
+            body = f.get("body") or "{} | _general_ | `{}`\n\n{}".format(f["severity"], f["rule"], f["message"])
+            if f.get("file") and f.get("line") and body not in out.get(row["case"], []):
+                out.setdefault(row["case"], []).append(body)
+    return out
+
+
 def placement(cases: list[dict], infra: Path, work: Path) -> list[dict]:
     """infra.pv_placement: the deployment repo's own placement guard, run on
     each case's recorded render and cluster state."""
@@ -72,6 +90,11 @@ def main() -> int:
     cases = root / "cases.json"
     elder = adapter("elder_adapter.py", ["--checkout", str(root / "grug"), "--cases", str(cases)])
     scanner = root / "scanner" / "check_private_leaks.py"
+    threads = work / "elder-threads.json"
+    threads.write_text(json.dumps(elder_threads(elder)))
+    for row in elder["results"]:
+        for f in row.get("findings") or []:
+            f.pop("body", None)  # served to the merge gate; the result keeps the message
     loom = adapter(
         "loom_adapter.py",
         [
@@ -83,6 +106,8 @@ def main() -> int:
             str(work / "loom"),
             "--leak-scanner",
             str(scanner) if scanner.exists() else str(root / "scanner" / "missing.py"),
+            "--elder-threads",
+            str(threads),
         ],
     )
     rows = placement(json.loads(cases.read_text()), root / "infra", work)

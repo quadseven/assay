@@ -52,10 +52,17 @@ SUPPLIED = {
     "base_line_counts",
     "boxes",
     "changes",
+    "new_files",
+    "removed_files",
+    "renamed",
 }
 # Seams that compose several detectors under one call, named here because they
 # do not follow the scan_* naming.
 SEAMS = {"lane_work": "lane_work_findings"}
+# The calls dispatch makes on a live review: their findings are posted as
+# inline review threads, which the factory's merge gate reads. The other
+# scan_* gates are parts of lane_work, replayed alone to show which part fired.
+PUBLISHED = ("elder.lane_work.lane_work_findings", "elder.claim_check.scan_claim_checks")
 BOX = re.compile(r"^-\s+\[[ xX]\]\s+(.+?)\s*$")
 
 
@@ -147,11 +154,29 @@ def supplied_inputs(case: dict, parse_diff, file_changes, linked_criterion) -> d
         "boxes": tuple((ticket.get("number", 0), i + 1, "open", t) for i, t in enumerate(criteria)),
     }
     if file_changes is not None:
-        supplied["changes"] = file_changes(pr["diff"])
+        changes = file_changes(pr["diff"])
+        supplied["changes"] = changes
+        # What lane_work passes a scanner it composes, so a scanner replayed
+        # alone sees the same file statuses it sees in the seam.
+        supplied["new_files"] = frozenset(c.path for c in changes if c.status == "added")
+        supplied["removed_files"] = frozenset(c.path for c in changes if c.status == "removed")
+        supplied["renamed"] = tuple(
+            (c.previous_path, c.path) for c in changes if c.status == "renamed" and c.previous_path
+        )
     return supplied
 
 
-def run_scanner(row: dict, fn, wanted: set, supplied: dict) -> None:
+def comment_renderer():
+    """The checkout's own inline-comment formatter, so the thread body the
+    merge gate parses is the one Elder posts; None when it cannot import."""
+    try:
+        dispatch = importlib.import_module("personas.code_reviewer.dispatch")
+    except Exception:  # noqa: BLE001 - reported through `renderer` in the output
+        return None
+    return getattr(dispatch, "_inline_comment_body", None)
+
+
+def run_scanner(row: dict, fn, wanted: set, supplied: dict, render=None) -> None:
     """Call one scanner and record blocked, flagged, passed or error on `row`."""
     missing = wanted - set(supplied)
     if missing:
@@ -167,6 +192,9 @@ def run_scanner(row: dict, fn, wanted: set, supplied: dict) -> None:
             "severity": str(getattr(f, "severity", "")).lower(),
             "rule": getattr(f, "rule_name", ""),
             "message": str(getattr(f, "message", ""))[:240],
+            "file": str(getattr(f, "file", "") or ""),
+            "line": int(getattr(f, "line", 0) or 0),
+            "body": render(f) if render else "",
         }
         for f in findings
     ]
@@ -191,6 +219,7 @@ def main() -> int:
     except (ImportError, AttributeError):
         linked = namedtuple("LinkedCriterion", "issue number text")
     usable, unreplayable = discover()
+    render = comment_renderer()
     results = []
     for case in json.loads(Path(args.cases).read_text(encoding="utf-8")):
         has_diff = bool((case.get("pr") or {}).get("diff"))
@@ -203,9 +232,15 @@ def main() -> int:
             row = {"case": case["id"], "gate": gate, "status": "n/a", "detail": ""}
             results.append(row)
             if has_diff:
-                run_scanner(row, fn, wanted, supplied)
+                run_scanner(row, fn, wanted, supplied, render if gate in PUBLISHED else None)
     json.dump(
-        {"gates": [g for g, _, _ in usable], "unreplayable": unreplayable, "results": results}, sys.stdout
+        {
+            "gates": [g for g, _, _ in usable],
+            "unreplayable": unreplayable,
+            "renderer": bool(render),
+            "results": results,
+        },
+        sys.stdout,
     )
     return 0
 
