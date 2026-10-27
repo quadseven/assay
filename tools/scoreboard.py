@@ -113,9 +113,9 @@ def render(suites: list[dict]) -> str:
             # with the truth only in a caveat the README does not show, and
             # a reader compares numbers, not caveats.
             if m.get("void"):
-                cell = f"void · {m['void']}"
+                cell = f"void: {m['void']}"
             else:
-                cell = m["value"] + (f" · {m['detail']}" if m.get("detail") else "")
+                cell = m["value"] + (f", {m['detail']}" if m.get("detail") else "")
             by_model.setdefault(model, {})[s["column"]] = cell
             # Shortest wins: a longer `where` is the same host plus how it was
             # reached, which belongs in the suite's own results, not here.

@@ -117,7 +117,7 @@ class TestMeasurementsAreReadable(unittest.TestCase):
             ]
         )
         row = next(line for line in rendered.splitlines() if line.startswith("| `m`"))
-        self.assertIn("void · server never loaded it", row)
+        self.assertIn("void: server never loaded it", row)
 
     def test_a_caveat_that_names_a_corpus_size_agrees_with_the_corpus_hash(self):
         """A row was re-worded as "the six-task corpus" while keeping the
