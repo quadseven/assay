@@ -12,6 +12,11 @@ check with `ruff-version` and `test-cmd`, and that reusable runs
 `uvx ruff@<version> check <lint-paths>` and `... format --check <lint-paths>`
 in its step "Ruff check + format --check", then `test-cmd` in its step
 "Test". A line scan, not a YAML load, so no extra dependency is needed.
+
+This module runs inside that same `test-cmd`, so the CI job that executes
+the contract's commands also checks the contract against ci.yml: a green
+`test / check` on a pull request is the evidence that the contract passes
+on that head.
 """
 
 from __future__ import annotations
