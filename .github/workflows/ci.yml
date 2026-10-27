@@ -38,8 +38,12 @@ jobs:
   # nothing to them.
   leak-scan:
     runs-on: ubuntu-latest
+    # The scan takes seconds; the cap only stops a hung step holding a runner
+    # for the six-hour platform default.
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a commit SHA (the fleet's v6.0.2 pin); a tag can be moved.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Leak scan
         # Positive control first: if a pattern stops matching its own control
