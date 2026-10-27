@@ -1,8 +1,126 @@
 # assay
 
-Eval suites that measure language models against public benchmarks and against
-one operator's real workloads, with the results published whether or not they
-are flattering.
+Eval suites that measure language models, with every result published.
+
+`assay` runs models through the same suites on the same hardware, against
+public benchmarks and against one operator's real workloads, and publishes
+what it measured whether or not it is flattering. It is for anyone picking a
+model for a real job who wants a measured answer instead of a vendor claim.
+
+## What it does
+
+1. A suite runs one model against its corpus or task set and grades the
+   output: macro extraction, an unattended coding ticket, an in-character
+   reply, a serving contract.
+2. The numbers someone stands behind go into that suite's
+   `results/scoreboard.json`, each with its date and its caveat.
+3. `tools/scoreboard.py` renders those files into the [Scoreboard](#scoreboard)
+   below, and CI fails when the README and the files disagree.
+
+## Quick start
+
+```sh
+git clone https://github.com/quadseven/assay
+cd assay
+uv sync --locked
+uv run pytest -q   # the parts that need no model and no corpus
+```
+
+That much runs offline on a clean machine. To run a benchmark you also need
+a model endpoint and the corpus. For the nutrition suite:
+
+```sh
+# 1. Fetch NutriBench (CC-BY-NC-SA-4.0, not redistributed here) from
+#    huggingface.co/datasets/dongx1997/NutriBench into
+#    suites/nutrition/data/nutribench/ (v2/train-00000-of-00001.parquet).
+
+# 2. Point at any Ollama host and run 5 rows.
+cd suites/nutrition
+OLLAMA_BASE_URL=http://localhost:11434 \
+  uv run python nutribench_runner.py --model llama3.2:3b --split v2 --max-rows 5
+```
+
+The runner prints per-axis pass rate, MAE, MAPE and latency, and exits
+non-zero if the corpus is missing rather than silently scoring nothing.
+
+## How it works
+
+```mermaid
+flowchart LR
+  E[Model endpoint] --> R[Suite runner]
+  C[Corpus or task set] --> R
+  R --> G[Grader]
+  G --> J[results/scoreboard.json]
+  J --> T[tools/scoreboard.py]
+  T --> M[README scoreboard]
+```
+
+A suite owns its corpus, its runner and its grader. The runner sends each
+prompt or task to the model endpoint; the grader scores the answer. Curated
+measurements go into the suite's `results/scoreboard.json`, and
+`tools/scoreboard.py` is the only thing that writes the table below. Raw run
+archives stay gitignored.
+
+| Suite | What it asks |
+|---|---|
+| [`suites/agentic_coding/`](suites/agentic_coding/) | Can a model work a real backlog ticket unattended? Six tasks, a hidden test, a contained runner. |
+| [`suites/spark_serving/`](suites/spark_serving/) | Does a served model hold `json_object`, `tool_calling` and `vision`, and how fast does it decode? |
+| [`suites/nutrition/`](suites/nutrition/) | NutriBench macro extraction: base, RAG, chain-of-thought and cloud arms. |
+| [`suites/persona_chat/`](suites/persona_chat/) | Is a model usable as an in-character voice, fast enough for a player? |
+| [`suites/loom_lanes/`](suites/loom_lanes/) | How does each Loom lane's model do on real Loom tickets? Reads GitHub; runs no model. |
+| [`suites/loom_gates/`](suites/loom_gates/) | Do the gates between a lane's pull request and a merge stop the right ones? Replays real cases. |
+| [`suites/lane_review/`](suites/lane_review/) | Does the review bot stop the lane pull requests that did damage, and only those? |
+| [`suites/review_quality/`](suites/review_quality/) | Which model should review pull requests, measured rather than picked by hand. |
+
+[`suites/README.md`](suites/README.md) describes how to add a suite.
+
+## Run and test locally
+
+```sh
+uv sync --locked
+uv run pytest -q
+uvx ruff@0.15.10 check .
+uvx ruff@0.15.10 format --check .
+python3 tools/leakscan.py --selftest
+python3 tools/leakscan.py .
+```
+
+CI runs the same commands on every pull request (`.github/workflows/ci.yml`).
+`uv run pytest -q` includes `tests/test_scoreboard.py`, which fails when the
+table below no longer matches the suites' `results/scoreboard.json` files.
+
+## Configuration
+
+Nothing is needed for the test suite. Running a benchmark needs a model to
+measure; these are the settings the suites read:
+
+| Setting | Where | What it does |
+|---|---|---|
+| `OLLAMA_BASE_URL` | environment | Ollama host for the nutrition runners (default `http://localhost:11434`). |
+| `OLLAMA_TIMEOUT` | environment | Per-request timeout in seconds for those runners. |
+| `OFF_PARQUET_PATH` | environment | Open Food Facts parquet for the RAG arm (`off_parquet.py` has the default). |
+| `POOLSIDE_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` | environment | Keys for the nutrition cloud arm; only the provider you pick is read. |
+| `OPENCODE_GO_API_KEY` | environment | Key for the review_quality runner. |
+| `LR_GATEWAY_URL` | environment | Model gateway for the lane_review pipeline mode. |
+| `--url`, `--model` | command line | Endpoint and model for the spark_serving and persona_chat probes. |
+| `--agent`, `--label` | command line | Agent command and model label for the agentic_coding runner. |
+
+Not shipped with the repo: the model servers, the NutriBench corpus and the
+Open Food Facts dump (each suite's README says how to fetch them), and the
+GitHub access the Loom suites read with.
+
+## Status
+
+Open work is tracked in
+[the assay epic](https://github.com/quadseven/assay/issues/56).
+
+## Contributing
+
+Changes land through a pull request; direct pushes to `main` are refused. A
+pull request must pass `ci.yml` (install, ruff, pytest and the leak scan),
+`check.leak-scan.yml` (the shared public-repo leak scan over the diff and the
+pull request text) and the review bot's checks. Read [AGENTS.md](AGENTS.md)
+first: this repository is public.
 
 ## Scoreboard
 
@@ -14,26 +132,26 @@ blank cell means "not run", never "not good".
 
 | Model | Where it runs | Agentic coding | Nutrition (mean MAPE) | In-character chat | Serving contracts / decode |
 |---|---|---|---|---|---|
-| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 3/3 · 64.8 tok/s |
-| `Qwen/Qwen3.8-27B (Ollama qwen3.8:27b-mtp-q8_0)` | local, Ollama, single node | 2/2 valid, 97s/task | -- | -- | 3/3 · 21.6 tok/s |
-| `Qwen/Qwen3.8-Flash-Next (unsloth UD-IQ4_XS GGUF)` | local, Ollama, single node | 6/6, 79s/task | -- | 3/4, 7.4s/reply | 2/3 · 27.5 tok/s |
-| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | 2/3 · 61.8 tok/s |
-| `gemma4:31b` | local, Ollama | void · server never loaded the model (fleet context 262k x 8 slots) | -- | -- | -- |
-| `gpt-oss:120b` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
+| `Qwen/Qwen3.6-35B-A3B-FP8` | local, vLLM | void: measured before reads were contained: the hidden test was readable to the agent | -- | -- | 3/3, 64.8 tok/s |
+| `Qwen/Qwen3.8-27B (Ollama qwen3.8:27b-mtp-q8_0)` | local, Ollama, single node | 2/2 valid, 97s/task | -- | -- | 3/3, 21.6 tok/s |
+| `Qwen/Qwen3.8-Flash-Next (unsloth UD-IQ4_XS GGUF)` | local, Ollama, single node | 6/6, 79s/task | -- | 3/4, 7.4s/reply | 2/3, 27.5 tok/s |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | local, vLLM, TP=2 across BOTH nodes | void: measured before reads were contained: the hidden test was readable to the agent | -- | -- | 2/3, 61.8 tok/s |
+| `gemma4:31b` | local, Ollama | void: server never loaded the model (fleet context 262k x 8 slots) | -- | -- | -- |
+| `gpt-oss:120b` | local, Ollama | void: measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- | -- |
-| `mistral-small:24b` | local, Ollama | -- | 35% · 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
+| `mistral-small:24b` | local, Ollama | -- | 35%, 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
 | `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
-| `nemotron-3-super:120b` | local, Ollama | void · harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
-| `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3 · 91.9 tok/s |
+| `nemotron-3-super:120b` | local, Ollama | void: harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
+| `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3, 91.9 tok/s |
 | `nemotron-3.5-lightning:30b (opencode harness)` | local, Ollama, single node | 4/6, 50.6s/task | -- | -- | -- |
 | `nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4 (opencode harness)` | local, vLLM (the model card's single-GPU recipe: LiLiCorr dflash drafter, 7 speculative tokens, one sequence), single node | 6/6, 47.6s/task | -- | -- | -- |
-| `poolside/laguna-m.1` | cloud | -- | 32.5% · 17.7% energy | -- | -- |
+| `poolside/laguna-m.1` | cloud | -- | 32.5%, 17.7% energy | -- | -- |
 | `poolside/laguna-xs.2` | cloud | -- | 30.8% | -- | -- |
 | `qwen2.5:32b` | local, Ollama | -- | 53% | -- | -- |
 | `qwen3-coder-next:q4_K_M (opencode harness)` | local, Ollama, single node | 6/6, 20.5s/task | -- | -- | -- |
-| `qwen3-coder-next:q8_0` | local, Ollama | void · measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
-| `qwen3.6:35b` | local, Ollama | void · wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- | -- |
-| `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | -- | 3/3 · 20.3 tok/s |
+| `qwen3-coder-next:q8_0` | local, Ollama | void: measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
+| `qwen3.6:35b` | local, Ollama | void: wrote into another repo's checkout mid-sweep; the grader cannot see that | -- | -- | -- |
+| `unsloth/Qwen3.8-27B-NVFP4` | local, vLLM | -- | -- | -- | 3/3, 20.3 tok/s |
 
 `--` means **not run**, never *not good*. Every number was measured
 on this hardware by the suite in its column; vendor and aggregator
@@ -70,7 +188,7 @@ stated as a result:
   character of an answer exists: a tok/s benchmark counts that as output,
   an agent counts it as latency several round trips deep.
 - **The biggest model was not the fastest solver.** A 304B MoE served
-  tensor-parallel across both nodes (tonyd2wild's community DSpark recipe: a
+  tensor-parallel across both nodes (a community DSpark recipe: a
   patched vLLM with MXFP4 MoE kernels and speculative decoding) costs the
   whole fleet while it is up, and an 85 GB model on ONE node finished the
   same tasks in half the wall-clock.
@@ -221,56 +339,6 @@ buried:
 
 Full method, every run, and the reasoning behind each conclusion:
 [`suites/nutrition/README.md`](suites/nutrition/README.md).
-
-## Reproduce it
-
-```bash
-git clone https://github.com/quadseven/assay
-cd assay
-uv sync
-uv run pytest            # the parts that need no model and no corpus
-```
-
-That much runs offline on a clean machine. To run the benchmark itself you
-need a model endpoint and the corpus:
-
-```bash
-# 1. Fetch NutriBench (~2MB, CC-BY-NC-SA-4.0, not redistributed here).
-#    See suites/nutrition/data/README.md for the exact commands.
-
-# 2. Point at any Ollama host and run 5 rows.
-cd suites/nutrition
-OLLAMA_BASE_URL=http://localhost:11434 \
-  uv run python nutribench_runner.py --model llama3.2:3b --split v2 --max-rows 5
-```
-
-The runner prints per-axis pass rate, MAE, MAPE and latency, and exits
-non-zero if the corpus is missing rather than silently scoring nothing.
-
-## What is in here
-
-`assay` is a home for eval suites, not a single study. Each suite lives under
-[`suites/`](suites/) and owns its own corpus, runners, graders and results.
-
-- [`suites/agentic_coding/`](suites/agentic_coding/) -- can a model be trusted
-  to work a real backlog ticket unattended? Six tasks seeded from this
-  operator's own recorded failures, each scored on three axes at once, with a
-  hidden test the model never sees. This is where the scoreboard's coding
-  column comes from.
-- [`suites/spark_serving/`](suites/spark_serving/) -- does a served model hold
-  the contracts the real consumers require (`json_object`, `tool_calling`,
-  `vision`), and how fast does it decode? Capability checks, not a scored task.
-- [`suites/nutrition/`](suites/nutrition/) -- NutriBench macro extraction.
-  Four arms (base, RAG, chain-of-thought, cloud), an LLM-judged promptfoo
-  matrix, and an Open Food Facts retriever over DuckDB.
-- [`suites/review_quality/`](suites/review_quality/) -- a design note, not an
-  implementation.
-- [`suites/loom_lanes/`](suites/loom_lanes/) -- how does each Loom lane's
-  model do on real Loom tickets? Read from the pull requests and ticket
-  comments Loom already writes; runs no model. This is where the Loom lanes
-  table comes from.
-
-[`suites/README.md`](suites/README.md) describes how to add one.
 
 ## Credits
 
