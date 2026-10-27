@@ -1,4 +1,4 @@
-"""README.md follows the public README standard (#69).
+"""README.md follows the public README standard (issue 69 in this repo).
 
 The standard lives in the shared public template repository
 (templates/public-repo/README-STANDARD.md in quadseven/infra-public). It asks
