@@ -14,8 +14,10 @@ public.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
+import shlex
 import unittest
 from pathlib import Path
 
@@ -139,6 +141,26 @@ class ReadmeStandardTest(unittest.TestCase):
         if any(not row.get("void") for row in measurements):
             self.assertNotIn("Every agentic-coding row above is `void`", self.text)
         self.assertIn("--endpoint", self.text.split("### Adding a model to the scoreboard", 1)[1])
+
+    def test_cloud_required_arguments_are_documented(self):
+        source = ast.parse((ROOT / "suites/nutrition/nutribench_runner_cloud.py").read_text())
+        for call in ast.walk(source):
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                if call.func.attr == "add_argument" and any(
+                    key.arg == "required" and isinstance(key.value, ast.Constant) and key.value.value is True
+                    for key in call.keywords
+                ):
+                    self.assertIn(call.args[0].value, self.sections["Configuration"])
+
+    def test_scoreboard_walkthrough_paths_follow_its_directory_changes(self):
+        section = self.text.split("### Adding a model to the scoreboard", 1)[1]
+        block = re.search(r"```bash\n(.*?)```", section, re.S).group(1)
+        cwd = ROOT
+        for line in block.splitlines():
+            if line.startswith("cd "):
+                cwd = (cwd / shlex.split(line.rstrip(chr(92)))[1]).resolve()
+            elif line.startswith(("python3 ", "$EDITOR ")):
+                self.assertTrue((cwd / shlex.split(line.rstrip(chr(92)))[1]).is_file(), line)
 
     def _source_text(self) -> str:
         if not hasattr(self, "_src"):

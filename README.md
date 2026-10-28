@@ -95,6 +95,8 @@ table below no longer matches the suites' `results/scoreboard.json` files.
 Nothing is needed for the test suite. Running a benchmark needs a model to
 measure; these are the settings the suites read:
 
+<!-- AI-REVIEW 2026-10-28 [Independent Codex reviewer; exact runtime not exposed] ASSAY69-CONFIG-003: document the cloud runner's source-required provider selector. -->
+
 | Setting | Where | What it does |
 |---|---|---|
 | `OLLAMA_BASE_URL` | environment | Ollama host for the nutrition runners (default `http://localhost:11434`). |
@@ -107,6 +109,7 @@ measure; these are the settings the suites read:
 | `DD_LLMOBS_ENABLED`, `DD_API_KEY` | environment | Optional nutrition telemetry: enable it and supply a Datadog key after installing the `llmobs` extra. Leave disabled for ordinary benchmarks. |
 | `DD_LLMOBS_ML_APP`, `DD_SITE` | environment | Optional telemetry app and site (defaults `nutribench-eval` and `datadoghq.com`). |
 | `OPENROUTER_REFERER` | environment | Optional cloud-arm request attribution (defaults to this public repository URL). |
+| `--provider`, `--model` | command line | Nutrition cloud runs require `--provider` to select its key and default model; `--model` overrides that model. |
 | `--url`, `--model` | command line | Endpoint and model for the spark_serving and persona_chat probes. |
 | `--agent`, `--label`, `--endpoint` | command line | Required agent command, result label and model-server `HOST:PORT` for agentic_coding. |
 | `--env`, `--endpoint-model` | command line | Pass the agent its proxy address through `{endpoint_host}` and `{endpoint_port}` in `--env` values; set the wire model when it differs from the label. |
@@ -224,6 +227,9 @@ cd suites/agentic_coding
 python3 runner.py --agent '<agent>' --label '<model>' \
   --endpoint '<model-host>:11434' \
   --env '<HOST_VAR>={endpoint_host}' --env '<PORT_VAR>={endpoint_port}'
+# AI-REVIEW 2026-10-28 [Independent Codex reviewer; exact runtime not exposed] ASSAY69-CWD-002:
+# Return to the repository root before editing records or running the renderer.
+cd ../..
 
 # 2. record what you stand behind, with its date and caveat
 $EDITOR suites/agentic_coding/results/scoreboard.json
