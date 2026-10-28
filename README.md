@@ -78,7 +78,7 @@ archives stay gitignored.
 
 ```sh
 uv sync --locked
-uv run pytest -q && uv run --extra llmobs pytest tests/test_optional_telemetry_security.py -q
+uv run pytest -q && uv run --extra llmobs python -c 'import ddtrace' && uv run --extra llmobs pytest tests/test_optional_telemetry_security.py tests/test_ddtrace_redaction_security.py -q
 uvx ruff@0.15.10 check .
 uvx ruff@0.15.10 format --check .
 python3 tools/leakscan.py --selftest
