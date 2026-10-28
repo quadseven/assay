@@ -27,7 +27,8 @@ jobs:
     uses: quadseven/infra-public/.github/workflows/check.python.yml@3d7eb0b00e8bfe949783d772ab777100182ab05d
     with:
       install-cmd: "uv sync --locked"
-      test-cmd: "uv run pytest -q"
+      # The optional tracing graph is not installed by the default sync.
+      test-cmd: "uv run pytest -q && uv run --extra llmobs pytest tests/test_optional_telemetry_security.py -q"
       ruff: true
       # Same ruff build the provisioned pre-commit pins (infra#995).
       ruff-version: "0.15.10"
