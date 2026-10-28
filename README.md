@@ -95,7 +95,7 @@ table below no longer matches the suites' `results/scoreboard.json` files.
 Nothing is needed for the test suite. Running a benchmark needs a model to
 measure; these are the settings the suites read:
 
-<!-- AI-REVIEW 2026-10-28 [Independent Codex reviewer; exact runtime not exposed] ASSAY69-CONFIG-003: document the cloud runner's source-required provider selector. -->
+<!-- AI-REVIEW 2026-10-28 [Codex GPT-6.1 Sol, medium; internal serving build not exposed] ASSAY69-CONFIG-003: document the cloud runner's source-required provider selector. -->
 
 | Setting | Where | What it does |
 |---|---|---|
@@ -227,7 +227,7 @@ cd suites/agentic_coding
 python3 runner.py --agent '<agent>' --label '<model>' \
   --endpoint '<model-host>:11434' \
   --env '<HOST_VAR>={endpoint_host}' --env '<PORT_VAR>={endpoint_port}'
-# AI-REVIEW 2026-10-28 [Independent Codex reviewer; exact runtime not exposed] ASSAY69-CWD-002:
+# AI-REVIEW 2026-10-28 [Codex GPT-6.1 Sol, medium; internal serving build not exposed] ASSAY69-CWD-002:
 # Return to the repository root before editing records or running the renderer.
 cd ../..
 

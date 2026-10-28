@@ -143,7 +143,7 @@ class ReadmeStandardTest(unittest.TestCase):
         self.assertIn("--endpoint", self.text.split("### Adding a model to the scoreboard", 1)[1])
 
     def test_cloud_required_arguments_are_documented(self):
-        source = ast.parse((ROOT / "suites/nutrition/nutribench_runner_cloud.py").read_text())
+        source = ast.parse((ROOT / "suites/nutrition/nutribench_runner_cloud.py").read_text(encoding="utf-8"))
         for call in ast.walk(source):
             if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
                 if call.func.attr == "add_argument" and any(
