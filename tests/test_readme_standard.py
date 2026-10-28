@@ -14,7 +14,10 @@ public.
 
 from __future__ import annotations
 
+import ast
+import json
 import re
+import shlex
 import unittest
 from pathlib import Path
 
@@ -114,11 +117,50 @@ class ReadmeStandardTest(unittest.TestCase):
             "POOLSIDE_API_KEY",
             "OPENROUTER_API_KEY",
             "LR_GATEWAY_URL",
+            "LR_DEBUG",
+            "OFF_PARQUET_OPTIONAL",
+            "DD_LLMOBS_ENABLED",
+            "DD_LLMOBS_ML_APP",
+            "DD_API_KEY",
+            "DD_SITE",
+            "OPENROUTER_REFERER",
+            "--endpoint",
+            "--env",
             "--url",
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, body)
                 self.assertIn(setting, self._source_text())
+
+    def test_agentic_scope_agrees_with_catalog_and_measurements(self):
+        count = len(list((ROOT / "suites/agentic_coding/tasks").glob("*/task.json")))
+        self.assertIn(f"current catalog contains {count} tasks", self.text)
+        measurements = json.loads(
+            (ROOT / "suites/agentic_coding/results/scoreboard.json").read_text(encoding="utf-8")
+        )["measurements"]
+        if any(not row.get("void") for row in measurements):
+            self.assertNotIn("Every agentic-coding row above is `void`", self.text)
+        self.assertIn("--endpoint", self.text.split("### Adding a model to the scoreboard", 1)[1])
+
+    def test_cloud_required_arguments_are_documented(self):
+        source = ast.parse((ROOT / "suites/nutrition/nutribench_runner_cloud.py").read_text(encoding="utf-8"))
+        for call in ast.walk(source):
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
+                if call.func.attr == "add_argument" and any(
+                    key.arg == "required" and isinstance(key.value, ast.Constant) and key.value.value is True
+                    for key in call.keywords
+                ):
+                    self.assertIn(call.args[0].value, self.sections["Configuration"])
+
+    def test_scoreboard_walkthrough_paths_follow_its_directory_changes(self):
+        section = self.text.split("### Adding a model to the scoreboard", 1)[1]
+        block = re.search(r"```bash\n(.*?)```", section, re.S).group(1)
+        cwd = ROOT
+        for line in block.splitlines():
+            if line.startswith("cd "):
+                cwd = (cwd / shlex.split(line.rstrip(chr(92)))[1]).resolve()
+            elif line.startswith(("python3 ", "$EDITOR ")):
+                self.assertTrue((cwd / shlex.split(line.rstrip(chr(92)))[1]).is_file(), line)
 
     def _source_text(self) -> str:
         if not hasattr(self, "_src"):
