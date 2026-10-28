@@ -26,8 +26,9 @@ uv sync --locked
 uv run pytest -q   # the parts that need no model and no corpus
 ```
 
-That much runs offline on a clean machine. To run a benchmark you also need
-a model endpoint and the corpus. For the nutrition suite:
+Installing dependencies needs network access. The tests need no model server
+or downloaded benchmark corpus. To run a benchmark you also need a model
+endpoint and the corpus. For the nutrition suite:
 
 ```sh
 # 1. Fetch NutriBench (CC-BY-NC-SA-4.0, not redistributed here) from
@@ -63,7 +64,7 @@ archives stay gitignored.
 
 | Suite | What it asks |
 |---|---|
-| [`suites/agentic_coding/`](suites/agentic_coding/) | Can a model work a real backlog ticket unattended? Six tasks, a hidden test, a contained runner. |
+| [`suites/agentic_coding/`](suites/agentic_coding/) | Can a model work a real backlog ticket unattended? The current catalog contains 9 tasks, each with a hidden test, and a contained runner. |
 | [`suites/spark_serving/`](suites/spark_serving/) | Does a served model hold `json_object`, `tool_calling` and `vision`, and how fast does it decode? |
 | [`suites/nutrition/`](suites/nutrition/) | NutriBench macro extraction: base, RAG, chain-of-thought and cloud arms. |
 | [`suites/persona_chat/`](suites/persona_chat/) | Is a model usable as an in-character voice, fast enough for a player? |
@@ -99,15 +100,33 @@ measure; these are the settings the suites read:
 | `OLLAMA_BASE_URL` | environment | Ollama host for the nutrition runners (default `http://localhost:11434`). |
 | `OLLAMA_TIMEOUT` | environment | Per-request timeout in seconds for those runners. |
 | `OFF_PARQUET_PATH` | environment | Open Food Facts parquet for the RAG arm (`off_parquet.py` has the default). |
+| `OFF_PARQUET_OPTIONAL` | environment | Set to `1` only to permit empty retrieval when the dump is absent; this does not measure a working RAG arm. |
 | `POOLSIDE_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY` | environment | Keys for the nutrition cloud arm; only the provider you pick is read. |
 | `OPENCODE_GO_API_KEY` | environment | Key for the review_quality runner. |
-| `LR_GATEWAY_URL` | environment | Model gateway for the lane_review pipeline mode. |
+| `LR_GATEWAY_URL`, `LR_DEBUG` | environment | Gateway required by lane_review pipeline mode; optional debug output when `LR_DEBUG` is set. |
+| `DD_LLMOBS_ENABLED`, `DD_API_KEY` | environment | Optional nutrition telemetry: enable it and supply a Datadog key after installing the `llmobs` extra. Leave disabled for ordinary benchmarks. |
+| `DD_LLMOBS_ML_APP`, `DD_SITE` | environment | Optional telemetry app and site (defaults `nutribench-eval` and `datadoghq.com`). |
+| `OPENROUTER_REFERER` | environment | Optional cloud-arm request attribution (defaults to this public repository URL). |
 | `--url`, `--model` | command line | Endpoint and model for the spark_serving and persona_chat probes. |
-| `--agent`, `--label` | command line | Agent command and model label for the agentic_coding runner. |
+| `--agent`, `--label`, `--endpoint` | command line | Required agent command, result label and model-server `HOST:PORT` for agentic_coding. |
+| `--env`, `--endpoint-model` | command line | Pass the agent its proxy address through `{endpoint_host}` and `{endpoint_port}` in `--env` values; set the wire model when it differs from the label. |
+| `--base-url`, `--models` | command line | Optional review_quality endpoint and served model IDs; hosted runs require `OPENCODE_GO_API_KEY`. |
+| `--repo`, `--rescore` | command line | loom_lanes needs target repositories and authenticated `gh`, or a saved collection to rescore. |
+| `--grug`, `--loom` | command line | Local source checkouts required by loom_gates replay; lane_review accepts `--grug` or recorded `--live` verdicts. |
 
-Not shipped with the repo: the model servers, the NutriBench corpus and the
-Open Food Facts dump (each suite's README says how to fetch them), and the
-GitHub access the Loom suites read with.
+Settings are supplied through the environment or command-line flags; there is
+no configuration file to copy. No model server, agent CLI, replay checkout,
+benchmark dump or GitHub credentials ship with the repository. Agentic coding
+requires `sandbox-exec` on macOS or `bwrap` on Linux; Windows is not a supported
+benchmark runner. See [the runner examples](suites/agentic_coding/README.md#reproduce-it)
+for the agent-specific proxy variables.
+
+Download `v2/train-00000-of-00001.parquet` from the
+[NutriBench dataset](https://huggingface.co/datasets/dongx1997/NutriBench)
+into `suites/nutrition/data/nutribench/v2/` for the nutrition quick start.
+The RAG arm additionally needs an Open Food Facts parquet dump containing
+the columns read by [`off_parquet.py`](suites/nutrition/off_parquet.py);
+set `OFF_PARQUET_PATH` to your local copy. No dump fetcher ships here.
 
 ## Status
 
@@ -173,71 +192,27 @@ names what); the number it produced is not published.
 
 <!-- scoreboard:end -->
 
-### What the first runs suggested, and why no number is published yet
+### Interpreting agentic coding results
 
-Every agentic-coding row above is `void` today: those runs happened before
-the runner contained reads, so the hidden test file was readable to the
-agent. No run was seen opening it and nothing in the instruction points to
-it, but a score that cannot exclude it is not a score. What those runs
-suggested, to be confirmed under the contained runner before any of it is
-stated as a result:
+<!-- AI-REVIEW 2026-10-28 [Codex GPT-6.1 Sol medium; internal serving build not exposed] ASSAY69-STALE-001: current measurements include valid runs and distinct corpus versions. -->
+The table contains both valid measurements and `void` runs. Each measurement
+records its date, corpus fingerprint and caveat in
+[`suites/agentic_coding/results/scoreboard.json`](suites/agentic_coding/results/scoreboard.json).
+Historical six-task results describe that run's corpus, not the current
+nine-task catalog; adding tasks does not change an earlier measurement.
 
-- **Decode throughput did not predict agentic coding.** The model that
-  generates tokens ~3x faster than the incumbent took ~4x longer per task.
-  It is a reasoning model, so most of its budget is spent before the first
-  character of an answer exists: a tok/s benchmark counts that as output,
-  an agent counts it as latency several round trips deep.
-- **The biggest model was not the fastest solver.** A 304B MoE served
-  tensor-parallel across both nodes (a community DSpark recipe: a
-  patched vLLM with MXFP4 MoE kernels and speculative decoding) costs the
-  whole fleet while it is up, and an 85 GB model on ONE node finished the
-  same tasks in half the wall-clock.
-- **Two models cleared every task**, which if it holds means the corpus is
-  saturated at the top and the next useful signal needs harder tasks or a
-  public anchor, not another candidate.
+A `void` cell names the boundary that failed: readable hidden tests, writes
+outside the attempt, a model that never loaded, or concurrent orphaned
+attempts. Those cells publish no qualification rate. Decode speed alone does
+not establish coding ability, and measurements on different corpora are not
+directly comparable.
 
-**A benchmark can measure its own harness.** One 120B model timed out on all
-six tasks. Only the first of those was a clean measurement: the runner's
-timeout killed the agent wrapper and left the real CLI generating, so tasks
-two through six shared the server with one to five orphaned attempts. Three
-of the six attempts still had a correct patch on disk when killed, and that
-3/6 is exactly the number this board refuses to publish: five of the six were
-not a controlled run. The row is `void` with the cause named, the runner now
-kills the whole process group, and the model is queued for a clean re-run. If
-later tasks in a sweep look slower than the first, suspect the harness before
-the model.
-
-The serving layer can do the same thing. A 31B model hit the cap on all six
-tasks with no file ever modified -- and had never loaded: the fleet's default
-served context (262k tokens across 8 parallel slots) left it half-offloaded
-and the runner died on every request. At a 32k context it loads in 17 s and
-answers. That row is `void` too, not 0/6 and not a blank: a number would be
-read as the model, and a blank as never tried, and the truth is that the
-server was measured six times and the model never once. `void` rows exist so
-that neither misreading is available.
-
-And the model can measure something the grader does not watch. A 35B model
-left a correct in-scope patch on four of six tasks -- and on one of them
-also wrote a correct patch into a *different repository's checkout* on the
-same host. The grader snapshots the task's working directory and nothing
-else, so that attempt still counted. The suite asks whether a model can be
-trusted with a ticket unattended; a run that answered "no" on the
-filesystem is not published as 4/6 on the tests. It is `void` until it is
-re-run contained, and the runner now enforces that: the agent can write
-only inside its own attempt box, read only the system toolchain and the
-box (not `$HOME`, not the suite with its hidden tests), reach only an
-inference-only proxy to the model server (which forwards requests for the
-labeled model and refuses the server's management API), cannot signal or
-enumerate the runner or reach a Mach service, and sees an environment
-built from an allowlist (`sandbox-exec` on macOS, `bwrap` with its own pid
-and network namespaces on Linux). Every one of
-those is proved by a probe before every attempt, and the runner refuses to
-start where a tool is missing or the proof fails. The tests are the
-agent's code running a second time, so they run in a second box with no
-network at all, on a copy of the tree that takes regular files only; an
-attempt that was refused at the proxy or left a symlink for the grader is
-`void` whatever its tests say. Rows measured before 2026-09-02 predate
-the read and network boundaries and say so.
+The current runner checks read, write, process and network boundaries before
+each attempt and grades generated tests in a second box without network
+access. It refuses to run when its containment prerequisites or probes fail.
+[The suite README](suites/agentic_coding/README.md) explains those boundaries
+and the measurement limits. These checks establish harness containment,
+not the correctness of an unmeasured model.
 
 ### Adding a model to the scoreboard
 
@@ -245,7 +220,10 @@ The table above is **generated**, so it cannot drift away from the suites:
 
 ```bash
 # 1. measure it -- the suite decides what the number means
-cd suites/agentic_coding && python3 runner.py --agent '<agent>' --label '<model>'
+cd suites/agentic_coding
+python3 runner.py --agent '<agent>' --label '<model>' \
+  --endpoint '<model-host>:11434' \
+  --env '<HOST_VAR>={endpoint_host}' --env '<PORT_VAR>={endpoint_port}'
 
 # 2. record what you stand behind, with its date and caveat
 $EDITOR suites/agentic_coding/results/scoreboard.json
@@ -271,12 +249,10 @@ model that measured **4x slower** on the work that actually mattered.
 | `spark_serving` | none -- capability contracts, not a scored task | n/a by design |
 | `agentic_coding` | SWE-bench Verified / Aider polyglot are the public comparables | **not run**, so no number is claimed |
 
-The agentic-coding corpus is deliberately private-workload-shaped rather than
-public: five of its six tasks encode a rule or incident from the operator's
-own systems, because a model that tops a generic coding benchmark has not been
-measured on the work it would actually be given. That is a real limitation as
-well as the point -- these scores are not comparable to anyone else's, and a
-public anchor is the obvious next addition.
+The task catalog combines workload-shaped regressions with a public-style
+JSON serialization task. It does not run SWE-bench Verified or Aider polyglot.
+Use the recorded corpus fingerprint and caveat to judge each row's scope;
+these qualification rates are not scores on either public benchmark.
 
 ## Nutrition, in detail
 

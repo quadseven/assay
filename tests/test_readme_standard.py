@@ -14,6 +14,7 @@ public.
 
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -114,11 +115,30 @@ class ReadmeStandardTest(unittest.TestCase):
             "POOLSIDE_API_KEY",
             "OPENROUTER_API_KEY",
             "LR_GATEWAY_URL",
+            "LR_DEBUG",
+            "OFF_PARQUET_OPTIONAL",
+            "DD_LLMOBS_ENABLED",
+            "DD_LLMOBS_ML_APP",
+            "DD_API_KEY",
+            "DD_SITE",
+            "OPENROUTER_REFERER",
+            "--endpoint",
+            "--env",
             "--url",
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, body)
                 self.assertIn(setting, self._source_text())
+
+    def test_agentic_scope_agrees_with_catalog_and_measurements(self):
+        count = len(list((ROOT / "suites/agentic_coding/tasks").glob("*/task.json")))
+        self.assertIn(f"current catalog contains {count} tasks", self.text)
+        measurements = json.loads(
+            (ROOT / "suites/agentic_coding/results/scoreboard.json").read_text(encoding="utf-8")
+        )["measurements"]
+        if any(not row.get("void") for row in measurements):
+            self.assertNotIn("Every agentic-coding row above is `void`", self.text)
+        self.assertIn("--endpoint", self.text.split("### Adding a model to the scoreboard", 1)[1])
 
     def _source_text(self) -> str:
         if not hasattr(self, "_src"):
