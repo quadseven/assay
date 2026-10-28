@@ -329,6 +329,25 @@ class TestGrade(unittest.TestCase):
         self.assertIn("hidden_test.py: symlink", got.detail)
 
 
+class TestLinuxProxyMount(unittest.TestCase):
+    @unittest.skipUnless(
+        sys.platform.startswith("linux") and shutil.which("bwrap"), "requires Linux bubblewrap"
+    )
+    def test_socket_under_tmp_remains_visible_in_private_tmpfs(self):
+        import runner
+
+        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:  # noqa: S108 -- this is the affected mount
+            root = Path(tmp) / "box"
+            root.mkdir()
+            socket_path = str(Path(tmp) / "model.sock")
+            with socket.socket(socket.AF_UNIX) as listener:
+                listener.bind(socket_path)
+                argv = runner.bwrap_argv(str(root), [], socket_path)
+                prefix = argv[: argv.index("--") + 1]
+                result = subprocess.run(prefix + ["test", "-S", socket_path], capture_output=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+
+
 class TestNoShellInterpolation(unittest.TestCase):
     """The agent instruction must reach the model as literal text.
 
