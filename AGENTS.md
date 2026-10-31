@@ -132,111 +132,125 @@ a scanner doesn't have.
 <!-- Everything above the next line is synced from quadseven/infra-public and replaced on every sync. Put this repo's own content below it. -->
 <!-- repo-specific below -->
 
-# AGENTS.md
+# assay
 
-Rules for anyone -- human or agent -- committing to this repository.
+Eval suites that measure language models, with every result published. **This repo is public. Assume everything pushed is permanent and world-readable.**
 
-**This repo is public. Assume everything you push is permanent and world-readable.**
+## Layout
 
-That is stronger than "everything you merge". See the next section for why.
+- `suites/<name>/`: one suite per question: `agentic_coding`, `spark_serving`, `nutrition`, `persona_chat`, `loom_lanes`, `loom_gates`, `lane_review`, `review_quality`. `suites/README.md` gives the file shape and how to add a suite.
+- `tools/leakscan.py`: this repo's own leak scanner. `tools/scoreboard.py`: renders the README scoreboard.
+- `tests/`: one test module per suite plus repo guards. Tests need no model server and no downloaded corpus.
+- `.loom/validation.conf`: the lane contract. `tests/test_validation_contract.py` keeps it equal to `.github/workflows/ci.yml`, so a change to one needs the other.
+- `suites/*/results/scoreboard.json`: curated measurements. Raw run JSON is gitignored, except `suites/loom_gates/results/*.json`, which tests re-grade.
 
-## The one rule that shapes every other
+## Commands
 
-**A leak is permanent the moment you PUSH, not when you merge.**
-
-GitHub creates a `refs/pull/N/head` ref for every pull request ever opened. It
-is server-side, not writable by any client, and **a force-push to `main` cannot
-touch it**. Closing the PR does not remove it. Deleting the branch does not
-remove it. `git ls-remote` lists these refs by default on a public repo, and
-anyone can fetch one.
-
-A normal clone does not fetch them, which is the dangerous part: `git log --all`
-on a fresh clone reports **clean** while the leak sits on GitHub's servers.
-
-This repository exists because that was discovered the expensive way. Its
-predecessor had its tree scrubbed, its tracker cleaned, and a full history
-rewrite prepared and verified -- and `refs/pull/2/head` still held 11
-occurrences of private terms across 4 files. Nothing a client can run removes
-them. The only fix was a new repository, which is this one.
-
-**So: scan before you push a branch. Not before you merge.** By merge time it is
-already too late.
-
-## Run the scan, and read what it says
+The first five lines match CI job `test`, and the last two match job `leak-scan`. Run all of them before pushing.
 
 ```bash
-python3 tools/leakscan.py --selftest   # ALWAYS first
+uv sync --locked
+uvx ruff@0.15.10 check .
+uvx ruff@0.15.10 format --check .
+uv run pytest -q
+uv run --extra llmobs python -c 'import ddtrace' && uv run --extra llmobs pytest tests/test_optional_telemetry_security.py tests/test_ddtrace_redaction_security.py -q
+python3 tools/leakscan.py --selftest
 python3 tools/leakscan.py .
 ```
 
-**`CLEAN` on its own means nothing.** Two ways this scan reports clean while
-leaking, both already hit here:
+- `python3 tools/scoreboard.py --write` rewrites the README table. `--check` exits 1 if it is stale, and `tests/test_scoreboard.py` runs that check. Never edit the table by hand.
+- `pre-commit run --all-files` runs the same ruff build. `.pre-commit-config.yaml` is managed from outside this repo; do not edit it.
 
-1. **No terms loaded.** Private nicknames live in `tools/leakscan.local.txt`,
-   which is gitignored on purpose -- publishing the scanner must not publish
-   what it hunts. If that file is missing, the scanner loads zero terms and
-   reports `CLEAN`. On the predecessor repo, `CLEAN` meant **41 leaks in 19
-   files**. The scan prints `(loaded N local term(s))` to stderr; if you do not
-   see it, you are not scanning for nicknames at all.
+## Required checks
 
-2. **A pattern silently stopped compiling.** That is what `--selftest` is for:
-   every class is checked against a control string it must match, and it prints
-   how many fired. Fewer classes than expected means the report is worthless.
+The ruleset requires a PR, `test / check` and `Grug - Chief`. Also on each PR, and bound by the merge gate below: `leak-scan`, `leak-scan / Scan diff and PR/issue text for private identifiers`, `Grug - Elder`, `Grug - Guard` and CodeQL.
 
-**CI cannot cover you here.** The workflow runs this scan, but the runner has no
-local terms file, so it only checks the built-in topology patterns -- private
-addresses, cluster naming, username-bearing paths. A bare product name or host
-nickname passes CI every time. It has to be that way: on a public repo the
-workflow log is public, so a finding would print the term it exists to protect.
+## Repo traps
 
-**Nickname coverage is a local, pre-push gate. The green check is not it.**
+- On macOS, two tests in `tests/test_agentic_coding_grade.py` can fail with `sandbox-exec: execvp() ... Operation not permitted`: `test_the_agent_can_read_and_reach_only_its_box_and_the_models_inference_api` and `test_test_time_code_can_reach_neither_the_host_nor_the_model`. Report them with the box error; the Ubuntu CI job is the verdict.
+- A new suite goes in `pythonpath` in `pyproject.toml`, because modules import by bare name.
+- `tests/test_declared_deps.py` fails when `pyproject.toml` and the imports drift apart.
+- `tools/leakscan.py` flags a bare issue ref of two or more digits in a tracked file. Write `assay#<n>` with the real number in code and docs.
+- Corpus rows are third-party data: copy them verbatim, non-ASCII included.
+
+## Shipping
+
+Nothing deploys. A change ships when it merges to `main`. A result ships through its suite's `results/scoreboard.json` and the regenerated README. `sync.public-repo-docs` opens a PR when the text above the marker in `AGENTS.md` or `CLAUDE.md` drifts from the shared template; it never touches text below the marker.
+
+## A leak is permanent the moment of PUSH, not merge
+
+GitHub creates a `refs/pull/N/head` ref for every PR ever opened. It is server-side, and no client can write it: a force-push to `main` cannot touch it, and closing the PR or deleting the branch does not remove it. `git ls-remote` lists these refs on a public repo, and anyone can fetch one. A normal clone does not fetch them, so `git log --all` on a fresh clone reports clean while the leak sits on GitHub.
+
+This repo exists because of that. Its predecessor had its tree scrubbed, its tracker cleaned and a full history rewrite prepared, and `refs/pull/2/head` still held 11 occurrences of private terms across 4 files. The only fix was a new repository.
+
+**Scan before pushing a branch, not before merging.**
+
+## Reading the scan
+
+`CLEAN` alone means nothing. It reports clean while leaking in two ways, both already hit here:
+
+1. **No terms loaded.** Private nicknames live in `tools/leakscan.local.txt`, gitignored so that publishing the scanner does not publish what it hunts. Without that file the scanner loads zero terms and reports `CLEAN`. On the predecessor repo, that `CLEAN` meant 41 leaks in 19 files. With terms it prints `(loaded N local term(s))` to stderr. With no such line, the run did not scan for nicknames.
+2. **A pattern stopped compiling.** `--selftest` checks every class against a control string and prints how many fired. Without local terms the count is 14 of 14. Fewer than all means the report is worthless.
+
+CI does not replace the local gate. The `leak-scan` job in `ci.yml` runs this scanner with no terms file, so it checks only built-in patterns. `check.leak-scan.yml` adds a shared deny list against the diff and PR text, but it runs after the push, which is already too late. Neither is required by the ruleset.
 
 ## What must never land here
 
-- Private hostnames or machine nicknames. Name the *shape* instead: `<node-a>`,
-  `<target>`, `CLAUDE_OR_TARGET_HOST`. Examples stay runnable that way.
-- RFC1918 / CGNAT addresses (`10.x`, `192.168.x`, `172.16-31.x`, `100.64-127.x`).
-- Private repository names, private product or project names, internal issue or
-  PR references.
-- Filesystem paths carrying a username.
-- Any credential. A key that is public *by design* (a Firebase Web API key, say)
-  is still worth a comment saying so, because the next reader will otherwise
-  file it as a leak -- that happened, twice.
-- Anything sent to a third party that names private work: `User-Agent`,
-  `HTTP-Referer` and `X-Title` end up in someone else's dashboard.
+The public-repo rules above apply. These are the rules specific to this repo:
 
-## How to reference private work
+- Name the shape of a private host, not the host: `<node-a>`, `<target>`, `CLAUDE_OR_TARGET_HOST`. Examples stay runnable that way.
+- No RFC1918 or CGNAT addresses (`10.x`, `192.168.x`, `172.16-31.x`, `100.64-127.x`).
+- No private product or project names and no internal issue or PR refs.
+- A key that is public by design, such as a Firebase Web API key, gets a comment saying so. The next reader will otherwise file it as a leak, which has happened twice.
+- Nothing sent to a third party names private work. `User-Agent`, `HTTP-Referer` and `X-Title` end up in someone else's dashboard.
 
-**Keep the finding, drop the identity.** The engineering is the value; the repo
-name is not.
-
-> On an internal refactor PR, a local model produced a patch that passed 1823
-> existing tests and still could not be merged.
-
-That sentence is publishable and loses nothing. A bare cross-repo issue
-reference in its place would have added no information a reader outside
-that repo could use -- and would have tripped this repo's own scanner, which
-flags them as a class.
+**Keep the finding, drop the identity.** The engineering is the value; the repo name is not. For example: "On an internal refactor PR, a local model produced a patch that passed 1823 existing tests and still could not be merged."
 
 ## What counts as a result
 
 Only numbers measured here, by a suite in this repo, on stated hardware.
 
-**Vendor and aggregator benchmark claims are never recorded as results.** A
-blank cell in the scoreboard means *not run*, never *not good* -- and it must
-say so, because a reader supplies the harsher reading for free.
-
-Publish results whether or not they flatter. The most useful finding this repo
-has produced is that a model measuring ~3x faster at decode was 4x *slower* per
-agentic task; nobody would have looked for that if the flattering number had
-been allowed to stand alone.
+- Vendor and aggregator benchmark claims are never recorded as results.
+- A blank scoreboard cell means not run, never not good, and it must say so.
+- Publish results whether or not they flatter. The most useful finding here is that a model about 3x faster at decode was 4x slower per agentic task.
 
 ## Suite conventions
 
-- The grading rule is a **pure module** -- evidence in, verdict out, no IO. A
-  stored result must be re-gradable later without re-running any model.
-- Corpora are **frozen** and carry a hash sidecar. If a fixture set can drift
-  under a run, fingerprint it and void the run when it moves.
-- A task that can be satisfied by doing nothing is not a task. Assert the
-  starting state **fails** before crediting a fix.
-- Every suite README states what its numbers are **not**.
+- The grading rule is a pure module: evidence in, verdict out, no IO. A stored result must be re-gradable without re-running any model.
+- Corpora are frozen and carry a hash sidecar. If a fixture set can drift under a run, fingerprint it and void the run when it moves.
+- A task that doing nothing can satisfy is not a task. Assert the starting state fails before crediting a fix.
+- Every suite README states what its numbers are not.
+
+## How work moves here
+
+Several AI brains work this repo beside the operator: Claude Code, Muse, Dot and the Loom factory. Loom has a station that dispatches, a brain that briefs and merges, and lanes that build. No brain outranks another. Each acts under its own GitHub App, never a person's account, and signs posts `-- <name>`.
+
+**Claims.** Put `claim:<name>` on a ticket before starting, and create the label if this repo lacks it. Check first and skip a ticket already held. One claim per ticket: the station keeps the earliest and removes the rest. A claim expires after 2 hours with no real activity, unless a comment holds it with `waiting: <what> until <time>`, or an open PR the claimer wrote and referenced holds it for up to 7 days. `claim:quadseven` is a person: leave those tickets alone. On stopping, push the work and say what is done, what is next, and the branch and head. Take over only an expired or plainly dead claim, after reading the holder's comments and open PRs.
+
+**Labels.** Loom sets one state label per ticket:
+
+`loom:triage` (not ready) -> `loom:queued` (no lane) -> `loom:briefed` + `lane:<name>` -> `loom:running` -> `loom:pr` -> `loom:merged` -> `loom:shipped` -> `loom:verified`, then closed.
+
+`loom:ticket` marks every ticket. `loom:failed` means the runner gave up; the reason is on the ticket. `wait:*` names why a ticket is held. `needs:human` is an ask for a person. `loom:factory` marks a fault in the factory itself.
+
+**CI and required checks.** Required checks differ per repo, so read them live: `gh api repos/<owner>/<repo>/rules/branches/<default-branch>`. Every repo needs a PR and `Grug - Chief`; most add test jobs; some add `Grug - Elder`. Run each command in `.loom/validation.conf` before pushing, and read the failing workflow file before guessing at a red check.
+
+- Shared workflows come from `quadseven/infra-public`, pinned by full SHA.
+- Shared leak scan (`check.leak-scan.yml`): reads the diff and the PR title and body, and a scan that cannot run is red. It has 9 rules: tailnet hosts, tailnet IPs, private-range IPs, server names, node names, user paths, MAC addresses, the stray mention, and cross-repo refs. A ref of the form `name#N` or `owner/name#N` to any other repo fails, public or not, unless `allowed-repo-refs` in `check.leak-scan.yml` lists that repo. Bare `#N` means this repo. A line with `leak-guard-allow` is exempt and visible in review; use it only for a real false positive.
+- Trust gate: none here. Every job runs on GitHub-hosted runners.
+- Other guards: none called here. `tests/test_workflow_hygiene.py` holds SHA pins and job timeouts inside `test / check`.
+- Agent Apps cannot push `.github/workflows` changes.
+
+**`grug`.** The bot is `grug-tribe[bot]`, driven by slash commands in a PR comment. Its handle takes no at-sign.
+
+- `Grug - Chief` reads the PR body. It wants `## Why` (5+ words), `## Acceptance criteria` (3+ bullets), `## Out of scope`, `Size: XS|S|M|L`, and `Refs <owner>/<repo>#N` or `Refs #N` to a ticket that is an epic or sits under one. Text in HTML comments does not count. Closing keywords are out: tickets close when their boxes are ticked.
+- A body with an agent marker (such as a session link) from an App author, or a Loom lane footer, gets a neutral Chief: `Hunt Plan skipped`. Neutral passes. A body with no marker gets the full check, so write the full shape every time.
+- `Grug - Elder` reviews the code by LLM. `/grug improve` re-runs it. `/grug recheck` re-runs Chief only. Five pushes in ten minutes pause Elder until `/grug resume`.
+- A degraded or partial review says `Degraded review (<reason>): not a verdict`. It is not a pass, whether it concludes failure or neutral. Run `/grug improve` once the backend recovers.
+- `Grug - Guard` scans for security problems and is advisory unless the repo turns on blocking. Haunt, once called Sentinel, comments when a PR closes over an unresolved critical finding. It posts no check; answer its comment and re-verify.
+
+**Merge gate.** Rulesets enforce less than this, and this binds: CI green, `Grug - Elder` success on the head (neutral is not enough), `Grug - Chief` success or neutral, not behind base, every bot thread answered, and a test that fails without the fix. `gh pr checks` does not show threads, so read `reviewThreads` by GraphQL and `pulls/<n>/reviews`. Anyone merges what they built. Loom merges docs, test and app code tiers alone and holds deploy, security and cross-repo tiers for the operator. A change to how brains merge, close or rewrite needs a fleet chat line and a 5 minute wait. Never use `--admin`.
+
+**Human line.** People do: permanent deletion of records, creating, rotating or entering credentials, access grants, new spending, accepting terms. People decide: another brain's role and the fleet goal text. A second brain must agree, in writing, to clear a lane demotion, lift another brain's hold, or reopen a sound close. Everything else needs nobody. Ask with `needs:human` and one exact question. A relayed yes is not a yes. Never print a credential.
+
+**When stuck.** Labels and stages: `docs/BRAIN.md` in `quadseven/loom`. Reusable workflows: `docs/reusables.md` in `quadseven/infra-public`. Chief's rules and every `/grug` verb: the README in `quadseven/grug`, whose `make chief-check` tests a body before posting. Fleet log: issue 30 in `quadseven/loom`. File a factory fault there as `loom:factory`. Poll `gh` at most once per 5 minutes.
