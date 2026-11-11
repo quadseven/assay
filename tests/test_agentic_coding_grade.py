@@ -18,7 +18,18 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import containment_probe
 from grade import Outcome, PytestRun, changed_files, grade, out_of_scope, parse_pytest
+
+# Capability, not presence: inside a lane sandbox the containment tool is
+# on PATH and sockets import, but applying a nested sandbox and binding
+# sockets are both refused, so presence guards let the tests below run and
+# fail on an unmodified tree. The probes try the real operations once, at
+# import; a test guarded by a probe skips with the probe's reason when the
+# matching probe reports unusable, and runs unchanged when it reports
+# usable.
+SANDBOX_CAPABILITY = containment_probe.sandbox_capability()
+SOCKET_CAPABILITY = containment_probe.socket_capability()
 
 
 def read_one_request(conn: socket.socket) -> bytes | None:
@@ -333,6 +344,8 @@ class TestLinuxProxyMount(unittest.TestCase):
     @unittest.skipUnless(
         sys.platform.startswith("linux") and shutil.which("bwrap"), "requires Linux bubblewrap"
     )
+    @unittest.skipUnless(SANDBOX_CAPABILITY.usable, SANDBOX_CAPABILITY.reason)
+    @unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
     def test_socket_under_tmp_remains_visible_in_private_tmpfs(self):
         import runner
 
@@ -494,6 +507,8 @@ class TestNoShellInterpolation(unittest.TestCase):
                 self.fail(f"child {child} outlived the wrapper's clean exit")
 
     @unittest.skipUnless(sys.platform == "darwin", "Linux boxes are pid namespaces: init dies, all die")
+    @unittest.skipUnless(SANDBOX_CAPABILITY.usable, SANDBOX_CAPABILITY.reason)
+    @unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
     def test_a_descendant_that_left_the_session_loses_the_model_and_is_killed(self):
         """`_kill_group` reaches the agent's process group. A descendant that
         called setsid() is in neither the group nor the session, and the
@@ -596,10 +611,8 @@ class TestNoShellInterpolation(unittest.TestCase):
                 proxy.close()
                 model.close()
 
-    @unittest.skipUnless(
-        shutil.which("sandbox-exec") or shutil.which("bwrap"),
-        "no containment tool here; the runner refuses to start on such a host (tested below)",
-    )
+    @unittest.skipUnless(SANDBOX_CAPABILITY.usable, SANDBOX_CAPABILITY.reason)
+    @unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
     def test_the_agent_cannot_write_outside_its_box(self):
         """A model wrote a correct patch into a different repository's
         checkout mid-sweep and the grader, which snapshots only the task
@@ -641,10 +654,8 @@ class TestNoShellInterpolation(unittest.TestCase):
             self.assertTrue((box / "claude-config").is_dir())
             self.assertTrue((box / "tmp").is_dir())
 
-    @unittest.skipUnless(
-        shutil.which("sandbox-exec") or shutil.which("bwrap"),
-        "no containment tool here; the runner refuses to start on such a host (tested above)",
-    )
+    @unittest.skipUnless(SANDBOX_CAPABILITY.usable, SANDBOX_CAPABILITY.reason)
+    @unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
     def test_the_agent_can_read_and_reach_only_its_box_and_the_models_inference_api(self):
         """A write-only boundary left the hidden tests readable to the agent
         being graded on them, every credential in $HOME readable to a process
@@ -1159,10 +1170,8 @@ class TestGradingBox(unittest.TestCase):
             )
             self.assertTrue(outcome.qualifies, outcome.detail)
 
-    @unittest.skipUnless(
-        shutil.which("sandbox-exec") or shutil.which("bwrap"),
-        "no containment tool here; the runner refuses to start on such a host",
-    )
+    @unittest.skipUnless(SANDBOX_CAPABILITY.usable, SANDBOX_CAPABILITY.reason)
+    @unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
     def test_test_time_code_can_reach_neither_the_host_nor_the_model(self):
         """The live version: a real attempt under real containment. The
         hidden test installed by the grader is itself the probe -- it runs
@@ -1223,6 +1232,7 @@ class TestGradingBox(unittest.TestCase):
         self.assertFalse(outcome.qualifies)
 
 
+@unittest.skipUnless(SOCKET_CAPABILITY.usable, SOCKET_CAPABILITY.reason)
 class TestModelProxy(unittest.TestCase):
     """The one way out of the box forwards inference for the labeled model
     and nothing else. Round six of assay#6: a relay that restricts the
