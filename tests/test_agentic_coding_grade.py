@@ -983,6 +983,21 @@ class TestNoShellInterpolation(unittest.TestCase):
         self.assertIn(("--ro-bind", "/w/.venv", "/w/.venv"), triples)
         self.assertNotIn(("--ro-bind", "/w/.venv/bin/python", "/w/.venv/bin/python"), triples)
 
+    def test_the_linux_box_root_is_read_only_after_its_mounts(self):
+        """bwrap builds the box on a writable tmpfs and creates mount points
+        on it, $HOME's among them when a toolchain file lives there; without
+        a remount the box could write a file at $HOME (in its own memory)."""
+        import runner
+
+        argv = runner.bwrap_argv("/x/box", ["/home/u/.local/bin/claude"], None)
+        ops = argv[: argv.index("--")]
+        pairs = [tuple(ops[i : i + 2]) for i in range(len(ops) - 1)]
+        self.assertIn(("--remount-ro", "/"), pairs)
+        last_mount = max(
+            i for i, a in enumerate(ops) if a in ("--bind", "--ro-bind", "--tmpfs", "--dev", "--proc")
+        )
+        self.assertGreater(ops.index("--remount-ro"), last_mount)
+
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
 

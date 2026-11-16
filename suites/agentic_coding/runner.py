@@ -682,6 +682,10 @@ def bwrap_argv(
         root,
         # A socket under /tmp must be mounted after the private tmpfs.
         *(["--bind", socket_path, socket_path] if socket_path else []),
+        # the root is bwrap's own tmpfs, holding the mount points it made
+        # ($HOME's, when a toolchain file lives there): read-only from here
+        "--remount-ro",
+        "/",
         "--unshare-pid",
         "--unshare-net",
         "--die-with-parent",
