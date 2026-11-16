@@ -695,6 +695,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 f"stat {hidden} >/dev/null 2>&1 && echo hidden-statable >> {report}\n"
                 f"stat {unlisted} >/dev/null 2>&1 && echo unlisted-statable >> {report}\n"
                 f"stat {Path.home()} >/dev/null 2>&1 && echo home-statable >> {report}\n"
+                f"ls -A {Path.home()} > {report}.home 2>/dev/null\n"
                 f"ls /Users >/dev/null 2>&1 && echo users-listable >> {report}\n"
                 f"ls /private/tmp >/dev/null 2>&1 && echo tmp-listable >> {report}\n"
                 f"ls /private/etc >/dev/null 2>&1 && echo etc-listable >> {report}\n"
@@ -751,7 +752,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                     "hidden-dir-listable",
                     "hidden-statable",
                     "unlisted-statable",
-                    "home-statable",
+                    *(["home-statable"] if sys.platform == "darwin" else []),
                     "users-listable",
                     "tmp-listable",
                     "etc-listable",
@@ -768,6 +769,22 @@ class TestNoShellInterpolation(unittest.TestCase):
                     "runner-signalable",
                 ):
                     self.assertNotIn(bad, lines)
+                if sys.platform.startswith("linux"):
+                    # bubblewrap creates a mount point for each toolchain file
+                    # bound from under $HOME, so $HOME exists in the box; it
+                    # holds those mount points and nothing of the host's home
+                    home = Path.home()
+                    bound = {
+                        Path(p).relative_to(home).parts[0]
+                        for p in runner.toolchain_files(agent)
+                        if Path(p).is_relative_to(home) and Path(p) != home
+                    }
+                    listed = (
+                        set(Path(f"{report}.home").read_text().split())
+                        if Path(f"{report}.home").exists()
+                        else set()
+                    )
+                    self.assertLessEqual(listed, bound, "the box lists the host's home beyond the toolchain")
                 if sys.platform == "darwin":
                     outside = subprocess.run(["pbpaste"], capture_output=True).returncode == 0
                     if outside:
@@ -832,6 +849,56 @@ class TestNoShellInterpolation(unittest.TestCase):
             ):
                 files = runner.toolchain_files("tool --flag")
         self.assertEqual(files, [str(first), str(mid), str(real)])
+
+    def test_the_grading_interpreter_gets_its_prefixes_and_the_directory_links_on_its_path(self):
+        """uv's venv python points at `cpython-3.14-<platform>/bin/python3.14`,
+        where `cpython-3.14-<platform>` is itself a link to the patch
+        release's directory. The grading box must read that link, the venv
+        (pyvenv.cfg, site-packages: pytest) and the base install (stdlib),
+        or the grader's pytest cannot start."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            real = base / "py-3.14.7" / "bin" / "python3.14"
+            real.parent.mkdir(parents=True)
+            real.write_text("#!/bin/sh\n")
+            minor = base / "py-3.14"
+            minor.symlink_to(real.parent.parent)
+            venv = base / "venv" / "bin" / "python"
+            venv.parent.mkdir(parents=True)
+            venv.symlink_to(minor / "bin" / "python3.14")
+            trees = runner.interpreter_trees(str(venv), (str(base / "venv"), str(minor)))
+        self.assertEqual(trees, (str(base / "venv"), str(base / "py-3.14.7"), str(minor)))
+
+    def test_a_directory_link_outside_the_interpreter_prefixes_is_never_granted(self):
+        """bubblewrap binds a link's target, so a link on the interpreter's
+        path that points elsewhere (here, at a stand-in for $HOME) would
+        bind all of it into the grading box."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            home = base / "home"
+            real = home / "py" / "bin" / "python3"
+            real.parent.mkdir(parents=True)
+            real.write_text("#!/bin/sh\n")
+            elsewhere = base / "opt" / "py"
+            elsewhere.parent.mkdir()
+            elsewhere.symlink_to(home / "py")
+            prefix = base / "venv"
+            (prefix / "bin").mkdir(parents=True)
+            (prefix / "bin" / "python").symlink_to(elsewhere / "bin" / "python3")
+            trees = runner.interpreter_trees(str(prefix / "bin" / "python"), (str(prefix),))
+        self.assertEqual(trees, (str(prefix),))
+
+    def test_an_interpreter_prefix_holding_home_or_the_tasks_is_refused(self):
+        import runner
+
+        with self.assertRaises(SystemExit):
+            runner.interpreter_trees(sys.executable, (str(runner.HOME.parent),))
+        with self.assertRaises(SystemExit):
+            runner.interpreter_trees(sys.executable, (str(runner.TASKS.parent),))
 
     def test_the_darwin_profile_is_default_deny_for_reads_writes_network_and_the_keychain(self):
         import runner
@@ -905,6 +972,31 @@ class TestNoShellInterpolation(unittest.TestCase):
         self.assertNotIn(runner.RELAY, graded)
         self.assertIn("--unshare-net", graded)
         self.assertEqual(graded[-1], "--")
+
+    def test_a_linux_read_inside_a_bound_tree_is_not_bound_again(self):
+        """A file inside a read-only tree already bound cannot be a mount
+        point: bwrap fails with `Can't create file` and the box never starts."""
+        import runner
+
+        argv = runner.bwrap_argv("/x/box", ["/w/.venv/bin/python"], None, ("/w/.venv",))
+        triples = [tuple(argv[i : i + 3]) for i in range(len(argv) - 2)]
+        self.assertIn(("--ro-bind", "/w/.venv", "/w/.venv"), triples)
+        self.assertNotIn(("--ro-bind", "/w/.venv/bin/python", "/w/.venv/bin/python"), triples)
+
+    def test_the_linux_box_root_is_read_only_after_its_mounts(self):
+        """bwrap builds the box on a writable tmpfs and creates mount points
+        on it, $HOME's among them when a toolchain file lives there; without
+        a remount the box could write a file at $HOME (in its own memory)."""
+        import runner
+
+        argv = runner.bwrap_argv("/x/box", ["/home/u/.local/bin/claude"], None)
+        ops = argv[: argv.index("--")]
+        pairs = [tuple(ops[i : i + 2]) for i in range(len(ops) - 1)]
+        self.assertIn(("--remount-ro", "/"), pairs)
+        last_mount = max(
+            i for i, a in enumerate(ops) if a in ("--bind", "--ro-bind", "--tmpfs", "--dev", "--proc")
+        )
+        self.assertGreater(ops.index("--remount-ro"), last_mount)
 
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
@@ -1084,7 +1176,7 @@ class TestGradingBox(unittest.TestCase):
 
         calls = []
 
-        def fake_contain(box, argv, *, agent, proxy):
+        def fake_contain(box, argv, *, agent, proxy, trees=()):
             calls.append((Path(box), list(argv), proxy))
             return ["env", "ASSAY_GRADE_MARK=1", *argv] if proxy is None else argv
 
