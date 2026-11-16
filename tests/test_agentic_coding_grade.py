@@ -695,6 +695,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                 f"stat {hidden} >/dev/null 2>&1 && echo hidden-statable >> {report}\n"
                 f"stat {unlisted} >/dev/null 2>&1 && echo unlisted-statable >> {report}\n"
                 f"stat {Path.home()} >/dev/null 2>&1 && echo home-statable >> {report}\n"
+                f"ls -A {Path.home()} > {report}.home 2>/dev/null\n"
                 f"ls /Users >/dev/null 2>&1 && echo users-listable >> {report}\n"
                 f"ls /private/tmp >/dev/null 2>&1 && echo tmp-listable >> {report}\n"
                 f"ls /private/etc >/dev/null 2>&1 && echo etc-listable >> {report}\n"
@@ -751,7 +752,7 @@ class TestNoShellInterpolation(unittest.TestCase):
                     "hidden-dir-listable",
                     "hidden-statable",
                     "unlisted-statable",
-                    "home-statable",
+                    *(["home-statable"] if sys.platform == "darwin" else []),
                     "users-listable",
                     "tmp-listable",
                     "etc-listable",
@@ -768,6 +769,22 @@ class TestNoShellInterpolation(unittest.TestCase):
                     "runner-signalable",
                 ):
                     self.assertNotIn(bad, lines)
+                if sys.platform.startswith("linux"):
+                    # bubblewrap creates a mount point for each toolchain file
+                    # bound from under $HOME, so $HOME exists in the box; it
+                    # holds those mount points and nothing of the host's home
+                    home = Path.home()
+                    bound = {
+                        Path(p).relative_to(home).parts[0]
+                        for p in runner.toolchain_files(agent)
+                        if Path(p).is_relative_to(home) and Path(p) != home
+                    }
+                    listed = (
+                        set(Path(f"{report}.home").read_text().split())
+                        if Path(f"{report}.home").exists()
+                        else set()
+                    )
+                    self.assertLessEqual(listed, bound, "the box lists the host's home beyond the toolchain")
                 if sys.platform == "darwin":
                     outside = subprocess.run(["pbpaste"], capture_output=True).returncode == 0
                     if outside:
@@ -832,6 +849,27 @@ class TestNoShellInterpolation(unittest.TestCase):
             ):
                 files = runner.toolchain_files("tool --flag")
         self.assertEqual(files, [str(first), str(mid), str(real)])
+
+    def test_the_grading_interpreter_gets_its_prefixes_and_the_directory_links_on_its_path(self):
+        """uv's venv python points at `cpython-3.14-<platform>/bin/python3.14`,
+        where `cpython-3.14-<platform>` is itself a link to the patch
+        release's directory. The grading box must read that link, the venv
+        (pyvenv.cfg, site-packages: pytest) and the base install (stdlib),
+        or the grader's pytest cannot start."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            real = base / "py-3.14.7" / "bin" / "python3.14"
+            real.parent.mkdir(parents=True)
+            real.write_text("#!/bin/sh\n")
+            minor = base / "py-3.14"
+            minor.symlink_to(real.parent.parent)
+            venv = base / "venv" / "bin" / "python"
+            venv.parent.mkdir(parents=True)
+            venv.symlink_to(minor / "bin" / "python3.14")
+            trees = runner.interpreter_trees(str(venv), (str(base / "venv"), str(minor)))
+        self.assertEqual(trees, (str(base / "venv"), str(base / "py-3.14.7"), str(minor)))
 
     def test_the_darwin_profile_is_default_deny_for_reads_writes_network_and_the_keychain(self):
         import runner
@@ -1084,7 +1122,7 @@ class TestGradingBox(unittest.TestCase):
 
         calls = []
 
-        def fake_contain(box, argv, *, agent, proxy):
+        def fake_contain(box, argv, *, agent, proxy, trees=()):
             calls.append((Path(box), list(argv), proxy))
             return ["env", "ASSAY_GRADE_MARK=1", *argv] if proxy is None else argv
 

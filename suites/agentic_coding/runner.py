@@ -133,6 +133,38 @@ def toolchain_files(agent: str) -> list[str]:
     return files
 
 
+def interpreter_trees(executable: str, prefixes: tuple[str, ...]) -> tuple[str, ...]:
+    """The directories an interpreter needs whole: its prefixes (a venv's
+    pyvenv.cfg and site-packages, the base install's stdlib and libpython)
+    and every directory link its path runs through below the top level. uv
+    points a venv's python at `cpython-3.14-<platform>/bin/python3.14`,
+    where `cpython-3.14-<platform>` is a link to the patch release, and exec
+    is refused unless that link is readable too."""
+    trees = [str(Path(p).resolve()) for p in prefixes]
+    path, seen = executable, set()
+    while path and path not in seen:
+        seen.add(path)
+        parts = Path(path).parts
+        link = next(
+            (
+                os.path.join(*parts[:d])
+                for d in range(3, len(parts))
+                if os.path.islink(os.path.join(*parts[:d]))
+            ),
+            None,
+        )
+        if link:
+            trees.append(link)
+            path = os.path.normpath(
+                os.path.join(os.path.dirname(link), os.readlink(link), os.path.relpath(path, link))
+            )
+        elif os.path.islink(path):
+            path = os.path.normpath(os.path.join(os.path.dirname(path), os.readlink(path)))
+        else:
+            break
+    return tuple(dict.fromkeys(trees))
+
+
 # What a coding agent needs from a model server, and nothing else. Claude
 # Code sends `POST /v1/messages` (with `?beta=true`), `POST
 # /v1/messages/count_tokens`, and one fire-and-forget `HEAD /api/hello`
@@ -572,7 +604,7 @@ def ancestors(paths: tuple[str, ...]) -> list[str]:
     return sorted(found)
 
 
-def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
+def darwin_profile(root: str, reads: list[str], port: int | None, trees: tuple[str, ...] = ()) -> str:
     """`port` is the model proxy; None is a box with no network at all,
     which is what the grading box gets.
 
@@ -587,8 +619,9 @@ def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
     shims all fail with EPERM), and the top-level symlinks the box's own
     path runs through. The CLI under $HOME needs nothing above itself: a
     literal file opens without its ancestors being visible, so $HOME stays
-    un-stat-able."""
-    roots = (*SYSTEM_READS, root)
+    un-stat-able. `trees` are whole directories read-only, with their
+    ancestors' metadata: the grading box's interpreter prefixes."""
+    roots = (*SYSTEM_READS, *trees, root)
     allow = "".join(f'(subpath "{p}")' for p in roots)
     allow += "".join(f'(literal "{p}")' for p in reads)
     deny_again = "".join(f'(subpath "{p}")' for p in SYSTEM_READS_EXCEPT)
@@ -605,14 +638,16 @@ def darwin_profile(root: str, reads: list[str], port: int | None) -> str:
     )
 
 
-def bwrap_argv(root: str, reads: list[str], socket_path: str | None) -> list[str]:
+def bwrap_argv(
+    root: str, reads: list[str], socket_path: str | None, trees: tuple[str, ...] = ()
+) -> list[str]:
     """bubblewrap with the toolchain roots read-only, the box read-write, a
     fresh network namespace (loopback only), and -- when there is a proxy --
     its Unix socket bound in and the relay started on RELAY_PORT ahead of
     the agent. Without one the namespace has loopback and nothing on it."""
     roots = LINUX_READS + ETC_FILES
     binds = [a for p in roots if os.path.exists(p) for a in ("--ro-bind", p, p)]
-    binds += [a for p in reads if not p.startswith(roots) for a in ("--ro-bind", p, p)]
+    binds += [a for p in (*trees, *reads) if not p.startswith(roots) for a in ("--ro-bind", p, p)]
     relay = (
         ["sh", "-c", 'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"', RELAY, socket_path, str(RELAY_PORT)]
         if socket_path
@@ -640,7 +675,9 @@ def bwrap_argv(root: str, reads: list[str], socket_path: str | None) -> list[str
     ]
 
 
-def containment(box: Path, *, reads: list[str], proxy: ModelProxy | None) -> list[str]:
+def containment(
+    box: Path, *, reads: list[str], proxy: ModelProxy | None, trees: tuple[str, ...] = ()
+) -> list[str]:
     """The argv prefix under which a process can write only under `box` and
     /dev, read only the system toolchain roots, the files in `reads`, and
     the box, and open a socket only to the model proxy -- or, with no
@@ -669,9 +706,9 @@ def containment(box: Path, *, reads: list[str], proxy: ModelProxy | None) -> lis
     root = str(box.resolve())
     socket_path = proxy.socket_path if proxy else None
     if sys.platform == "darwin" and shutil.which("sandbox-exec") and socket_path is None:
-        return ["sandbox-exec", "-p", darwin_profile(root, reads, proxy.port if proxy else None)]
+        return ["sandbox-exec", "-p", darwin_profile(root, reads, proxy.port if proxy else None, trees)]
     if sys.platform.startswith("linux") and shutil.which("bwrap") and (proxy is None or socket_path):
-        return bwrap_argv(root, reads, socket_path)
+        return bwrap_argv(root, reads, socket_path, trees)
     raise SystemExit(
         f"no containment available on {sys.platform} (need sandbox-exec on macOS or bwrap on Linux); "
         "refusing to run an agent that could write outside its task directory"
@@ -746,7 +783,9 @@ PROBE_FAILURES = {
 }
 
 
-def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy | None) -> list[str]:
+def contain(
+    box: Path, argv: list[str], *, agent: str, proxy: ModelProxy | None, trees: tuple[str, ...] = ()
+) -> list[str]:
     """`argv` wrapped for the box, and PROVED before it is returned: the
     wrapper runs a shell once that must write inside the box (a wrapper
     that exits nonzero here, as bubblewrap does for a bind it cannot make,
@@ -757,7 +796,7 @@ def contain(box: Path, argv: list[str], *, agent: str, proxy: ModelProxy | None)
     to signal this runner, and on macOS must not reach the pasteboard
     (which stands for every Mach service, the Keychain included). A prefix
     that cannot show all of it is refused with the agent never started."""
-    prefix = containment(box, reads=toolchain_files(agent), proxy=proxy)
+    prefix = containment(box, reads=toolchain_files(agent), proxy=proxy, trees=trees)
     token = uuid.uuid4().hex
     # the token is in THIS process's environment while the agent's is built:
     # an allowlist that has regressed to a copy of os.environ carries it in
@@ -918,8 +957,13 @@ def grading_prefix(box: Path) -> list[str]:
     with this interpreter readable and NO network. The tests are the
     agent's code executing a second time -- an import-time payload in a
     conftest.py or in an allowed module runs whatever pytest runs -- so
-    they run with exactly the agent's filesystem and less of its reach."""
-    return contain(box, [], agent=shlex.quote(sys.executable), proxy=None)
+    they run with exactly the agent's filesystem and less of its reach.
+    The interpreter's prefixes are readable whole: a venv's python finds
+    pytest only through its pyvenv.cfg and site-packages, and a managed
+    interpreter (uv's, under $HOME) loads its stdlib and libpython from
+    its base prefix."""
+    trees = interpreter_trees(sys.executable, (sys.prefix, sys.base_prefix))
+    return contain(box, [], agent=shlex.quote(sys.executable), proxy=None, trees=trees)
 
 
 def run_pytest(cwd: Path, target: str = "", *, box: Path, prefix: list[str]) -> PytestRun:
