@@ -871,6 +871,35 @@ class TestNoShellInterpolation(unittest.TestCase):
             trees = runner.interpreter_trees(str(venv), (str(base / "venv"), str(minor)))
         self.assertEqual(trees, (str(base / "venv"), str(base / "py-3.14.7"), str(minor)))
 
+    def test_a_directory_link_outside_the_interpreter_prefixes_is_never_granted(self):
+        """bubblewrap binds a link's target, so a link on the interpreter's
+        path that points elsewhere (here, at a stand-in for $HOME) would
+        bind all of it into the grading box."""
+        import runner
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            home = base / "home"
+            real = home / "py" / "bin" / "python3"
+            real.parent.mkdir(parents=True)
+            real.write_text("#!/bin/sh\n")
+            elsewhere = base / "opt" / "py"
+            elsewhere.parent.mkdir()
+            elsewhere.symlink_to(home / "py")
+            prefix = base / "venv"
+            (prefix / "bin").mkdir(parents=True)
+            (prefix / "bin" / "python").symlink_to(elsewhere / "bin" / "python3")
+            trees = runner.interpreter_trees(str(prefix / "bin" / "python"), (str(prefix),))
+        self.assertEqual(trees, (str(prefix),))
+
+    def test_an_interpreter_prefix_holding_home_or_the_tasks_is_refused(self):
+        import runner
+
+        with self.assertRaises(SystemExit):
+            runner.interpreter_trees(sys.executable, (str(runner.HOME.parent),))
+        with self.assertRaises(SystemExit):
+            runner.interpreter_trees(sys.executable, (str(runner.TASKS.parent),))
+
     def test_the_darwin_profile_is_default_deny_for_reads_writes_network_and_the_keychain(self):
         import runner
 

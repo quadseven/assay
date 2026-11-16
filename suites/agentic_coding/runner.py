@@ -136,11 +136,21 @@ def toolchain_files(agent: str) -> list[str]:
 def interpreter_trees(executable: str, prefixes: tuple[str, ...]) -> tuple[str, ...]:
     """The directories an interpreter needs whole: its prefixes (a venv's
     pyvenv.cfg and site-packages, the base install's stdlib and libpython)
-    and every directory link its path runs through below the top level. uv
-    points a venv's python at `cpython-3.14-<platform>/bin/python3.14`,
-    where `cpython-3.14-<platform>` is a link to the patch release, and exec
-    is refused unless that link is readable too."""
-    trees = [str(Path(p).resolve()) for p in prefixes]
+    and each directory link its path runs through whose target lies inside
+    one of them. uv points a venv's python at
+    `cpython-3.14-<platform>/bin/python3.14`, where `cpython-3.14-<platform>`
+    is a link to the patch release, and exec is refused unless that link is
+    readable too. A link to anywhere else is never granted: bubblewrap binds
+    a link's target, so a link to $HOME would bind all of it. A prefix that
+    is or holds $HOME or the hidden tasks is refused outright."""
+    trees = [Path(p).resolve() for p in prefixes]
+    for tree in trees:
+        if HOME.resolve().is_relative_to(tree) or TASKS.resolve().is_relative_to(tree):
+            raise SystemExit(
+                f"the grader's interpreter prefix {tree} holds $HOME or the hidden tasks; "
+                "refusing to make it readable in the grading box"
+            )
+    links: list[str] = []
     path, seen = executable, set()
     while path and path not in seen:
         seen.add(path)
@@ -154,7 +164,8 @@ def interpreter_trees(executable: str, prefixes: tuple[str, ...]) -> tuple[str, 
             None,
         )
         if link:
-            trees.append(link)
+            if any(Path(link).resolve().is_relative_to(tree) for tree in trees):
+                links.append(link)
             path = os.path.normpath(
                 os.path.join(os.path.dirname(link), os.readlink(link), os.path.relpath(path, link))
             )
@@ -162,7 +173,7 @@ def interpreter_trees(executable: str, prefixes: tuple[str, ...]) -> tuple[str, 
             path = os.path.normpath(os.path.join(os.path.dirname(path), os.readlink(path)))
         else:
             break
-    return tuple(dict.fromkeys(trees))
+    return tuple(dict.fromkeys([*map(str, trees), *links]))
 
 
 # What a coding agent needs from a model server, and nothing else. Claude
