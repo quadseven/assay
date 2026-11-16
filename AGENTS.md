@@ -172,11 +172,11 @@ Eval suites that measure language models, with every result published. **This re
 
 ## Layout
 
-- `suites/<name>/`: one suite per question: `agentic_coding`, `spark_serving`, `nutrition`, `persona_chat`, `loom_lanes`, `loom_gates`, `lane_review`, `review_quality`. `suites/README.md` gives the file shape and how to add a suite.
+- `suites/<name>/`: one suite per question: `agentic_coding`, `spark_serving`, `nutrition`, `persona_chat`, `loom_lanes`, `loom_gates`, `lane_review`, `review_quality`, `pr_review`. `suites/README.md` gives the file shape and how to add a suite.
 - `tools/leakscan.py`: this repo's own leak scanner. `tools/scoreboard.py`: renders the README scoreboard.
 - `tests/`: one test module per suite plus repo guards. Tests need no model server and no downloaded corpus.
 - `.loom/validation.conf`: the lane contract. `tests/test_validation_contract.py` keeps it equal to `.github/workflows/ci.yml`, so a change to one needs the other.
-- `suites/*/results/scoreboard.json`: curated measurements. Raw run JSON is gitignored, except `suites/loom_gates/results/*.json`, which tests re-grade.
+- `suites/*/results/scoreboard.json`: curated measurements. Raw run JSON is gitignored, except `suites/loom_gates/results/*.json` and `suites/pr_review/results/20*.json`, which tests re-grade.
 
 ## Commands
 

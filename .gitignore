@@ -26,3 +26,9 @@ tools/leakscan.local.txt
 
 # lane_review --pipeline model reply cache (lr_pipeline.py).
 .cache/
+
+# pr_review: private-repository seeds, cases and per-case detail never land in a tracked file.
+suites/pr_review/seeds.private.json
+suites/pr_review/cases.private.json
+# pr_review run records ARE tracked: tests re-grade them to their stored summary.
+!suites/pr_review/results/20*.json
