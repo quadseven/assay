@@ -658,7 +658,11 @@ def bwrap_argv(
     the agent. Without one the namespace has loopback and nothing on it."""
     roots = LINUX_READS + ETC_FILES
     binds = [a for p in roots if os.path.exists(p) for a in ("--ro-bind", p, p)]
-    binds += [a for p in (*trees, *reads) if not p.startswith(roots) for a in ("--ro-bind", p, p)]
+    binds += [a for p in trees if not p.startswith(roots) for a in ("--ro-bind", p, p)]
+    # a read inside a bound tree is already there, and cannot be a mount point
+    # inside a read-only bind
+    inside = tuple(os.path.join(t, "") for t in trees)
+    binds += [a for p in reads if not p.startswith(roots + inside) for a in ("--ro-bind", p, p)]
     relay = (
         ["sh", "-c", 'python3 -c "$0" "$1" "$2" & shift 2; exec "$@"', RELAY, socket_path, str(RELAY_PORT)]
         if socket_path

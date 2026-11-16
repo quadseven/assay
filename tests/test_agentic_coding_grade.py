@@ -973,6 +973,16 @@ class TestNoShellInterpolation(unittest.TestCase):
         self.assertIn("--unshare-net", graded)
         self.assertEqual(graded[-1], "--")
 
+    def test_a_linux_read_inside_a_bound_tree_is_not_bound_again(self):
+        """A file inside a read-only tree already bound cannot be a mount
+        point: bwrap fails with `Can't create file` and the box never starts."""
+        import runner
+
+        argv = runner.bwrap_argv("/x/box", ["/w/.venv/bin/python"], None, ("/w/.venv",))
+        triples = [tuple(argv[i : i + 3]) for i in range(len(argv) - 2)]
+        self.assertIn(("--ro-bind", "/w/.venv", "/w/.venv"), triples)
+        self.assertNotIn(("--ro-bind", "/w/.venv/bin/python", "/w/.venv/bin/python"), triples)
+
     def test_the_runner_refuses_to_start_without_containment(self):
         import runner
 
