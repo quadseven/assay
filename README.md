@@ -72,6 +72,7 @@ archives stay gitignored.
 | [`suites/loom_gates/`](suites/loom_gates/) | Do the gates between a lane's pull request and a merge stop the right ones? Replays real cases. |
 | [`suites/lane_review/`](suites/lane_review/) | Does the review bot stop the lane pull requests that did damage, and only those? |
 | [`suites/review_quality/`](suites/review_quality/) | Which model should review pull requests, measured rather than picked by hand. |
+| [`suites/pr_review/`](suites/pr_review/) | Does the review bot put a finding on the lines of real merged pull requests that were later reverted or hotfixed, and how much noise does it leave on clean ones? |
 
 [`suites/README.md`](suites/README.md) describes how to add a suite.
 
@@ -116,6 +117,7 @@ measure; these are the settings the suites read:
 | `--base-url`, `--models` | command line | Optional review_quality endpoint and served model IDs; hosted runs require `OPENCODE_GO_API_KEY`. |
 | `--repo`, `--rescore` | command line | loom_lanes needs target repositories and authenticated `gh`, or a saved collection to rescore. |
 | `--grug`, `--loom` | command line | Local source checkouts required by loom_gates replay; lane_review accepts `--grug` or recorded `--live` verdicts. |
+| `--historical`, `--findings`, `--grug-sha` | command line | pr_review reads the review bot's posted findings with authenticated `gh`, or scores a replay's findings file. |
 
 Settings are supplied through the environment or command-line flags; there is
 no configuration file to copy. No model server, agent CLI, replay checkout,

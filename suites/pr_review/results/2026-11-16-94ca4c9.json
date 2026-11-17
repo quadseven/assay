@@ -1,0 +1,1538 @@
+{
+ "suite": "pr_review",
+ "mode": "historical",
+ "date": "2026-11-16",
+ "grug_sha": "94ca4c933be70108a3e8feaec0bc43bc876c3879",
+ "corpus_sha256": "688ec55989afe263d2b22b049173b1836a2a9e7899dbc1a5c1b1ca8fa93f8351",
+ "params": {
+  "threshold": "medium",
+  "pr_threshold": "high",
+  "slack": 3
+ },
+ "summary": {
+  "public": {
+   "all": {
+    "bug_cases": 19,
+    "clean_cases": 20,
+    "defects": 19,
+    "caught": 1,
+    "catch_rate": 0.0526,
+    "line_defects": 6,
+    "line_caught": 1,
+    "line_catch_rate": 0.1667,
+    "false_positives_on_clean": 7,
+    "false_positives_per_clean_pr": 0.35,
+    "clean_prs_with_any_false_positive": 6,
+    "unmatched_findings_on_bug_cases": 16,
+    "median_time_to_verdict_s": 87,
+    "p90_time_to_verdict_s": 954,
+    "not_scored": {
+     "unreviewed": 11
+    }
+   },
+   "by_scope": {
+    "clean": {
+     "bug_cases": 0,
+     "clean_cases": 20,
+     "defects": 0,
+     "caught": 0,
+     "catch_rate": null,
+     "line_defects": 0,
+     "line_caught": 0,
+     "line_catch_rate": null,
+     "false_positives_on_clean": 7,
+     "false_positives_per_clean_pr": 0.35,
+     "clean_prs_with_any_false_positive": 6,
+     "unmatched_findings_on_bug_cases": 0,
+     "median_time_to_verdict_s": 132,
+     "p90_time_to_verdict_s": 1214,
+     "not_scored": {}
+    },
+    "lines": {
+     "bug_cases": 6,
+     "clean_cases": 0,
+     "defects": 6,
+     "caught": 1,
+     "catch_rate": 0.1667,
+     "line_defects": 6,
+     "line_caught": 1,
+     "line_catch_rate": 0.1667,
+     "false_positives_on_clean": 0,
+     "false_positives_per_clean_pr": null,
+     "clean_prs_with_any_false_positive": 0,
+     "unmatched_findings_on_bug_cases": 16,
+     "median_time_to_verdict_s": 85,
+     "p90_time_to_verdict_s": 1061,
+     "not_scored": {
+      "unreviewed": 10
+     }
+    },
+    "pr": {
+     "bug_cases": 13,
+     "clean_cases": 0,
+     "defects": 13,
+     "caught": 0,
+     "catch_rate": 0.0,
+     "line_defects": 0,
+     "line_caught": 0,
+     "line_catch_rate": null,
+     "false_positives_on_clean": 0,
+     "false_positives_per_clean_pr": null,
+     "clean_prs_with_any_false_positive": 0,
+     "unmatched_findings_on_bug_cases": 0,
+     "median_time_to_verdict_s": 59,
+     "p90_time_to_verdict_s": 233,
+     "not_scored": {
+      "unreviewed": 1
+     }
+    }
+   }
+  },
+  "private_overlay": {
+   "all": {
+    "bug_cases": 24,
+    "clean_cases": 0,
+    "defects": 24,
+    "caught": 2,
+    "catch_rate": 0.0833,
+    "line_defects": 5,
+    "line_caught": 0,
+    "line_catch_rate": 0.0,
+    "false_positives_on_clean": 0,
+    "false_positives_per_clean_pr": null,
+    "clean_prs_with_any_false_positive": 0,
+    "unmatched_findings_on_bug_cases": 12,
+    "median_time_to_verdict_s": 141,
+    "p90_time_to_verdict_s": 387,
+    "not_scored": {
+     "unreviewed": 36
+    }
+   },
+   "by_scope": {
+    "lines": {
+     "bug_cases": 5,
+     "clean_cases": 0,
+     "defects": 5,
+     "caught": 0,
+     "catch_rate": 0.0,
+     "line_defects": 5,
+     "line_caught": 0,
+     "line_catch_rate": 0.0,
+     "false_positives_on_clean": 0,
+     "false_positives_per_clean_pr": null,
+     "clean_prs_with_any_false_positive": 0,
+     "unmatched_findings_on_bug_cases": 12,
+     "median_time_to_verdict_s": 204,
+     "p90_time_to_verdict_s": 530,
+     "not_scored": {
+      "unreviewed": 24
+     }
+    },
+    "pr": {
+     "bug_cases": 19,
+     "clean_cases": 0,
+     "defects": 19,
+     "caught": 2,
+     "catch_rate": 0.1053,
+     "line_defects": 0,
+     "line_caught": 0,
+     "line_catch_rate": null,
+     "false_positives_on_clean": 0,
+     "false_positives_per_clean_pr": null,
+     "clean_prs_with_any_false_positive": 0,
+     "unmatched_findings_on_bug_cases": 0,
+     "median_time_to_verdict_s": 104,
+     "p90_time_to_verdict_s": 387,
+     "not_scored": {
+      "unreviewed": 12
+     }
+    }
+   }
+  }
+ },
+ "cases": [
+  {
+   "id": "assay-50",
+   "repo": "quadseven/assay",
+   "pr": 50,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-19T05:19:39Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-19T05:19:04Z",
+   "verdict_seconds": 35,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-39",
+   "repo": "quadseven/grug",
+   "pr": 39,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-05-03T21:08:07Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-40",
+   "repo": "quadseven/grug",
+   "pr": 40,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-05-04T03:26:16Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-41",
+   "repo": "quadseven/grug",
+   "pr": 41,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-05-04T03:56:55Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-156",
+   "repo": "quadseven/grug",
+   "pr": 156,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-05-24T05:25:21Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-157",
+   "repo": "quadseven/grug",
+   "pr": 157,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-05-24T05:10:15Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-504",
+   "repo": "quadseven/grug",
+   "pr": 504,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-07-05T04:17:28Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-523",
+   "repo": "quadseven/grug",
+   "pr": 523,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-07-05T20:05:57Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-525",
+   "repo": "quadseven/grug",
+   "pr": 525,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-07-05T20:27:19Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-585",
+   "repo": "quadseven/grug",
+   "pr": 585,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-07-10T18:16:33Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-664",
+   "repo": "quadseven/grug",
+   "pr": 664,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-07-16T20:45:07Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "grug-1167",
+   "repo": "quadseven/grug",
+   "pr": 1167,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "services/_shared/llm_client.py",
+     "line": 4928,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 3711,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/llm_client.py",
+     "line": 4928,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 2624,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 2619,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "f6a976384e40"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 2496,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 2556,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "70d710313509"
+    },
+    {
+     "path": "services/_shared/personas/code_reviewer/dispatch.py",
+     "line": 2497,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "silent-exception-swallow",
+     "outdated": false,
+     "commit": "70d710313509"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-10-14T02:34:17Z",
+    "conclusion": "success",
+    "title": "Living Hunt f6a97638..70d71031 - Elder markings - 0 blocking, 1 total; 6 earlier finding(s) still open (0 high/critical)",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-14T02:33:46Z",
+   "verdict_seconds": 31,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-1281",
+   "repo": "quadseven/grug",
+   "pr": 1281,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "grugthink/src/grugthink/config/pg_store.py",
+     "line": 99,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "6d3d6cd2b849"
+    },
+    {
+     "path": "grugthink/src/grugthink/config/pg_store.py",
+     "line": 115,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "6d3d6cd2b849"
+    },
+    {
+     "path": "grugthink/src/grugthink/config/pg_store.py",
+     "line": 161,
+     "severity": "medium",
+     "category": "maintainability",
+     "rule": "dead-code",
+     "outdated": false,
+     "commit": "e8cd3e528a8b"
+    },
+    {
+     "path": "grugthink/src/grugthink/config/pg_store.py",
+     "line": 127,
+     "severity": "medium",
+     "category": "robustness",
+     "rule": "missing-error-handling",
+     "outdated": false,
+     "commit": "e8cd3e528a8b"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-10-19T15:45:33Z",
+    "conclusion": "success",
+    "title": "Elder markings - 0 blocking, 1 total; 1 earlier finding(s) still open (0 high/critical); 2 earlier finding(s) addressed in e8cd3e5",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-19T15:43:59Z",
+   "verdict_seconds": 94,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "loom-549",
+   "repo": "quadseven/loom",
+   "pr": 549,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-16T23:44:26Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-16T23:42:42Z",
+   "verdict_seconds": 104,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "loom-1622",
+   "repo": "quadseven/loom",
+   "pr": 1622,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-24T14:05:37Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-24T13:59:05Z",
+   "verdict_seconds": 392,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-99",
+   "repo": "quadseven/mod-overseer",
+   "pr": 99,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-30T19:14:22Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt 7491e36c..963ab9eb - WARN Grug eyes clouded (no_diff)",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-30T19:14:05Z",
+   "verdict_seconds": 17,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-162",
+   "repo": "quadseven/mod-overseer",
+   "pr": 162,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-02T20:11:29Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-02T19:53:48Z",
+   "verdict_seconds": 1061,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-793",
+   "repo": "quadseven/mod-overseer",
+   "pr": 793,
+   "kind": "bug",
+   "status": "unreviewed",
+   "findings": [],
+   "verdict": null,
+   "pushed_at": "2026-10-02T21:01:51Z",
+   "verdict_seconds": null
+  },
+  {
+   "id": "muster-134",
+   "repo": "quadseven/muster",
+   "pr": 134,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "server/muster/api.py",
+     "line": 1371,
+     "severity": "medium",
+     "category": "correctness",
+     "rule": "monotonic-zero-sentinel",
+     "outdated": false,
+     "commit": "e5c3ce788b17"
+    },
+    {
+     "path": "agent/android/app/src/main/java/app/muster/agent/DiagnosticsSteward.kt",
+     "line": 19,
+     "severity": "medium",
+     "category": "robustness",
+     "rule": "missing-error-handling",
+     "outdated": false,
+     "commit": "e5c3ce788b17"
+    },
+    {
+     "path": "server/muster/api.py",
+     "line": 289,
+     "severity": "medium",
+     "category": "correctness",
+     "rule": "monotonic-zero-sentinel",
+     "outdated": false,
+     "commit": "e5c3ce788b17"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-10-15T11:48:16Z",
+    "conclusion": "success",
+    "title": "Elder markings - 0 blocking, 3 total",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-15T11:46:32Z",
+   "verdict_seconds": 104,
+   "caught": [
+    "d1"
+   ],
+   "missed": [],
+   "false_positives": 2,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-164",
+   "repo": "quadseven/muster",
+   "pr": 164,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-16T23:10:30Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-16T23:09:31Z",
+   "verdict_seconds": 59,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-183",
+   "repo": "quadseven/muster",
+   "pr": 183,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-19T16:01:24Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-19T16:00:39Z",
+   "verdict_seconds": 45,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-752",
+   "repo": "quadseven/wow-overseer",
+   "pr": 752,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "bridge.py",
+     "line": 13983,
+     "severity": "low",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 14006,
+     "severity": "low",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 24969,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 13054,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 13987,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 14057,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 214,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 268,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": true,
+     "commit": "27f9b8145e22"
+    },
+    {
+     "path": "bridge.py",
+     "line": 13056,
+     "severity": "low",
+     "category": "type design",
+     "rule": "type-safety-gap",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 14104,
+     "severity": "high",
+     "category": "correctness",
+     "rule": "null-deref",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 24847,
+     "severity": "medium",
+     "category": "robustness",
+     "rule": "missing-error-handling",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 281,
+     "severity": "medium",
+     "category": "robustness",
+     "rule": "missing-error-handling",
+     "outdated": true,
+     "commit": "f80dc9134988"
+    },
+    {
+     "path": "bridge.py",
+     "line": 23734,
+     "severity": "high",
+     "category": "correctness",
+     "rule": "caller-not-updated",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "bridge.py",
+     "line": 24919,
+     "severity": "medium",
+     "category": "silent failure",
+     "rule": "broad-except-masks-bug",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 339,
+     "severity": "medium",
+     "category": "correctness",
+     "rule": "off-by-one-or-bounds",
+     "outdated": true,
+     "commit": "f80dc9134988"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 293,
+     "severity": "low",
+     "category": "correctness",
+     "rule": "off-by-one-or-bounds",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildwork.py",
+     "line": 290,
+     "severity": "low",
+     "category": "correctness",
+     "rule": "doc-code-claim-drift",
+     "outdated": true,
+     "commit": "f80dc9134988"
+    },
+    {
+     "path": "bridge.py",
+     "line": 23720,
+     "severity": "low",
+     "category": "maintainability",
+     "rule": "dead-code",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildfund.py",
+     "line": 325,
+     "severity": "low",
+     "category": "security",
+     "rule": "secret-in-log-or-trace",
+     "outdated": true,
+     "commit": "ad7c7323fb3e"
+    },
+    {
+     "path": "guildwork.py",
+     "line": 157,
+     "severity": "low",
+     "category": "correctness",
+     "rule": "inverted-logic",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "guildpost.py",
+     "line": 153,
+     "severity": "medium",
+     "category": "correctness",
+     "rule": "off-by-one-or-bounds",
+     "outdated": false,
+     "commit": "99443860f3d5"
+    },
+    {
+     "path": "tests/test_family_economy_parity.py",
+     "line": 448,
+     "severity": "medium",
+     "category": "test fidelity",
+     "rule": "mock-vs-real-divergence",
+     "outdated": true,
+     "commit": "ad7c7323fb3e"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-10-10T20:05:09Z",
+    "conclusion": "success",
+    "title": "Living Hunt ad7c7323..99443860 - Elder clear - weak markings held back",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-10T20:04:03Z",
+   "verdict_seconds": 66,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 14,
+   "below_threshold": 8
+  },
+  {
+   "id": "wow-overseer-1029",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1029,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-15T17:41:38Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-15T17:40:49Z",
+   "verdict_seconds": 49,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-1075",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1075,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-16T11:20:06Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-16T11:18:45Z",
+   "verdict_seconds": 81,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-1079",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1079,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "bridge.py",
+     "line": 19196,
+     "severity": "medium",
+     "category": "robustness",
+     "rule": "unbounded-growth",
+     "outdated": false,
+     "commit": "4461aac25518"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-10-16T12:27:07Z",
+    "conclusion": "neutral",
+    "title": "WARN Grug eyes clouded (all_failed)",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-16T12:25:25Z",
+   "verdict_seconds": 102,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-1160",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1160,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-18T08:12:01Z",
+    "conclusion": "success",
+    "title": "Elder clear - weak markings held back (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-18T08:08:08Z",
+   "verdict_seconds": 233,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-1338",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1338,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-21T16:09:03Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-21T15:53:09Z",
+   "verdict_seconds": 954,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-1600",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1600,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-28T01:50:21Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-28T01:49:24Z",
+   "verdict_seconds": 57,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "zippie-31",
+   "repo": "quadseven/zippie",
+   "pr": 31,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "travel/bond-agent/tests/test_home_downstream_aggregation.py",
+     "line": 147,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "d8294fc1b365"
+    },
+    {
+     "path": "travel/bond-agent/tests/test_home_downstream_aggregation.py",
+     "line": 148,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "d8294fc1b365"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-08-30T16:19:45Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-30T16:18:57Z",
+   "verdict_seconds": 48,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "zippie-211",
+   "repo": "quadseven/zippie",
+   "pr": 211,
+   "kind": "bug",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-10-15T12:35:16Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt da4e2dd1..3dc4ce89 - WARN Grug eyes clouded (no_diff)",
+    "degraded": false
+   },
+   "pushed_at": "2026-10-15T12:35:01Z",
+   "verdict_seconds": 15,
+   "caught": [],
+   "missed": [
+    "d1"
+   ],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-897",
+   "repo": "quadseven/grug",
+   "pr": 897,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-21T06:38:54Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-21T06:26:53Z",
+   "verdict_seconds": 721,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-934",
+   "repo": "quadseven/grug",
+   "pr": 934,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "services/_shared/llm_client.py",
+     "line": 1735,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "fc8ec6b0e55e"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-09-05T03:45:37Z",
+    "conclusion": "success",
+    "title": "Living Hunt f3830460..fc8ec6b0 - Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-05T03:44:45Z",
+   "verdict_seconds": 52,
+   "caught": [],
+   "missed": [],
+   "false_positives": 1,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-938",
+   "repo": "quadseven/grug",
+   "pr": 938,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-12T12:42:34Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt 12b93e5c..34cfbe51 - WARN Elder review coverage partial",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-12T12:34:55Z",
+   "verdict_seconds": 459,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "grug-949",
+   "repo": "quadseven/grug",
+   "pr": 949,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "services/_shared/github_app_auth/__init__.py",
+     "line": 210,
+     "severity": "high",
+     "category": "general",
+     "rule": "lint-security",
+     "outdated": true,
+     "commit": "01711f93fba0"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-09-12T13:46:21Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt 01711f93..c3606586 - WARN Grug eyes clouded (parse_failed)",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-12T13:46:06Z",
+   "verdict_seconds": 15,
+   "caught": [],
+   "missed": [],
+   "false_positives": 1,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-49",
+   "repo": "quadseven/mod-overseer",
+   "pr": 49,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-27T14:28:35Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-27T13:14:07Z",
+   "verdict_seconds": 4468,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-81",
+   "repo": "quadseven/mod-overseer",
+   "pr": 81,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-29T21:28:42Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-29T21:26:38Z",
+   "verdict_seconds": 124,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-253",
+   "repo": "quadseven/mod-overseer",
+   "pr": 253,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-06T18:30:34Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-06T18:29:56Z",
+   "verdict_seconds": 38,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "mod-overseer-290",
+   "repo": "quadseven/mod-overseer",
+   "pr": 290,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-07T00:45:15Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-07T00:43:48Z",
+   "verdict_seconds": 87,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-1",
+   "repo": "quadseven/muster",
+   "pr": 1,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-29T02:02:01Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-29T01:59:08Z",
+   "verdict_seconds": 173,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-4",
+   "repo": "quadseven/muster",
+   "pr": 4,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-29T04:57:03Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-29T04:54:43Z",
+   "verdict_seconds": 140,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-7",
+   "repo": "quadseven/muster",
+   "pr": 7,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-29T14:12:05Z",
+    "conclusion": "success",
+    "title": "Living Hunt 3f29edf7..6dc14382 - Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-29T14:10:46Z",
+   "verdict_seconds": 79,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "muster-11",
+   "repo": "quadseven/muster",
+   "pr": 11,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "server/muster/api.py",
+     "line": 1199,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "98ac4c8dddd1"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-08-31T00:37:38Z",
+    "conclusion": "success",
+    "title": "Living Hunt 76bf8791..98ac4c8d - Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-31T00:36:56Z",
+   "verdict_seconds": 42,
+   "caught": [],
+   "missed": [],
+   "false_positives": 1,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-186",
+   "repo": "quadseven/wow-overseer",
+   "pr": 186,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "bridge.py",
+     "line": 6514,
+     "severity": "medium",
+     "category": "concurrency",
+     "rule": "race-condition",
+     "outdated": false,
+     "commit": "e4fbdd0c78d6"
+    },
+    {
+     "path": "bridge.py",
+     "line": 6472,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "e4fbdd0c78d6"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-09-22T20:02:50Z",
+    "conclusion": "success",
+    "title": "Living Hunt ba387188..e4fbdd0c - Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-22T20:02:28Z",
+   "verdict_seconds": 22,
+   "caught": [],
+   "missed": [],
+   "false_positives": 2,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-369",
+   "repo": "quadseven/wow-overseer",
+   "pr": 369,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-27T18:12:28Z",
+    "conclusion": "neutral",
+    "title": "WARN Grug eyes clouded (parse_failed)",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-27T18:09:53Z",
+   "verdict_seconds": 155,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-389",
+   "repo": "quadseven/wow-overseer",
+   "pr": 389,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-28T01:09:06Z",
+    "conclusion": "success",
+    "title": "Living Hunt af54a307..fa684c1a - Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-28T01:08:53Z",
+   "verdict_seconds": 13,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "wow-overseer-410",
+   "repo": "quadseven/wow-overseer",
+   "pr": 410,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "tests/test_guildrun.py",
+     "line": 355,
+     "severity": "medium",
+     "category": "test coverage",
+     "rule": "missing-test-coverage",
+     "outdated": false,
+     "commit": "a1b1fa24c8da"
+    },
+    {
+     "path": "tests/test_guildrun.py",
+     "line": 359,
+     "severity": "low",
+     "category": "test coverage",
+     "rule": "missing-test-coverage",
+     "outdated": false,
+     "commit": "a1b1fa24c8da"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-09-28T20:44:18Z",
+    "conclusion": "success",
+    "title": "Elder clear - weak markings held back",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-28T20:43:49Z",
+   "verdict_seconds": 29,
+   "caught": [],
+   "missed": [],
+   "false_positives": 1,
+   "below_threshold": 1
+  },
+  {
+   "id": "zippie-1",
+   "repo": "quadseven/zippie",
+   "pr": 1,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-29T02:33:52Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings (deep append)",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-29T02:25:09Z",
+   "verdict_seconds": 523,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "zippie-28",
+   "repo": "quadseven/zippie",
+   "pr": 28,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-08-30T03:01:24Z",
+    "conclusion": "success",
+    "title": "Elder clear - no markings",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-30T02:56:18Z",
+   "verdict_seconds": 306,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  },
+  {
+   "id": "zippie-34",
+   "repo": "quadseven/zippie",
+   "pr": 34,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [
+    {
+     "path": "travel/bond-agent/zippie/agent.py",
+     "line": 3032,
+     "severity": "medium",
+     "category": "general",
+     "rule": "high-complexity",
+     "outdated": false,
+     "commit": "4865950b8a10"
+    }
+   ],
+   "verdict": {
+    "completed_at": "2026-08-30T16:46:31Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt 8718a93d..4865950b - WARN Elder review coverage partial",
+    "degraded": false
+   },
+   "pushed_at": "2026-08-30T16:26:17Z",
+   "verdict_seconds": 1214,
+   "caught": [],
+   "missed": [],
+   "false_positives": 1,
+   "below_threshold": 0
+  },
+  {
+   "id": "zippie-42",
+   "repo": "quadseven/zippie",
+   "pr": 42,
+   "kind": "clean",
+   "status": "scored",
+   "findings": [],
+   "verdict": {
+    "completed_at": "2026-09-04T22:22:52Z",
+    "conclusion": "neutral",
+    "title": "Living Hunt 3dc608cd..5720ab89 - WARN Elder review coverage partial",
+    "degraded": false
+   },
+   "pushed_at": "2026-09-04T22:09:34Z",
+   "verdict_seconds": 798,
+   "caught": [],
+   "missed": [],
+   "false_positives": 0,
+   "below_threshold": 0
+  }
+ ]
+}

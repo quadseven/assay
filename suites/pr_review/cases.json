@@ -1,0 +1,2635 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "id": "assay-50",
+   "repo": "quadseven/assay",
+   "pr": 50,
+   "kind": "bug",
+   "base_sha": "f96899f36c50d2905e356297c0fccfb9925b265a",
+   "head_sha": "2180b96601000f675b17a026b4da915cd8a6cc57",
+   "merged_at": "2026-10-19T05:33:40Z",
+   "size": {
+    "additions": 24,
+    "deletions": 3,
+    "files": 4
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Published a benchmark row no run produced; its percentages fit no possible denominator; reverted.",
+     "evidence": "https://github.com/quadseven/assay/pull/57",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "README.md",
+       "start": 25,
+       "end": 25
+      },
+      {
+       "path": "suites/nutrition/README.md",
+       "start": 62,
+       "end": 62
+      },
+      {
+       "path": "suites/nutrition/README.md",
+       "start": 67,
+       "end": 69
+      },
+      {
+       "path": "suites/nutrition/README.md",
+       "start": 75,
+       "end": 77
+      },
+      {
+       "path": "suites/nutrition/results/scoreboard.json",
+       "start": 7,
+       "end": 7
+      },
+      {
+       "path": "tests/test_scoreboard.py",
+       "start": 158,
+       "end": 172
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-39",
+   "repo": "quadseven/grug",
+   "pr": 39,
+   "kind": "bug",
+   "base_sha": "82a4d06b451574db854a3fe2b80a3816270f4d7f",
+   "head_sha": "34e4f6613c1fa2f8eaf0fbe0654c0a48b25ebe43",
+   "merged_at": "2026-05-03T21:15:57Z",
+   "size": {
+    "additions": 665,
+    "deletions": 1,
+    "files": 10
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "The session HMAC did not cover the user id appended to the cookie, so a signed-in user could load another user's row; cookie max age also outlived the state TTL.",
+     "evidence": "https://github.com/quadseven/grug/pull/62",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "services/api/auth/github_oauth.py",
+       "start": 171,
+       "end": 197
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-40",
+   "repo": "quadseven/grug",
+   "pr": 40,
+   "kind": "bug",
+   "base_sha": "8e3ebe778b424782e2785b734de0b250531d506d",
+   "head_sha": "f57a5a029ec7c2f2eaa6e1a0ed241f74a59aea8b",
+   "merged_at": "2026-05-04T03:30:56Z",
+   "size": {
+    "additions": 1046,
+    "deletions": 3,
+    "files": 22
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "A copied module kept the wrong logger name, and the acceptance error message named a section the author did not use.",
+     "evidence": "https://github.com/quadseven/grug/pull/65",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "services/api/personas/tpm/dor_checks.py",
+       "start": 71,
+       "end": 71
+      },
+      {
+       "path": "services/api/personas/tpm/dor_checks.py",
+       "start": 81,
+       "end": 81
+      },
+      {
+       "path": "services/webhook/personas/tpm/dor_checks.py",
+       "start": 71,
+       "end": 71
+      },
+      {
+       "path": "services/webhook/personas/tpm/dor_checks.py",
+       "start": 81,
+       "end": 81
+      },
+      {
+       "path": "services/webhook/personas/tpm/persona.py",
+       "start": 12,
+       "end": 12
+      },
+      {
+       "path": "services/webhook/tests/test_dor_checks.py",
+       "start": 41,
+       "end": 41
+      },
+      {
+       "path": "services/webhook/tests/test_dor_checks.py",
+       "start": 58,
+       "end": 62
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-41",
+   "repo": "quadseven/grug",
+   "pr": 41,
+   "kind": "bug",
+   "base_sha": "44faa684225f2ebe65d42b9719153fd37c1e68f4",
+   "head_sha": "4ba1e43dd29532d2118f5ccfb78d0ade83743227",
+   "merged_at": "2026-05-04T04:02:50Z",
+   "size": {
+    "additions": 627,
+    "deletions": 27,
+    "files": 9
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Re-recording an installation overwrote its installed_at timestamp in a racy read-modify-write.",
+     "evidence": "https://github.com/quadseven/grug/pull/65",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "services/api/adapters/install_store.py",
+       "start": 51,
+       "end": 61
+      },
+      {
+       "path": "services/webhook/adapters/install_store.py",
+       "start": 51,
+       "end": 61
+      },
+      {
+       "path": "services/webhook/tests/test_install_store.py",
+       "start": 122,
+       "end": 122
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-156",
+   "repo": "quadseven/grug",
+   "pr": 156,
+   "kind": "bug",
+   "base_sha": "a848c7a7cc7f2bb21cb296d63e3f5f6a231595d0",
+   "head_sha": "9cf5407f198f7c5ab999d11475f634565e1d9f48",
+   "merged_at": "2026-05-24T05:26:33Z",
+   "size": {
+    "additions": 14,
+    "deletions": 2,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Moved the IaC deploy to a hosted runner that lacks uv, which the workflow assumed was preinstalled; deploys silently stopped.",
+     "evidence": "https://github.com/quadseven/grug/pull/166",
+     "localized_by": "curated",
+     "locations": [
+      {
+       "path": ".github/workflows/iac.deploy.yml",
+       "start": 49,
+       "end": 64
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-157",
+   "repo": "quadseven/grug",
+   "pr": 157,
+   "kind": "bug",
+   "base_sha": "ce71e678880c972cdce692808d85629524d469d5",
+   "head_sha": "189b4fde37c712ac908cc6a4a474747f25759bd3",
+   "merged_at": "2026-05-24T05:24:52Z",
+   "size": {
+    "additions": 739,
+    "deletions": 44,
+    "files": 14
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Static-site rewrite rules tripped the host's pretty-URL canonicalization, redirecting the landing page to the app route.",
+     "evidence": "https://github.com/quadseven/grug/pull/160",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "infra/scripts/attest_landing_url_slug_canonical.py",
+       "start": 22,
+       "end": 26
+      },
+      {
+       "path": "infra/scripts/attest_landing_url_slug_canonical.py",
+       "start": 51,
+       "end": 52
+      },
+      {
+       "path": "infra/scripts/attest_landing_url_slug_canonical.py",
+       "start": 101,
+       "end": 107
+      },
+      {
+       "path": "web/public/_redirects",
+       "start": 4,
+       "end": 23
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-504",
+   "repo": "quadseven/grug",
+   "pr": 504,
+   "kind": "bug",
+   "base_sha": "57cd02f54e7d66579b50b83db9191f2e499983a4",
+   "head_sha": "a9b3f94297d91a22e7c87f933eecbe4550e97051",
+   "merged_at": "2026-07-05T04:18:57Z",
+   "size": {
+    "additions": 598,
+    "deletions": 175,
+    "files": 24
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Widened the static-credential tripwire so proof tests that scrubbed only one half of the pair failed in CI; merged over the red check.",
+     "evidence": "https://github.com/quadseven/grug/pull/505",
+     "localized_by": "context",
+     "locations": [
+      {
+       "path": "services/webhook/tests/test_poller_handler.py",
+       "start": 259,
+       "end": 263
+      },
+      {
+       "path": "services/webhook/tests/test_poller_handler.py",
+       "start": 359,
+       "end": 367
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-523",
+   "repo": "quadseven/grug",
+   "pr": 523,
+   "kind": "bug",
+   "base_sha": "27b3a0855729fd6bc21dc4c574fa8f07e225f89a",
+   "head_sha": "9f5df0fd595403f71ab6d578ce466623e02cc83c",
+   "merged_at": "2026-07-05T20:07:47Z",
+   "size": {
+    "additions": 14,
+    "deletions": 2,
+    "files": 1
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "The release synthetic still probed through a port-forward that cannot bind on these nodes, so every deploy false-failed and rolled back.",
+     "evidence": "https://github.com/quadseven/grug/pull/524",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": ".github/workflows/deploy.k8s.yml",
+       "start": 499,
+       "end": 514
+      },
+      {
+       "path": ".github/workflows/deploy.k8s.yml",
+       "start": 532,
+       "end": 532
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-525",
+   "repo": "quadseven/grug",
+   "pr": 525,
+   "kind": "bug",
+   "base_sha": "e16724be91f2662a00ee19371a0727f7a508fe3a",
+   "head_sha": "6e166a66efad6b1cc3c34d3f1b3bae0a6a2e7127",
+   "merged_at": "2026-07-05T20:28:42Z",
+   "size": {
+    "additions": 23,
+    "deletions": 62,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Removing the in-cluster synthetic probe dropped the required post-deploy liveness and readiness validation.",
+     "evidence": "https://github.com/quadseven/grug/pull/526",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": ".github/workflows/deploy.k8s.yml",
+       "start": 536,
+       "end": 536
+      },
+      {
+       "path": "docs/adr/0017-synthetic-selftest-and-rollback.md",
+       "start": 40,
+       "end": 43
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-585",
+   "repo": "quadseven/grug",
+   "pr": 585,
+   "kind": "bug",
+   "base_sha": "67a7da8a17a7a0ecd56065690e682a6b251412a1",
+   "head_sha": "ca827f623957e12c439e859b641221bc97622a62",
+   "merged_at": "2026-07-10T18:29:30Z",
+   "size": {
+    "additions": 4691,
+    "deletions": 612,
+    "files": 50
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Deep review required both free-tier backends; one backend failing permanently made every review partial and nothing was ever published.",
+     "evidence": "https://github.com/quadseven/grug/pull/586",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "services/_shared/llm_client.py",
+       "start": 294,
+       "end": 298
+      },
+      {
+       "path": "services/_shared/llm_client.py",
+       "start": 1093,
+       "end": 1096
+      },
+      {
+       "path": "services/_shared/llm_client.py",
+       "start": 1273,
+       "end": 1285
+      },
+      {
+       "path": "services/webhook/tests/test_llm_client.py",
+       "start": 232,
+       "end": 237
+      },
+      {
+       "path": "services/webhook/tests/test_llm_client.py",
+       "start": 249,
+       "end": 250
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-664",
+   "repo": "quadseven/grug",
+   "pr": 664,
+   "kind": "bug",
+   "base_sha": "4998c6cc30c757413e8e1a247653970fac6f3f6a",
+   "head_sha": "783d5cb47539e1e6fa288ce24d3f1f7655374249",
+   "merged_at": "2026-07-16T21:39:59Z",
+   "size": {
+    "additions": 15,
+    "deletions": 12,
+    "files": 4
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Deep-diff bound and settle timing disagreed with their documented values (inclusive vs exclusive bound, settle constant).",
+     "evidence": "https://github.com/quadseven/grug/pull/665",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "k8s/consumer-deployment.yaml",
+       "start": 95,
+       "end": 95
+      },
+      {
+       "path": "k8s/webhook-deployment.yaml",
+       "start": 98,
+       "end": 98
+      },
+      {
+       "path": "services/webhook/tests/test_snapshot_identity.py",
+       "start": 57,
+       "end": 57
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-1167",
+   "repo": "quadseven/grug",
+   "pr": 1167,
+   "kind": "bug",
+   "base_sha": "00abd4aeb9c7e84f58416345bd8b570566035881",
+   "head_sha": "70d710313509faa20fddd0e2d6980d9cea163f01",
+   "merged_at": "2026-10-14T03:46:52Z",
+   "size": {
+    "additions": 552,
+    "deletions": 5,
+    "files": 5
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "The intent check raised a high intent-mismatch on every pull request that linked acceptance criteria, blocking merges fleet-wide; reverted.",
+     "evidence": "https://github.com/quadseven/grug/pull/1171",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "services/_shared/llm_client.py",
+       "start": 209,
+       "end": 210
+      },
+      {
+       "path": "services/_shared/llm_client.py",
+       "start": 4928,
+       "end": 4936
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 100,
+       "end": 109
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1061,
+       "end": 1061
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1078,
+       "end": 1079
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1109,
+       "end": 1111
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1117,
+       "end": 1117
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1132,
+       "end": 1132
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1158,
+       "end": 1158
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1172,
+       "end": 1172
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1184,
+       "end": 1184
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 1365,
+       "end": 1367
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 2492,
+       "end": 2577
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 2624,
+       "end": 2632
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 3180,
+       "end": 3190
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 3235,
+       "end": 3235
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 3711,
+       "end": 3718
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 4240,
+       "end": 4240
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/dispatch.py",
+       "start": 4247,
+       "end": 4247
+      },
+      {
+       "path": "services/_shared/personas/code_reviewer/intent.py",
+       "start": 1,
+       "end": 318
+      },
+      {
+       "path": "services/webhook/tests/test_code_reviewer_dispatch.py",
+       "start": 1065,
+       "end": 1065
+      },
+      {
+       "path": "services/webhook/tests/test_code_reviewer_intent.py",
+       "start": 1,
+       "end": 81
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-1281",
+   "repo": "quadseven/grug",
+   "pr": 1281,
+   "kind": "bug",
+   "base_sha": "f5ebf46c2289e30753b9f1e7dbf2bb4d735c0644",
+   "head_sha": "e8cd3e528a8b72572c35cf7e30078ac1f3fed26f",
+   "merged_at": "2026-10-19T16:20:24Z",
+   "size": {
+    "additions": 510,
+    "deletions": 38,
+    "files": 9
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Replaced a persistent volume with an emptyDir and seeded config from the empty mount on first boot, so the pod ran with no bots; reverted.",
+     "evidence": "https://github.com/quadseven/grug/pull/1362",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "grugthink/docs/pgvector-memory.md",
+       "start": 68,
+       "end": 74
+      },
+      {
+       "path": "grugthink/k8s/DEPLOY.md",
+       "start": 102,
+       "end": 112
+      },
+      {
+       "path": "grugthink/k8s/deployment.yaml",
+       "start": 12,
+       "end": 18
+      },
+      {
+       "path": "grugthink/k8s/deployment.yaml",
+       "start": 31,
+       "end": 33
+      },
+      {
+       "path": "grugthink/k8s/deployment.yaml",
+       "start": 81,
+       "end": 84
+      },
+      {
+       "path": "grugthink/k8s/deployment.yaml",
+       "start": 182,
+       "end": 186
+      },
+      {
+       "path": "grugthink/k8s/deployment.yaml",
+       "start": 188,
+       "end": 188
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 16,
+       "end": 16
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 35,
+       "end": 49
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 85,
+       "end": 94
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 125,
+       "end": 127
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 145,
+       "end": 149
+      },
+      {
+       "path": "grugthink/src/grugthink/config/loader.py",
+       "start": 171,
+       "end": 171
+      },
+      {
+       "path": "grugthink/src/grugthink/config/manager.py",
+       "start": 15,
+       "end": 15
+      },
+      {
+       "path": "grugthink/src/grugthink/config/manager.py",
+       "start": 56,
+       "end": 66
+      },
+      {
+       "path": "grugthink/src/grugthink/config/manager.py",
+       "start": 73,
+       "end": 74
+      },
+      {
+       "path": "grugthink/src/grugthink/config/manager.py",
+       "start": 79,
+       "end": 80
+      },
+      {
+       "path": "grugthink/src/grugthink/config/pg_store.py",
+       "start": 1,
+       "end": 173
+      },
+      {
+       "path": "grugthink/tests/test_k8s_manifest.py",
+       "start": 1,
+       "end": 78
+      },
+      {
+       "path": "grugthink/tests/unit/config/test_pg_store.py",
+       "start": 1,
+       "end": 169
+      },
+      {
+       "path": "grugthink/uv.lock",
+       "start": 3,
+       "end": 3
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "loom-549",
+   "repo": "quadseven/loom",
+   "pr": 549,
+   "kind": "bug",
+   "base_sha": "5a42cf1ae0285958a9a6bed2e1d042f5ce43d324",
+   "head_sha": "6acd52fa18e49b34069cd09de1c3025f61d44eed",
+   "merged_at": "2026-10-17T01:05:16Z",
+   "size": {
+    "additions": 34,
+    "deletions": 1,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Label self-heal relabels a ticket mid fix round to loom:pr, letting the brain merge the head it had sent back; reverted.",
+     "evidence": "https://github.com/quadseven/loom/pull/1506",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "bus/brain.py",
+       "start": 2202,
+       "end": 2210
+      },
+      {
+       "path": "tests/test_bus_brain.py",
+       "start": 1008,
+       "end": 1032
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "loom-1622",
+   "repo": "quadseven/loom",
+   "pr": 1622,
+   "kind": "bug",
+   "base_sha": "ca5437e91cb0f100cc0162c725268535a949eb1b",
+   "head_sha": "3ec338a5c04d047467b846f6949844a11d369f01",
+   "merged_at": "2026-10-24T14:06:12Z",
+   "size": {
+    "additions": 37,
+    "deletions": 6,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Let the agent read its sign-in from the keychain, which the lane sandbox denies to the tool it actually runs, so auth kept failing; reverted.",
+     "evidence": "https://github.com/quadseven/loom/pull/1636",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "lanes/agent_sandbox.sh",
+       "start": 80,
+       "end": 86
+      },
+      {
+       "path": "lanes/agent_sandbox.sh",
+       "start": 93,
+       "end": 93
+      },
+      {
+       "path": "lanes/agent_sandbox.sh",
+       "start": 104,
+       "end": 108
+      },
+      {
+       "path": "tests/test_agent_sandbox.py",
+       "start": 122,
+       "end": 145
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mod-overseer-99",
+   "repo": "quadseven/mod-overseer",
+   "pr": 99,
+   "kind": "bug",
+   "base_sha": "c7257e987d8447123c49b8b09bb0286468d614bf",
+   "head_sha": "963ab9ebcb62cdd6c59a15686f7d26ca6d760119",
+   "merged_at": "2026-08-30T19:15:47Z",
+   "size": {
+    "additions": 137,
+    "deletions": 7,
+    "files": 1
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Dropped follow from party members in a dungeon run on a false premise, so the party stopped or arrived piecemeal and died.",
+     "evidence": "https://github.com/quadseven/mod-overseer/pull/101",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 1880,
+       "end": 1880
+      },
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 2064,
+       "end": 2101
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mod-overseer-162",
+   "repo": "quadseven/mod-overseer",
+   "pr": 162,
+   "kind": "bug",
+   "base_sha": "b43ec4ffdf5b85cf997adaf79aaee58fc7820cfc",
+   "head_sha": "253ca2eb95f4a9ea089bc8d6f3b9e371de25f110",
+   "merged_at": "2026-09-02T21:21:46Z",
+   "size": {
+    "additions": 498,
+    "deletions": 10,
+    "files": 1
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Terrain grounding sampled ground height along a step but never checked line of sight, so characters stepped through walls.",
+     "evidence": "https://github.com/quadseven/mod-overseer/pull/182",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 6528,
+       "end": 6529
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mod-overseer-793",
+   "repo": "quadseven/mod-overseer",
+   "pr": 793,
+   "kind": "bug",
+   "base_sha": "b303756bd66c0d28522984b6a12ae4044cb3e000",
+   "head_sha": "dd437b177bff4fa01d85a23d7c5f4fef993ab383",
+   "merged_at": "2026-10-02T21:03:21Z",
+   "size": {
+    "additions": 131,
+    "deletions": 4,
+    "files": 4
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Let a headless roster leader hold a run's leading seat, contradicting the rule that a run's leader has a client; reverted.",
+     "evidence": "https://github.com/quadseven/mod-overseer/pull/827",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 7496,
+       "end": 7509
+      },
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 25359,
+       "end": 25366
+      },
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 41864,
+       "end": 41867
+      },
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 41880,
+       "end": 41880
+      },
+      {
+       "path": "src/mod_overseer.cpp",
+       "start": 41884,
+       "end": 41884
+      },
+      {
+       "path": "src/overseer_decisions.cpp",
+       "start": 35,
+       "end": 39
+      },
+      {
+       "path": "src/overseer_decisions.h",
+       "start": 80,
+       "end": 92
+      },
+      {
+       "path": "tests/test_headless_run_seat.cpp",
+       "start": 1,
+       "end": 85
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "muster-134",
+   "repo": "quadseven/muster",
+   "pr": 134,
+   "kind": "bug",
+   "base_sha": "92fa708ccc5dc00c4c1e9d0e29ec9ffb4a4f2e7e",
+   "head_sha": "e5c3ce788b178c93a9aa623c93c0be95d318a724",
+   "merged_at": "2026-10-15T11:53:13Z",
+   "size": {
+    "additions": 385,
+    "deletions": 4,
+    "files": 11
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Diagnostics path returned an unreachable result without logging the caught failure, and a zero sentinel on a monotonic clock refused the first upload.",
+     "evidence": "https://github.com/quadseven/muster/pull/182",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "agent/android/app/src/main/java/app/muster/agent/DiagnosticsSteward.kt",
+       "start": 1,
+       "end": 6
+      },
+      {
+       "path": "agent/android/app/src/main/java/app/muster/agent/DiagnosticsSteward.kt",
+       "start": 17,
+       "end": 18
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 305,
+       "end": 305
+      },
+      {
+       "path": "server/tests/test_api.py",
+       "start": 582,
+       "end": 582
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "muster-164",
+   "repo": "quadseven/muster",
+   "pr": 164,
+   "kind": "bug",
+   "base_sha": "c3593cca2877c4bcfe94b7b05ab80b2f1308ddf1",
+   "head_sha": "09b92df0e3c34cc3650b98c1245fd467e164e323",
+   "merged_at": "2026-10-16T23:13:21Z",
+   "size": {
+    "additions": 80,
+    "deletions": 48,
+    "files": 11
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Cut certificate lifetime to 21 days although its own body held the merge until renewal was proven on hardware; reverted.",
+     "evidence": "https://github.com/quadseven/muster/pull/189",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "AGENTS.md",
+       "start": 177,
+       "end": 178
+      },
+      {
+       "path": "ARCHITECTURE.md",
+       "start": 200,
+       "end": 203
+      },
+      {
+       "path": "ARCHITECTURE.md",
+       "start": 344,
+       "end": 345
+      },
+      {
+       "path": "DECISIONS.md",
+       "start": 294,
+       "end": 303
+      },
+      {
+       "path": "DECISIONS.md",
+       "start": 308,
+       "end": 308
+      },
+      {
+       "path": "DECISIONS.md",
+       "start": 442,
+       "end": 449
+      },
+      {
+       "path": "DECISIONS.md",
+       "start": 451,
+       "end": 452
+      },
+      {
+       "path": "DECISIONS.md",
+       "start": 1531,
+       "end": 1531
+      },
+      {
+       "path": "docs/policy.md",
+       "start": 335,
+       "end": 335
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 540,
+       "end": 540
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 593,
+       "end": 593
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 601,
+       "end": 602
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 754,
+       "end": 754
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 854,
+       "end": 854
+      },
+      {
+       "path": "server/muster/api.py",
+       "start": 1706,
+       "end": 1706
+      },
+      {
+       "path": "server/muster/ca.py",
+       "start": 34,
+       "end": 44
+      },
+      {
+       "path": "server/muster/ca.py",
+       "start": 48,
+       "end": 49
+      },
+      {
+       "path": "server/muster/kith.py",
+       "start": 117,
+       "end": 117
+      },
+      {
+       "path": "server/muster/kith.py",
+       "start": 174,
+       "end": 174
+      },
+      {
+       "path": "server/muster/kith.py",
+       "start": 672,
+       "end": 672
+      },
+      {
+       "path": "server/muster/kith.py",
+       "start": 779,
+       "end": 780
+      },
+      {
+       "path": "server/muster/kith.py",
+       "start": 1716,
+       "end": 1717
+      },
+      {
+       "path": "server/muster/revocation.py",
+       "start": 26,
+       "end": 26
+      },
+      {
+       "path": "server/tests/test_api.py",
+       "start": 1881,
+       "end": 1881
+      },
+      {
+       "path": "server/tests/test_api.py",
+       "start": 3533,
+       "end": 3534
+      },
+      {
+       "path": "server/tests/test_api.py",
+       "start": 4338,
+       "end": 4338
+      },
+      {
+       "path": "server/tests/test_ca.py",
+       "start": 158,
+       "end": 162
+      },
+      {
+       "path": "server/tests/test_ca.py",
+       "start": 165,
+       "end": 166
+      },
+      {
+       "path": "server/tests/test_ca.py",
+       "start": 171,
+       "end": 172
+      },
+      {
+       "path": "server/tests/test_ca.py",
+       "start": 177,
+       "end": 177
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 151,
+       "end": 151
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 155,
+       "end": 155
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 174,
+       "end": 174
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 177,
+       "end": 177
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 495,
+       "end": 495
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 966,
+       "end": 966
+      },
+      {
+       "path": "server/tests/test_kith.py",
+       "start": 1257,
+       "end": 1257
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "muster-183",
+   "repo": "quadseven/muster",
+   "pr": 183,
+   "kind": "bug",
+   "base_sha": "9b268d9271245c831d8f02a5beaffce0c4d686a4",
+   "head_sha": "884665b5265a689fc28a52c7cb6fe2403708aa94",
+   "merged_at": "2026-10-19T16:30:30Z",
+   "size": {
+    "additions": 120,
+    "deletions": 7,
+    "files": 3
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Gated the asset CLI on a directory that exists only inside the deployment, breaking the documented laptop step, and printed a backing state it never read; reverted.",
+     "evidence": "https://github.com/quadseven/muster/pull/190",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "server/muster/assets.py",
+       "start": 326,
+       "end": 326
+      },
+      {
+       "path": "server/muster/cli.py",
+       "start": 140,
+       "end": 143
+      },
+      {
+       "path": "server/muster/cli.py",
+       "start": 170,
+       "end": 185
+      },
+      {
+       "path": "server/muster/cli.py",
+       "start": 189,
+       "end": 191
+      },
+      {
+       "path": "server/muster/cli.py",
+       "start": 205,
+       "end": 221
+      },
+      {
+       "path": "server/muster/cli.py",
+       "start": 481,
+       "end": 485
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 328,
+       "end": 328
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 333,
+       "end": 334
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 338,
+       "end": 343
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 351,
+       "end": 352
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 356,
+       "end": 359
+      },
+      {
+       "path": "server/tests/test_cli.py",
+       "start": 383,
+       "end": 441
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-752",
+   "repo": "quadseven/wow-overseer",
+   "pr": 752,
+   "kind": "bug",
+   "base_sha": "73752fe5c53629336a0e05f0898b939329d39acf",
+   "head_sha": "99443860f3d5db000e793bc706b1fd11c22fef89",
+   "merged_at": "2026-10-10T20:09:57Z",
+   "size": {
+    "additions": 1733,
+    "deletions": 39,
+    "files": 9
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "A synchronous read-back raced an asynchronous commit, so a letter whose gold had left could be reported unsent and the refund posted twice.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/788",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "bridge.py",
+       "start": 24941,
+       "end": 24946
+      },
+      {
+       "path": "classtrain.py",
+       "start": 214,
+       "end": 216
+      },
+      {
+       "path": "guildfund.py",
+       "start": 207,
+       "end": 209
+      },
+      {
+       "path": "guildfund.py",
+       "start": 245,
+       "end": 246
+      },
+      {
+       "path": "guildfund.py",
+       "start": 255,
+       "end": 256
+      },
+      {
+       "path": "tests/test_member_gold.py",
+       "start": 508,
+       "end": 512
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1029",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1029,
+   "kind": "bug",
+   "base_sha": "c181d11aeedb30453a4bf71ac72a65037428db50",
+   "head_sha": "5dc2fbb2c9e409e2cef884c43df683b2ee49969a",
+   "merged_at": "2026-10-15T17:53:47Z",
+   "size": {
+    "additions": 25,
+    "deletions": 4,
+    "files": 3
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "A bank floor turned a health finding off by paying members less, and named no cause as its criteria required; reverted.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1031",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "guildfund.py",
+       "start": 68,
+       "end": 70
+      },
+      {
+       "path": "guildfund.py",
+       "start": 404,
+       "end": 404
+      },
+      {
+       "path": "guildfund.py",
+       "start": 406,
+       "end": 406
+      },
+      {
+       "path": "tests/test_guildfund.py",
+       "start": 100,
+       "end": 116
+      },
+      {
+       "path": "tests/test_guildfund.py",
+       "start": 128,
+       "end": 129
+      },
+      {
+       "path": "tests/test_member_gold.py",
+       "start": 281,
+       "end": 281
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1075",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1075,
+   "kind": "bug",
+   "base_sha": "281e4ff3b09fed8d574f366a49d3f0e46384caf0",
+   "head_sha": "de76723772419e63e10272603514be68733a3bbd",
+   "merged_at": "2026-10-16T11:27:56Z",
+   "size": {
+    "additions": 17,
+    "deletions": 2,
+    "files": 6
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Removed a weapon type from a class table with a test asserting a false game rule, hiding a health finding instead of fixing it; reverted.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1081",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": ".agents/hooks.json",
+       "start": 1,
+       "end": 1
+      },
+      {
+       "path": ".loom/test.txt",
+       "start": 1,
+       "end": 1
+      },
+      {
+       "path": "bin/test.txt",
+       "start": 1,
+       "end": 1
+      },
+      {
+       "path": "test_hook.sh",
+       "start": 1,
+       "end": 1
+      },
+      {
+       "path": "tests/test_gear.py",
+       "start": 19,
+       "end": 20
+      },
+      {
+       "path": "tests/test_gear.py",
+       "start": 118,
+       "end": 128
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1079",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1079,
+   "kind": "bug",
+   "base_sha": "0177024b81f96efb49ded3f3db0de9f2689ca7a9",
+   "head_sha": "4461aac25518b6954b15445d3db3ed84148deb04",
+   "merged_at": "2026-10-16T12:35:30Z",
+   "size": {
+    "additions": 60,
+    "deletions": 6,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Queue filter compared a raw keyword against a wing id, so it could keep rows it meant to drop or empty the queue; reverted.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1083",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "bridge.py",
+       "start": 18,
+       "end": 18
+      },
+      {
+       "path": "bridge.py",
+       "start": 4113,
+       "end": 4114
+      },
+      {
+       "path": "bridge.py",
+       "start": 4116,
+       "end": 4116
+      },
+      {
+       "path": "bridge.py",
+       "start": 4123,
+       "end": 4124
+      },
+      {
+       "path": "bridge.py",
+       "start": 4148,
+       "end": 4150
+      },
+      {
+       "path": "bridge.py",
+       "start": 19192,
+       "end": 19207
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 15,
+       "end": 15
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 39,
+       "end": 39
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 299,
+       "end": 301
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 352,
+       "end": 352
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 380,
+       "end": 380
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 402,
+       "end": 402
+      },
+      {
+       "path": "tests/test_dungeonstall.py",
+       "start": 484,
+       "end": 510
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1160",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1160,
+   "kind": "bug",
+   "base_sha": "710fe454d11333c761789a6595b97d85a194e49f",
+   "head_sha": "d3692b6e65436a9c4652bfb2915d6ded9ee3af4a",
+   "merged_at": "2026-10-18T09:34:22Z",
+   "size": {
+    "additions": 470,
+    "deletions": 0,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Added planning helpers and tests that nothing calls, duplicating constants another module owns, while the ticket was closed as done; reverted.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1365",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "tests/test_summon.py",
+       "start": 1,
+       "end": 341
+      },
+      {
+       "path": "travel.py",
+       "start": 933,
+       "end": 1061
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1338",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1338,
+   "kind": "bug",
+   "base_sha": "e4d0a5451344f053eca5be0fbf4840d2d3f5017f",
+   "head_sha": "9a105a20b6a6903e9e884faf1c3ae05875256701",
+   "merged_at": "2026-10-21T17:13:25Z",
+   "size": {
+    "additions": 82,
+    "deletions": 56,
+    "files": 7
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Flipped a stated capability flag and inverted its tests with no matching module change, so the UI reported behavior the module does not have.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1366",
+     "localized_by": "removed",
+     "locations": [
+      {
+       "path": "jobs.py",
+       "start": 552,
+       "end": 554
+      },
+      {
+       "path": "jobs.py",
+       "start": 576,
+       "end": 578
+      },
+      {
+       "path": "raidrun.py",
+       "start": 56,
+       "end": 58
+      },
+      {
+       "path": "raidrun.py",
+       "start": 331,
+       "end": 332
+      },
+      {
+       "path": "tests/test_raidready.py",
+       "start": 226,
+       "end": 228
+      },
+      {
+       "path": "tests/test_raidready.py",
+       "start": 539,
+       "end": 539
+      },
+      {
+       "path": "tests/test_raidready.py",
+       "start": 595,
+       "end": 600
+      },
+      {
+       "path": "tests/test_raidrun.py",
+       "start": 59,
+       "end": 79
+      },
+      {
+       "path": "tests/test_raidrun.py",
+       "start": 97,
+       "end": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "wow-overseer-1600",
+   "repo": "quadseven/wow-overseer",
+   "pr": 1600,
+   "kind": "bug",
+   "base_sha": "a79833957a89d323a46010735f0e07c0bb1d223e",
+   "head_sha": "79da2ac1a792e607bd013851c5c9acd9dfe22b8c",
+   "merged_at": "2026-10-28T01:59:54Z",
+   "size": {
+    "additions": 279,
+    "deletions": 26,
+    "files": 2
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "lines",
+     "description": "Treated an object quest ender with no static spawn as missing, so quests whose ender is script-summoned were abandoned as broken.",
+     "evidence": "https://github.com/quadseven/wow-overseer/pull/1614",
+     "localized_by": "removed+context",
+     "locations": [
+      {
+       "path": "questers.py",
+       "start": 68,
+       "end": 68
+      },
+      {
+       "path": "questers.py",
+       "start": 974,
+       "end": 974
+      },
+      {
+       "path": "tests/test_questers.py",
+       "start": 1216,
+       "end": 1216
+      },
+      {
+       "path": "tests/test_questers.py",
+       "start": 1248,
+       "end": 1248
+      },
+      {
+       "path": "tests/test_questers.py",
+       "start": 1291,
+       "end": 1293
+      },
+      {
+       "path": "tests/test_questers.py",
+       "start": 1302,
+       "end": 1304
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "zippie-31",
+   "repo": "quadseven/zippie",
+   "pr": 31,
+   "kind": "bug",
+   "base_sha": "a7890b9672d424f8360b29027baad7bf2e8ff6ca",
+   "head_sha": "de237b73523740e36eb0e02cc7d5638a546be3b6",
+   "merged_at": "2026-08-30T19:23:54Z",
+   "size": {
+    "additions": 946,
+    "deletions": 83,
+    "files": 6
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Per-leg downstream endpoints made traffic flow one way only, taking the bond down on deploy; reverted.",
+     "evidence": "https://github.com/quadseven/zippie/pull/37",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "ARCHITECTURE.md",
+       "start": 560,
+       "end": 569
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 20,
+       "end": 30
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 48,
+       "end": 48
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 88,
+       "end": 110
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 128,
+       "end": 129
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 145,
+       "end": 152
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/home_transport.py",
+       "start": 164,
+       "end": 165
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 34,
+       "end": 50
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 168,
+       "end": 217
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 526,
+       "end": 532
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 611,
+       "end": 617
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 645,
+       "end": 651
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 976,
+       "end": 987
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1041,
+       "end": 1048
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1055,
+       "end": 1056
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1060,
+       "end": 1061
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1079,
+       "end": 1079
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1087,
+       "end": 1088
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1090,
+       "end": 1092
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1100,
+       "end": 1101
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1106,
+       "end": 1106
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1108,
+       "end": 1108
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1227,
+       "end": 1252
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1255,
+       "end": 1258
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1260,
+       "end": 1324
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1346,
+       "end": 1350
+      },
+      {
+       "path": "deploy/oke/zippie-home/zippie-pkg/transport.py",
+       "start": 1418,
+       "end": 1427
+      },
+      {
+       "path": "travel/bond-agent/tests/test_home_downstream_aggregation.py",
+       "start": 1,
+       "end": 378
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 20,
+       "end": 30
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 48,
+       "end": 48
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 88,
+       "end": 110
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 128,
+       "end": 129
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 145,
+       "end": 152
+      },
+      {
+       "path": "travel/bond-agent/zippie/home_transport.py",
+       "start": 164,
+       "end": 165
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 34,
+       "end": 50
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 168,
+       "end": 217
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 526,
+       "end": 532
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 611,
+       "end": 617
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 645,
+       "end": 651
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 976,
+       "end": 987
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1041,
+       "end": 1048
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1055,
+       "end": 1056
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1060,
+       "end": 1061
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1079,
+       "end": 1079
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1087,
+       "end": 1088
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1090,
+       "end": 1092
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1100,
+       "end": 1101
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1106,
+       "end": 1106
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1108,
+       "end": 1108
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1227,
+       "end": 1252
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1255,
+       "end": 1258
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1260,
+       "end": 1324
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1346,
+       "end": 1350
+      },
+      {
+       "path": "travel/bond-agent/zippie/transport.py",
+       "start": 1418,
+       "end": 1427
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "zippie-211",
+   "repo": "quadseven/zippie",
+   "pr": 211,
+   "kind": "bug",
+   "base_sha": "4d4c404684a83af0b1c2b03f903db1456acf45c3",
+   "head_sha": "3dc4ce89f775b32b83f7b1a9d78046fb8d5fee93",
+   "merged_at": "2026-10-15T12:53:15Z",
+   "size": {
+    "additions": 931,
+    "deletions": 89,
+    "files": 8
+   },
+   "defects": [
+    {
+     "id": "d1",
+     "scope": "pr",
+     "description": "Changed the published image without updating the manifest's pinned digest, turning main red on the pin guard.",
+     "evidence": "https://github.com/quadseven/zippie/pull/219",
+     "localized_by": "whole-pr",
+     "locations": [
+      {
+       "path": "docs/ios-client-mode.md",
+       "start": 47,
+       "end": 47
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 31,
+       "end": 31
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 33,
+       "end": 33
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 102,
+       "end": 102
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 113,
+       "end": 115
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 152,
+       "end": 171
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 216,
+       "end": 216
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 218,
+       "end": 218
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 226,
+       "end": 235
+      },
+      {
+       "path": "travel/datapath-go/cmd/zippie-clienthome/main.go",
+       "start": 250,
+       "end": 267
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 27,
+       "end": 31
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 52,
+       "end": 55
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 61,
+       "end": 71
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 75,
+       "end": 76
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 108,
+       "end": 110
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 112,
+       "end": 117
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 119,
+       "end": 123
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 125,
+       "end": 125
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 127,
+       "end": 129
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 131,
+       "end": 131
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 137,
+       "end": 143
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 145,
+       "end": 147
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 153,
+       "end": 167
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 169,
+       "end": 175
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 193,
+       "end": 198
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 202,
+       "end": 202
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 206,
+       "end": 208
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 210,
+       "end": 222
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 224,
+       "end": 225
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 227,
+       "end": 246
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 248,
+       "end": 261
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 263,
+       "end": 264
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 266,
+       "end": 266
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 275,
+       "end": 286
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome.go",
+       "start": 289,
+       "end": 289
+      },
+      {
+       "path": "travel/datapath-go/zippie/clienthome_perclient_test.go",
+       "start": 1,
+       "end": 299
+      },
+      {
+       "path": "travel/datapath-go/zippie/clientmode_e2e_test.go",
+       "start": 218,
+       "end": 367
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 110,
+       "end": 115
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 117,
+       "end": 117
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 119,
+       "end": 119
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 123,
+       "end": 133
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 141,
+       "end": 259
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 270,
+       "end": 272
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 280,
+       "end": 290
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 292,
+       "end": 292
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 300,
+       "end": 301
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 303,
+       "end": 303
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 307,
+       "end": 329
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 331,
+       "end": 337
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 340,
+       "end": 340
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 342,
+       "end": 342
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 344,
+       "end": 347
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 349,
+       "end": 357
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 359,
+       "end": 390
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 398,
+       "end": 398
+      },
+      {
+       "path": "travel/datapath-go/zippie/clients.go",
+       "start": 419,
+       "end": 440
+      },
+      {
+       "path": "travel/datapath-go/zippie/retransmit.go",
+       "start": 287,
+       "end": 294
+      },
+      {
+       "path": "travel/datapath-go/zippie/transport.go",
+       "start": 31,
+       "end": 40
+      },
+      {
+       "path": "travel/datapath-go/zippie/transport.go",
+       "start": 213,
+       "end": 213
+      },
+      {
+       "path": "travel/datapath-go/zippie/transport.go",
+       "start": 232,
+       "end": 232
+      },
+      {
+       "path": "travel/datapath-go/zippie/transport.go",
+       "start": 808,
+       "end": 808
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "grug-897",
+   "repo": "quadseven/grug",
+   "pr": 897,
+   "kind": "clean",
+   "base_sha": "fdd2e045162a45cda3a0ae7af3d4d2b8c8504c8c",
+   "head_sha": "26686b99fce56c4ed13ae6984f112ed0a99c82b5",
+   "merged_at": "2026-09-12T14:37:21Z",
+   "size": {
+    "additions": 50,
+    "deletions": 4,
+    "files": 2
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "grug-934",
+   "repo": "quadseven/grug",
+   "pr": 934,
+   "kind": "clean",
+   "base_sha": "7e05e83465f8805006bbfa6fe1b8295fd5990526",
+   "head_sha": "fc8ec6b0e55e89a9abb24d04b4dd7d184822b64a",
+   "merged_at": "2026-09-05T03:48:02Z",
+   "size": {
+    "additions": 154,
+    "deletions": 29,
+    "files": 3
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "grug-938",
+   "repo": "quadseven/grug",
+   "pr": 938,
+   "kind": "clean",
+   "base_sha": "2367a6929ce3f53044cc0ec63418420c3bf51bf8",
+   "head_sha": "34cfbe51dc7f88b87e3f16a3b1cf469663e6fc99",
+   "merged_at": "2026-09-12T12:46:40Z",
+   "size": {
+    "additions": 341,
+    "deletions": 24,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "grug-949",
+   "repo": "quadseven/grug",
+   "pr": 949,
+   "kind": "clean",
+   "base_sha": "c84f0be635dc59b2cafe0f29255334f0f3e7c90e",
+   "head_sha": "c3606586ffdc1c7a45271716a126139e114f6712",
+   "merged_at": "2026-09-12T13:48:36Z",
+   "size": {
+    "additions": 313,
+    "deletions": 39,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "mod-overseer-49",
+   "repo": "quadseven/mod-overseer",
+   "pr": 49,
+   "kind": "clean",
+   "base_sha": "2b8f40da317d3e383954724a015293b9f4ba49d2",
+   "head_sha": "28c1a2f82e2ee4b59ab11c10ce31afac013ac6b2",
+   "merged_at": "2026-08-27T15:07:26Z",
+   "size": {
+    "additions": 399,
+    "deletions": 0,
+    "files": 2
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "mod-overseer-81",
+   "repo": "quadseven/mod-overseer",
+   "pr": 81,
+   "kind": "clean",
+   "base_sha": "6c8fcc2a9c16c04a199b5a67e886d17b0d69bd2a",
+   "head_sha": "9988bfeed89178eda024d69b70c3e2f5ac8a3310",
+   "merged_at": "2026-08-29T21:29:18Z",
+   "size": {
+    "additions": 94,
+    "deletions": 0,
+    "files": 1
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "mod-overseer-253",
+   "repo": "quadseven/mod-overseer",
+   "pr": 253,
+   "kind": "clean",
+   "base_sha": "ca89fe9ed2b484d0b978e8b4c6e4dee71da9fe21",
+   "head_sha": "d764165791f09540ceb217333cf578f4f4a96272",
+   "merged_at": "2026-09-06T18:35:37Z",
+   "size": {
+    "additions": 293,
+    "deletions": 8,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "mod-overseer-290",
+   "repo": "quadseven/mod-overseer",
+   "pr": 290,
+   "kind": "clean",
+   "base_sha": "8b1270f363221e7a0728fd48036a8f8029054060",
+   "head_sha": "581fd14feb135b4bcd1d05918392374760ccb816",
+   "merged_at": "2026-09-07T00:48:44Z",
+   "size": {
+    "additions": 515,
+    "deletions": 19,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "muster-1",
+   "repo": "quadseven/muster",
+   "pr": 1,
+   "kind": "clean",
+   "base_sha": "7328b56f68b78b9ec5daa73ed3e92fbe72fd20e2",
+   "head_sha": "bea41539f885ad7a4ba40308f576cd8afd28c314",
+   "merged_at": "2026-08-29T02:02:32Z",
+   "size": {
+    "additions": 73,
+    "deletions": 28,
+    "files": 1
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "muster-4",
+   "repo": "quadseven/muster",
+   "pr": 4,
+   "kind": "clean",
+   "base_sha": "35695f7a3c9fd667fc157b7bb67195d408c922c7",
+   "head_sha": "033a4f960e2c34b33af6a419816f475104d849e5",
+   "merged_at": "2026-08-29T15:34:45Z",
+   "size": {
+    "additions": 66,
+    "deletions": 5,
+    "files": 7
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "muster-7",
+   "repo": "quadseven/muster",
+   "pr": 7,
+   "kind": "clean",
+   "base_sha": "35695f7a3c9fd667fc157b7bb67195d408c922c7",
+   "head_sha": "6dc14382a4a9ade71fed40bd1073a3978aa583d9",
+   "merged_at": "2026-08-29T15:34:11Z",
+   "size": {
+    "additions": 291,
+    "deletions": 42,
+    "files": 12
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "muster-11",
+   "repo": "quadseven/muster",
+   "pr": 11,
+   "kind": "clean",
+   "base_sha": "321f8786399537bf0691407d680643a30ceff02a",
+   "head_sha": "98ac4c8dddd16f47aea93f53a45dea267d1f255f",
+   "merged_at": "2026-08-31T00:38:31Z",
+   "size": {
+    "additions": 583,
+    "deletions": 24,
+    "files": 9
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "wow-overseer-186",
+   "repo": "quadseven/wow-overseer",
+   "pr": 186,
+   "kind": "clean",
+   "base_sha": "a2e26c5bd72e29a2f0c8c24d9f04d20a320adf46",
+   "head_sha": "e4fbdd0c78d6cbd3459c0308b11b31ce2b4adabf",
+   "merged_at": "2026-09-22T20:04:20Z",
+   "size": {
+    "additions": 557,
+    "deletions": 8,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "wow-overseer-369",
+   "repo": "quadseven/wow-overseer",
+   "pr": 369,
+   "kind": "clean",
+   "base_sha": "918e724d6e6e96dba0e59093ae8de0f7b77d1c5e",
+   "head_sha": "4858d9defd1ca4aeddec28c2b0e4cd4485b48519",
+   "merged_at": "2026-09-27T18:17:29Z",
+   "size": {
+    "additions": 227,
+    "deletions": 6,
+    "files": 6
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "wow-overseer-389",
+   "repo": "quadseven/wow-overseer",
+   "pr": 389,
+   "kind": "clean",
+   "base_sha": "a1601f68ed6cf2ec24942ac7cb87e03322d2adc2",
+   "head_sha": "fa684c1ad68d775e3686c5d368baf935004cdb4b",
+   "merged_at": "2026-09-28T01:18:41Z",
+   "size": {
+    "additions": 110,
+    "deletions": 0,
+    "files": 2
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "wow-overseer-410",
+   "repo": "quadseven/wow-overseer",
+   "pr": 410,
+   "kind": "clean",
+   "base_sha": "16394f228b3ba50194b7a32e4dc5e1d1e09f7b4e",
+   "head_sha": "a1b1fa24c8da91fa5d4aa81b189213edf44160ab",
+   "merged_at": "2026-09-28T20:47:42Z",
+   "size": {
+    "additions": 43,
+    "deletions": 28,
+    "files": 2
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "zippie-1",
+   "repo": "quadseven/zippie",
+   "pr": 1,
+   "kind": "clean",
+   "base_sha": "24657d10a6eaf2d34e39c3b0b7a391ad00ce5f6b",
+   "head_sha": "9f6d94a1f707160ad6fad8c8fd2ea4fbc7efe3aa",
+   "merged_at": "2026-08-29T02:42:04Z",
+   "size": {
+    "additions": 69,
+    "deletions": 19,
+    "files": 5
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "zippie-28",
+   "repo": "quadseven/zippie",
+   "pr": 28,
+   "kind": "clean",
+   "base_sha": "56cbd6aac43c0531a3733aee9cfc734d33953dc9",
+   "head_sha": "8a9b83e1ae1768903e79ffeb0927664c3251f033",
+   "merged_at": "2026-08-30T03:02:12Z",
+   "size": {
+    "additions": 37,
+    "deletions": 10,
+    "files": 8
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "zippie-34",
+   "repo": "quadseven/zippie",
+   "pr": 34,
+   "kind": "clean",
+   "base_sha": "eb79901c35d122c396f23ac12f357b1b38851c78",
+   "head_sha": "4865950b8a107b33b2cda70df66e6c9564c4e8cf",
+   "merged_at": "2026-08-30T17:10:28Z",
+   "size": {
+    "additions": 582,
+    "deletions": 21,
+    "files": 8
+   },
+   "defects": [],
+   "note": ""
+  },
+  {
+   "id": "zippie-42",
+   "repo": "quadseven/zippie",
+   "pr": 42,
+   "kind": "clean",
+   "base_sha": "72acee653ae513c7344ec8827bc8b3e08c438d3c",
+   "head_sha": "5720ab8936917d4a80a745865535aa108f866c9e",
+   "merged_at": "2026-09-12T14:52:16Z",
+   "size": {
+    "additions": 550,
+    "deletions": 0,
+    "files": 4
+   },
+   "defects": [],
+   "note": ""
+  }
+ ]
+}
