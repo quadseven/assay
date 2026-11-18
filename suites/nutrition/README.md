@@ -190,6 +190,16 @@ The frozen base run sends one request at a time with the four-field JSON
 schema, `temperature=0`, `num_ctx=2048`, and `num_predict=200`.
 Omit `--no-think` to reproduce the run with Ollama's default thinking setting.
 
+For an exact reproduction check, use the Ollama version and model digest
+listed in the results above. After running the default-model command, compare
+the fresh run's metadata and per-row predictions with the published run from
+`suites/nutrition`. The comparison ignores wall-clock latency and JSON formatting.
+
+```bash
+jq -es 'length == 2 and (map(.responses |= map(.response | fromjson)) | .[0] == .[1])' \
+  results/nemotron-3-nano-base.json results/reproduction.json
+```
+
 ### The promptfoo matrix
 
 Runs every cell against the committed CSV, so it needs no parquet download.
