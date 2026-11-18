@@ -1,0 +1,126 @@
+{
+  "model": "nemotron-3-nano:30b-a3b-q4_K_M",
+  "corpus_sha256": "06bef570ee9b3d98c7eab9f79011727ffbadbfd813a09c1319d3e7661ec5705f",
+  "responses": [
+    {
+      "response": "",
+      "elapsed_s": 84.97881507873535
+    },
+    {
+      "response": "",
+      "elapsed_s": 14.155640125274658
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.341245889663696
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.8918468952178955
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.571837902069092
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.13672423362732
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.024605989456177
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.141268014907837
+    },
+    {
+      "response": "",
+      "elapsed_s": 9.769866943359375
+    },
+    {
+      "response": "",
+      "elapsed_s": 12.505987167358398
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.122126817703247
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.522639036178589
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.577966928482056
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.812771797180176
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.748316049575806
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.755853891372681
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.764939069747925
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.81801176071167
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.523483753204346
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.466830253601074
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.376983880996704
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.533556938171387
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.458582878112793
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.7346601486206055
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.610088109970093
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.687985897064209
+    },
+    {
+      "response": "",
+      "elapsed_s": 8.036163091659546
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.610773086547852
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.609008073806763
+    },
+    {
+      "response": "",
+      "elapsed_s": 7.563284873962402
+    }
+  ]
+}
