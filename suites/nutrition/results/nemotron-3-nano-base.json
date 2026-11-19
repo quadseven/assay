@@ -1,0 +1,127 @@
+{
+  "model": "nemotron-3-nano:30b-a3b-q4_K_M",
+  "corpus_sha256": "06bef570ee9b3d98c7eab9f79011727ffbadbfd813a09c1319d3e7661ec5705f",
+  "responses": [
+    {
+      "response": "{\n  \"energy\": 258.5,\n  \"protein\": 13.5,\n  \"carb\": 31.5,\n  \"fat\": 5.5\n}",
+      "elapsed_s": 3.3514699935913086
+    },
+    {
+      "response": "{\n  \"energy\": 17.25,\n  \"protein\": 0.0,\n  \"carb\": 4.485,\n  \"fat\": 0.0\n}",
+      "elapsed_s": 2.161379098892212
+    },
+    {
+      "response": "{\n  \"energy\": 108.5,\n  \"protein\": 10.2,\n  \"carb\": 13.5,\n  \"fat\": 4.5\n}",
+      "elapsed_s": 2.3155388832092285
+    },
+    {
+      "response": "{\n  \"energy\": 258,\n  \"protein\": 3.5,\n  \"carb\": 58.5,\n  \"fat\": 0.5\n}",
+      "elapsed_s": 2.1145522594451904
+    },
+    {
+      "response": "{\n  \"energy\": 277.5,\n  \"protein\": 5.4,\n  \"carb\": 58.5,\n  \"fat\": 0.5\n}",
+      "elapsed_s": 2.1962928771972656
+    },
+    {
+      "response": "{\n  \"energy\": 155.5,\n  \"protein\": 15.5,\n  \"carb\": 15.5,\n  \"fat\": 1.5\n}",
+      "elapsed_s": 2.5129849910736084
+    },
+    {
+      "response": "{\n  \"energy\": 101.5,\n  \"protein\": 0.5,\n  \"carb\": 25.5,\n  \"fat\": 15.2\n}",
+      "elapsed_s": 2.4513890743255615
+    },
+    {
+      "response": "{\n  \"energy\": 1150,\n  \"protein\": 50,\n  \"carb\": 120,\n  \"fat\": 45\n}",
+      "elapsed_s": 2.0007805824279785
+    },
+    {
+      "response": "{\n  \"energy\": 378.5,\n  \"protein\": 2.7,\n  \"carb\": 96.5,\n  \"fat\": 0.5\n}",
+      "elapsed_s": 2.1355929374694824
+    },
+    {
+      "response": "{\n  \"energy\": 388.5,\n  \"protein\": 15.2,\n  \"carb\": 66.5,\n  \"fat\": 5.5\n}",
+      "elapsed_s": 2.246767997741699
+    },
+    {
+      "response": "{\n  \"energy\": 357,\n  \"protein\": 13,\n  \"carb\": 55,\n  \"fat\": 10\n}",
+      "elapsed_s": 2.0117390155792236
+    },
+    {
+      "response": "{\n  \"energy\": 258.5,\n  \"protein\": 10.5,\n  \"carb\": 55.5,\n  \"fat\": 0.5\n}",
+      "elapsed_s": 2.189107894897461
+    },
+    {
+      "response": "{\n  \"energy\": 258,\n  \"protein\": 2.5,\n  \"carb\": 38.5,\n  \"fat\": 9.5\n}",
+      "elapsed_s": 2.1186249256134033
+    },
+    {
+      "response": "{\n  \"energy\": 158.4,\n  \"protein\": 1.5,\n  \"carb\": 31.2,\n  \"fat\": 5.5\n}",
+      "elapsed_s": 2.2050797939300537
+    },
+    {
+      "response": "{\n  \"energy\": 1065.3,\n  \"protein\": 38.5,\n  \"carb\": 155.5,\n  \"fat\": 38.5\n}",
+      "elapsed_s": 2.3299400806427
+    },
+    {
+      "response": "{\n  \"energy\": 357.5,\n  \"protein\": 13.5,\n  \"carb\": 58.5,\n  \"fat\": 10.5\n}",
+      "elapsed_s": 2.240705966949463
+    },
+    {
+      "response": "{\n  \"energy\": 357.5,\n  \"protein\": 10.5,\n  \"carb\": 58.5,\n  \"fat\": 6.5\n}",
+      "elapsed_s": 2.2235612869262695
+    },
+    {
+      "response": "{\n  \"energy\": 388.5,\n  \"protein\": 15.2,\n  \"carb\": 56.4,\n  \"fat\": 10.5\n}",
+      "elapsed_s": 2.2262051105499268
+    },
+    {
+      "response": "{\n  \"energy\": 550,\n  \"protein\": 15,\n  \"carb\": 85,\n  \"fat\": 10\n}",
+      "elapsed_s": 2.027109146118164
+    },
+    {
+      "response": "{\n  \"energy\": 558,\n  \"protein\": 5.5,\n  \"carb\": 128.5,\n  \"fat\": 1.5\n}",
+      "elapsed_s": 2.136563777923584
+    },
+    {
+      "response": "{\n  \"energy\": 108,\n  \"protein\": 0,\n  \"carb\": 28,\n  \"fat\": 9\n}",
+      "elapsed_s": 1.8694069385528564
+    },
+    {
+      "response": "{\n  \"energy\": 357,\n  \"protein\": 31.2,\n  \"carb\": 13.6,\n  \"fat\": 24.6\n}",
+      "elapsed_s": 2.143979072570801
+    },
+    {
+      "response": "{\n  \"energy\": 1080,\n  \"protein\": 55,\n  \"carb\": 150,\n  \"fat\": 30\n}",
+      "elapsed_s": 2.028156042098999
+    },
+    {
+      "response": "{\n  \"energy\": 1080,\n  \"protein\": 15,\n  \"carb\": 250,\n  \"fat\": 30\n}",
+      "elapsed_s": 2.0009560585021973
+    },
+    {
+      "response": "{\n  \"energy\": 350,\n  \"protein\": 14,\n  \"carb\": 55,\n  \"fat\": 10\n}",
+      "elapsed_s": 1.9188742637634277
+    },
+    {
+      "response": "{\n  \"energy\": 320,\n  \"protein\": 24,\n  \"carb\": 12,\n  \"fat\": 20\n}",
+      "elapsed_s": 1.8987040519714355
+    },
+    {
+      "response": "{\n  \"energy\": 650,\n  \"protein\": 30,\n  \"carb\": 70,\n  \"fat\": 30\n}",
+      "elapsed_s": 1.9255590438842773
+    },
+    {
+      "response": "{\n  \"energy\": 350,\n  \"protein\": 35,\n  \"carb\": 5,\n  \"fat\": 15\n}",
+      "elapsed_s": 1.8509221076965332
+    },
+    {
+      "response": "{\n  \"energy\": 210,\n  \"protein\": 2,\n  \"carb\": 27,\n  \"fat\": 12\n}",
+      "elapsed_s": 1.8885109424591064
+    },
+    {
+      "response": "{\n  \"energy\": 150,\n  \"protein\": 5,\n  \"carb\": 20,\n  \"fat\": 5\n}",
+      "elapsed_s": 1.8414099216461182
+    }
+  ],
+  "think": false
+}

@@ -1,6 +1,11 @@
 # NutriBench eval result archive
 
-Each `<YYYYMMDD>-<HHMMSS>_nutribench.json` is one full promptfoo run. Files are gitignored (large + frequent); only `index.md` and this README are tracked.
+Each `<YYYYMMDD>-<HHMMSS>_nutribench.json` is one full promptfoo run. These
+files are gitignored. The published Nemotron runs record the model, the
+frozen CSV's SHA-256, and each raw response and latency in CSV order.
+
+- [`nemotron-3-nano-base.json`](nemotron-3-nano-base.json) uses direct output with native thinking disabled.
+- [`nemotron-3-nano-default-thinking.json`](nemotron-3-nano-default-thinking.json) uses Ollama's default thinking setting.
 
 ## File naming
 

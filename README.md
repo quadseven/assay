@@ -60,7 +60,8 @@ A suite owns its corpus, its runner and its grader. The runner sends each
 prompt or task to the model endpoint; the grader scores the answer. Curated
 measurements go into the suite's `results/scoreboard.json`, and
 `tools/scoreboard.py` is the only thing that writes the table below. Raw run
-archives stay gitignored.
+archives are usually gitignored. The nutrition suite tracks the small raw
+runs that support its default-model row.
 
 | Suite | What it asks |
 |---|---|
@@ -164,7 +165,7 @@ blank cell means "not run", never "not good".
 | `gpt-oss:120b` | local, Ollama | void: measured before reads were contained: the hidden test was readable to the agent | -- | -- | -- |
 | `llama3.2:3b` | local, Ollama | -- | ~53% | -- | -- |
 | `mistral-small:24b` | local, Ollama | -- | 35%, 15.6% energy with a scratchpad | 4/4, 9.5s/reply | -- |
-| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama, single node, via the Anthropic bridge | 2/6, 33s/task | -- | 4/4, 6.0s/reply | -- |
+| `nemotron-3-nano:30b-a3b-q4_K_M` | local, Ollama | 2/6, 33s/task | 55.2% | 4/4, 6.0s/reply | -- |
 | `nemotron-3-super:120b` | local, Ollama | void: harness defect: tasks 2-6 shared the box with orphaned attempts | -- | -- | -- |
 | `nemotron-3.5-lightning:30b` | local, Ollama, single node | 6/6, 35s/task | -- | 4/4, 12.2s/reply | 2/3, 91.9 tok/s |
 | `nemotron-3.5-lightning:30b (opencode harness)` | local, Ollama, single node | 4/6, 50.6s/task | -- | -- | -- |
@@ -240,9 +241,8 @@ $EDITOR suites/agentic_coding/results/scoreboard.json
 python3 tools/scoreboard.py --write
 ```
 
-The raw run archive stays gitignored -- it is large, per-run, and full of raw
-agent output. What gets published is the curated `results/scoreboard.json` per
-suite: measurements someone stands behind, each carrying its **date** and its
+Large raw run archives stay gitignored. The curated `results/scoreboard.json`
+for each suite carries the published measurements, each with a **date** and a
 **caveat**.
 
 Both fields are mandatory and `tests/test_scoreboard.py` enforces them. A number
@@ -283,6 +283,7 @@ prediction lands within +/-20% of ground truth.
 | base | llama3.2:3b | **~53%** | -- | 5 |
 | base | mistral-small:24b | ~35% | 26.9% | 30 |
 | base | qwen2.5:32b | ~53% | 51.3% | 30 |
+| base | nemotron-3-nano:30b-a3b-q4_K_M | 55.2% | 43.3% | 30 |
 | RAG over Open Food Facts | mistral-small:24b | **81%** | 61.6% | 30 |
 | CoT scratchpad | mistral-small:24b | -- | **15.6%** | 12 of 30 |
 | cloud, direct | poolside laguna-xs.2 | 30.8% | 22.0% | 30 |

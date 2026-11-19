@@ -7,9 +7,57 @@ number in the README at once.
 
 from __future__ import annotations
 
+import hashlib
+import io
+import json
+import sys
+from pathlib import Path
+
 import nutribench_runner as runner
 import pytest
 from nutribench_runner import NB_RESPONSE_SCHEMA, within_tolerance
+
+
+@pytest.mark.parametrize("no_think", [False, True])
+def test_base_runner_records_every_frozen_slice_response(monkeypatch, tmp_path, capsys, no_think):
+    slice_file = Path(runner.__file__).with_name("eval_prompts_nutribench.csv")
+    output = tmp_path / "run.json"
+    model = "nemotron-3-nano:30b-a3b-q4_K_M"
+    response = '{"energy": 290, "protein": 12.33, "carb": 30, "fat": 5}'
+    requests = []
+
+    def generate(request, *, timeout):
+        requests.append(json.loads(request.data))
+        return io.BytesIO(json.dumps({"response": response}).encode())
+
+    monkeypatch.setattr(runner.urllib.request, "urlopen", generate)
+    args = [
+        "nutribench_runner.py",
+        "--model",
+        model,
+        "--slice-file",
+        str(slice_file),
+        "--output",
+        str(output),
+    ]
+    if no_think:
+        args.append("--no-think")
+    monkeypatch.setattr(sys, "argv", args)
+
+    assert runner.main() == 0
+    assert len(requests) == 30
+    assert "Meal description:\nFor lunch, I had" in requests[0]["prompt"]
+    assert all(request["model"] == model for request in requests)
+    assert all(request.get("think") is (False if no_think else None) for request in requests)
+    assert all(
+        request["options"] == {"temperature": 0, "num_ctx": 2048, "num_predict": 200} for request in requests
+    )
+    assert "parse rate: 100.0%  (30/30)" in capsys.readouterr().out
+    record = json.loads(output.read_text())
+    assert record["model"] == model
+    assert record["corpus_sha256"] == hashlib.sha256(slice_file.read_bytes()).hexdigest()
+    assert record.get("think") is (False if no_think else None)
+    assert [result["response"] for result in record["responses"]] == [response] * 30
 
 
 def test_tolerance_band_is_twenty_percent_inclusive():

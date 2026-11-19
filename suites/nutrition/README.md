@@ -50,25 +50,36 @@ the published numbers.
 
 ## Results
 
-All runs 2026-05-08 / 2026-05-09, NutriBench v2, 30 rows unless noted.
+Original runs 2026-05-08 / 2026-05-09. All runs use NutriBench v2 and 30 rows
+unless noted.
 
 ### Local models, base arm
 
-| Model | Energy | Protein | Carb | Fat | Mean MAPE |
-|---|---|---|---|---|---|
-| mistral-small:24b | 26.9% | 32.9% | 30.4% | 50.6% | ~35% |
-| qwen2.5:32b | 51.3% | 49.0% | 48.5% | 64.5% | ~53% |
-| llama3.2:3b (5 rows) | -- | -- | -- | -- | ~53% |
+| Model | Energy MAPE | Protein MAPE | Carb MAPE | Fat MAPE | Mean MAPE | Pass rates (energy / protein / carb / fat) |
+|---|---|---|---|---|---|---|
+| mistral-small:24b | 26.9% | 32.9% | 30.4% | 50.6% | ~35% | 43.3% / 40.0% / 36.7% / 20.0% |
+| qwen2.5:32b | 51.3% | 49.0% | 48.5% | 64.5% | ~53% | -- |
+| llama3.2:3b (5 rows) | -- | -- | -- | -- | ~53% | -- |
+| nemotron-3-nano:30b-a3b-q4_K_M | 43.3% | 55.0% | 58.7% | 63.8% | 55.2% | 33.3% / 20.0% / 26.7% / 23.3% |
 
-> These are the numbers as measured in 2026-08 and they are unchanged.
-> `mistral-small:24b` has since been retired and its weights deleted, so
-> its row cannot be reproduced locally. The suite now defaults to
-> `nemotron-3-nano:30b-a3b-q4_K_M`, which has NOT yet been measured on this
-> benchmark -- do not read the row above as applying to it.
+> The suite default has its own measured row. The `mistral-small:24b` row
+> records its historical result. That model was retired and its local weights
+> were deleted.
 
-Pass rates for mistral-small:24b were 43.3% energy, 40.0% protein, 36.7% carb,
-20.0% fat. Fat is the hardest axis for every model tested; the models
-consistently under-estimate it.
+The default-model base run on 2026-11-18 used Ollama 0.40.16 on an Apple M3
+Pro with 36 GB of unified memory. All 30 predictions parsed with native
+thinking disabled, matching the direct setup of the earlier local models.
+N=30, seed 17, frozen CSV SHA-256
+`06bef570ee9b3d98c7eab9f79011727ffbadbfd813a09c1319d3e7661ec5705f`.
+The Ollama model digest was
+`b725f11174073334edd0c2ff396b8d4e66d7dab22a5a63717ccad5a08a270cf1`.
+[Raw direct run](results/nemotron-3-nano-base.json).
+
+With Ollama's default thinking setting and the same 200-token limit, zero
+of 30 responses contained a JSON prediction. MAPE and pass rates are undefined
+for that run. [Raw default-thinking run](results/nemotron-3-nano-default-thinking.json).
+
+Fat has the highest MAPE in each local run with per-axis results.
 
 **qwen2.5:32b was strictly worse than mistral-small:24b** despite being
 larger, anchoring roughly 50% under truth on most rows. Model family beat
@@ -160,6 +171,11 @@ cd suites/nutrition
 OLLAMA_BASE_URL=http://localhost:11434 \
   uv run python nutribench_runner.py --model llama3.2:3b --split v2 --max-rows 5
 
+# Default model, base arm, all 30 frozen rows. No parquet download needed.
+OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_TIMEOUT=120 \
+  uv run python nutribench_runner.py --model nemotron-3-nano:30b-a3b-q4_K_M \
+    --no-think --slice-file eval_prompts_nutribench.csv --output results/reproduction.json
+
 # Retrieval arm. Additionally needs the 6.9GB Open Food Facts parquet.
 OLLAMA_BASE_URL=http://localhost:11434 \
   uv run python nutribench_runner_rag.py --model nemotron-3-nano:30b-a3b-q4_K_M --split v2 --max-rows 30
@@ -168,6 +184,20 @@ OLLAMA_BASE_URL=http://localhost:11434 \
 POOLSIDE_API_KEY=<your Poolside API key> \
   uv run python nutribench_runner_cloud.py \
     --provider poolside --model poolside/laguna-xs.2 --split v2 --max-rows 30
+```
+
+The frozen base run sends one request at a time with the four-field JSON
+schema, `temperature=0`, `num_ctx=2048`, and `num_predict=200`.
+Omit `--no-think` to reproduce the run with Ollama's default thinking setting.
+
+For an exact reproduction check, use the Ollama version and model digest
+listed in the results above. After running the default-model command, compare
+the fresh run's metadata and per-row predictions with the published run from
+`suites/nutrition`. The comparison ignores wall-clock latency and JSON formatting.
+
+```bash
+jq -es 'length == 2 and (map(.responses |= map(.response | fromjson)) | .[0] == .[1])' \
+  results/nemotron-3-nano-base.json results/reproduction.json
 ```
 
 ### The promptfoo matrix

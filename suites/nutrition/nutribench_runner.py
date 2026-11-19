@@ -38,6 +38,9 @@ threshold; the original NutriBench paper uses tighter bands).
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
+import io
 import json
 import logging
 import os
@@ -61,6 +64,7 @@ OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120"))
 # Pass criterion: predicted within +/-N% of ground truth. NutriBench paper
 # uses tighter bands; 20% is a generous starting threshold.
 TOLERANCE = 0.20
+AXES = ("energy", "protein", "carb", "fat")
 
 NB_DATA = _HERE / "data" / "nutribench"
 
@@ -121,7 +125,9 @@ quantities are not specified, assume typical serving sizes.
 """
 
 
-def ollama_generate_nb(*, model: str, meal_description: str) -> tuple[dict | None, float, str]:
+def ollama_generate_nb(
+    *, model: str, meal_description: str, think: bool | None = None
+) -> tuple[dict | None, float, str]:
     """Hit the local Ollama host with the NutriBench prompt + tight schema.
 
     Returns (parsed_dict, wall_clock_s, raw_response_text). parsed_dict
@@ -139,6 +145,8 @@ def ollama_generate_nb(*, model: str, meal_description: str) -> tuple[dict | Non
             "num_predict": 200,
         },
     }
+    if think is not None:
+        body["think"] = think
     url = f"{OLLAMA_BASE_URL}/api/generate"
     req = urllib.request.Request(
         url,
@@ -198,26 +206,56 @@ def main() -> int:
     p.add_argument("--model", default="llama3.2:3b")
     p.add_argument("--split", default="v2", choices=list(SPLIT_PATHS))
     p.add_argument("--max-rows", type=int, default=20)
+    p.add_argument("--slice-file", type=Path, help="score all rows of a frozen NutriBench CSV")
+    p.add_argument("--output", type=Path, help="write the raw responses for --slice-file to JSON")
+    p.add_argument(
+        "--no-think", dest="think", action="store_false", default=None, help="disable native thinking"
+    )
     args = p.parse_args()
 
-    rows = load_split(args.split, args.max_rows)
-    print(f"\n=== NutriBench eval  --  model={args.model} split={args.split} rows={len(rows)} ===\n")
+    if args.output and not args.slice_file:
+        p.error("--output requires --slice-file")
+    if args.slice_file:
+        corpus = args.slice_file.read_bytes()
+        reader = csv.DictReader(io.StringIO(corpus.decode("utf-8"), newline=""))
+        required = {"meal_description", *(f"expected_{axis}" for axis in AXES)}
+        if missing := required.difference(reader.fieldnames or []):
+            p.error(f"slice file missing columns: {', '.join(sorted(missing))}")
+        rows = [
+            {
+                "meal_description": row["meal_description"],
+                **{axis: float(row[f"expected_{axis}"]) for axis in AXES},
+            }
+            for row in reader
+        ]
+        if not rows:
+            p.error("slice file has no data rows")
+        source = f"slice-file={args.slice_file}"
+    else:
+        rows = load_split(args.split, args.max_rows)
+        source = f"split={args.split}"
+    print(f"\n=== NutriBench eval  --  model={args.model} {source} rows={len(rows)} ===\n")
 
     pass_counts = {"energy": 0, "protein": 0, "carb": 0, "fat": 0}
     abs_errors = {"energy": [], "protein": [], "carb": [], "fat": []}
     rel_errors = {"energy": [], "protein": [], "carb": [], "fat": []}
     fail_parse = 0
     latencies: list[float] = []
+    responses = []
 
     for i, row in enumerate(rows):
-        parsed, elapsed, raw = ollama_generate_nb(model=args.model, meal_description=row["meal_description"])
+        parsed, elapsed, raw = ollama_generate_nb(
+            model=args.model, meal_description=row["meal_description"], think=args.think
+        )
         latencies.append(elapsed)
+        if args.output:
+            responses.append({"response": raw, "elapsed_s": elapsed})
         if parsed is None:
             fail_parse += 1
             print(f"  {i + 1:3d}/{len(rows)} PARSE-FAIL  {elapsed:5.1f}s  {raw[:80]}")
             continue
         line_status = []
-        for axis in ("energy", "protein", "carb", "fat"):
+        for axis in AXES:
             actual = float(row[axis])
             pred = float(parsed.get(axis, 0))
             ok = within_tolerance(actual, pred)
@@ -235,12 +273,12 @@ def main() -> int:
     n_parsed = n - fail_parse
     print()
     print("=" * 60)
-    print(f"  RESULTS  --  {args.model} on {args.split}")
+    print(f"  RESULTS  --  {args.model} on {args.slice_file or args.split}")
     print("=" * 60)
     print(f"  parse rate: {100 * n_parsed / n:.1f}%  ({n_parsed}/{n})")
     if n_parsed > 0:
         print(f"  pass rate by axis (within +/-{int(TOLERANCE * 100)}% of ground truth):")
-        for axis in ("energy", "protein", "carb", "fat"):
+        for axis in AXES:
             denom = n_parsed
             print(
                 f"    {axis:8s}  {100 * pass_counts[axis] / denom:5.1f}%   "
@@ -252,6 +290,15 @@ def main() -> int:
         print(f"  p95 latency: {latencies[int(0.95 * len(latencies))]:.1f}s")
         print(f"  mean latency: {sum(latencies) / len(latencies):.1f}s")
     print()
+    if args.output:
+        record = {
+            "model": args.model,
+            "corpus_sha256": hashlib.sha256(corpus).hexdigest(),
+            "responses": responses,
+        }
+        if args.think is not None:
+            record["think"] = args.think
+        args.output.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     return 0
 
 
