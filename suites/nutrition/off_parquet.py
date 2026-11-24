@@ -18,6 +18,7 @@ Set OFF_PARQUET_PATH env var to override the default location.
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 from pathlib import Path
@@ -36,6 +37,9 @@ PARQUET_PATH = Path(os.getenv("OFF_PARQUET_PATH", str(DEFAULT_PARQUET_PATH)))
 # zero import cost; we just hold the connection so per-query setup is
 # negligible.
 _con: duckdb.DuckDBPyConnection | None = None
+
+# Bounded in-memory cache for repeated ingredient lookups across eval rows.
+SEARCH_CACHE_MAXSIZE = 1024
 
 
 def _connection() -> duckdb.DuckDBPyConnection:
@@ -91,36 +95,8 @@ def _pivot_nutriments(nutriments) -> dict[str, float]:
     return out
 
 
-def search(query: str, *, k: int = 20, retries: int = 0) -> list[Product]:
-    """Search OFF parquet for products matching `query` (case-insensitive
-    substring on product_name's first text element). Returns up to `k`
-    parsed Product records.
-
-    Filters:
-      - nutriments IS NOT NULL
-      - has at least one of (energy-kcal, proteins, carbohydrates, fat) per-100g
-      - product_name not empty
-
-    Note: `retries` arg kept for interface parity with off_retriever.search;
-    DuckDB queries are local + don't fail transiently.
-    """
-    if not query.strip():
-        return []
-    if not PARQUET_PATH.exists():
-        # Hard-fail rather than silently degrading: a RAG eval that runs
-        # against zero candidates produces a misleading "RAG works"
-        # signal. Caller must explicitly opt out with OFF_PARQUET_OPTIONAL=1
-        # if they want the silent-fallback path (e.g. unit tests that
-        # don't depend on retrieved candidates).
-        if os.getenv("OFF_PARQUET_OPTIONAL") == "1":
-            log.warning("parquet not found at %s; returning [] (OFF_PARQUET_OPTIONAL=1)", PARQUET_PATH)
-            return []
-        raise FileNotFoundError(
-            f"OFF parquet missing at {PARQUET_PATH}. RAG evaluation requires the "
-            f"6.9GB OFF dump. Pull via `suites/nutrition/data/README.md` "
-            f"recipe, or set OFF_PARQUET_OPTIONAL=1 to silently degrade."
-        )
-
+@functools.lru_cache(maxsize=SEARCH_CACHE_MAXSIZE)
+def _search_cached(parquet_path: str, normalized_query: str, k: int) -> tuple[Product, ...]:
     con = _connection()
     # DuckDB substring match on the FIRST product_name entry. Most rows
     # have an English name in slot 0 or 1; we lowercase both query and
@@ -136,10 +112,10 @@ def search(query: str, *, k: int = 20, retries: int = 0) -> list[Product]:
           AND LOWER(CAST(product_name AS VARCHAR)) LIKE ?
         LIMIT ?
     """
-    pattern = f"%{query.lower()}%"
+    pattern = f"%{normalized_query}%"
     # Pull a buffer larger than k, since some rows will fail nutrient
     # extraction. ~3x is generally enough.
-    rows = con.execute(sql, [str(PARQUET_PATH), pattern, k * 3]).fetchall()
+    rows = con.execute(sql, [parquet_path, pattern, k * 3]).fetchall()
 
     products: list[Product] = []
     for product_name_field, brands, code, nutriments in rows:
@@ -163,7 +139,51 @@ def search(query: str, *, k: int = 20, retries: int = 0) -> list[Product]:
         )
         if len(products) >= k:
             break
-    return products
+    return tuple(products)
+
+
+def clear_search_cache() -> None:
+    """Clear the in-memory parquet lookup cache."""
+    _search_cached.cache_clear()
+
+
+def search_cache_info() -> functools._CacheInfo:
+    """Return lru_cache statistics for parquet lookups."""
+    return _search_cached.cache_info()
+
+
+def search(query: str, *, k: int = 20, retries: int = 0) -> list[Product]:
+    """Search OFF parquet for products matching `query` (case-insensitive
+    substring on product_name's first text element). Returns up to `k`
+    parsed Product records.
+
+    Filters:
+      - nutriments IS NOT NULL
+      - has at least one of (energy-kcal, proteins, carbohydrates, fat) per-100g
+      - product_name not empty
+
+    Note: `retries` arg kept for interface parity with off_retriever.search;
+    DuckDB queries are local + don't fail transiently.
+    """
+    normalized = query.strip().lower()
+    if not normalized:
+        return []
+    if not PARQUET_PATH.exists():
+        # Hard-fail rather than silently degrading: a RAG eval that runs
+        # against zero candidates produces a misleading "RAG works"
+        # signal. Caller must explicitly opt out with OFF_PARQUET_OPTIONAL=1
+        # if they want the silent-fallback path (e.g. unit tests that
+        # don't depend on retrieved candidates).
+        if os.getenv("OFF_PARQUET_OPTIONAL") == "1":
+            log.warning("parquet not found at %s; returning [] (OFF_PARQUET_OPTIONAL=1)", PARQUET_PATH)
+            return []
+        raise FileNotFoundError(
+            f"OFF parquet missing at {PARQUET_PATH}. RAG evaluation requires the "
+            f"6.9GB OFF dump. Pull via `suites/nutrition/data/README.md` "
+            f"recipe, or set OFF_PARQUET_OPTIONAL=1 to silently degrade."
+        )
+
+    return list(_search_cached(str(PARQUET_PATH), normalized, k))
 
 
 if __name__ == "__main__":
