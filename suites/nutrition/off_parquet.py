@@ -21,6 +21,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
+import threading
 from pathlib import Path
 
 import duckdb
@@ -37,6 +38,9 @@ PARQUET_PATH = Path(os.getenv("OFF_PARQUET_PATH", str(DEFAULT_PARQUET_PATH)))
 # zero import cost; we just hold the connection so per-query setup is
 # negligible.
 _con: duckdb.DuckDBPyConnection | None = None
+# One DuckDB connection must not run two statements at once, and lru_cache
+# does not serialize concurrent misses, so every use of `_con` holds this lock.
+_con_lock = threading.Lock()
 
 # Bounded in-memory cache for repeated ingredient lookups across eval rows.
 SEARCH_CACHE_MAXSIZE = 1024
@@ -45,10 +49,11 @@ SEARCH_CACHE_MAXSIZE = 1024
 def _connection() -> duckdb.DuckDBPyConnection:
     """Lazy-init in-memory DuckDB; configure for parquet. Singleton."""
     global _con
-    if _con is None:
-        _con = duckdb.connect(":memory:")
-        # No need to import; DuckDB's read_parquet is built-in.
-    return _con
+    with _con_lock:
+        if _con is None:
+            _con = duckdb.connect(":memory:")
+            # No need to import; DuckDB's read_parquet is built-in.
+        return _con
 
 
 def _extract_name(name_field) -> str:
@@ -115,7 +120,8 @@ def _search_cached(parquet_path: str, normalized_query: str, k: int) -> tuple[Pr
     pattern = f"%{normalized_query}%"
     # Pull a buffer larger than k, since some rows will fail nutrient
     # extraction. ~3x is generally enough.
-    rows = con.execute(sql, [parquet_path, pattern, k * 3]).fetchall()
+    with _con_lock:
+        rows = con.execute(sql, [parquet_path, pattern, k * 3]).fetchall()
 
     products: list[Product] = []
     for product_name_field, brands, code, nutriments in rows:

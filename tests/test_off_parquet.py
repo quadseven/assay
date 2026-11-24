@@ -152,3 +152,37 @@ def test_cache_keys_on_k_and_parquet_path_and_supports_clear(monkeypatch, tmp_pa
         assert counting_con.execute_count == 4
     finally:
         real_con.close()
+
+
+def test_concurrent_cache_misses_never_share_the_connection_at_once(monkeypatch):
+    """lru_cache lets two misses run together; the connection lock keeps them serial."""
+    import threading
+    import time
+
+    import off_parquet
+
+    active, peak, guard = [0], [0], threading.Lock()
+
+    class _Rows:
+        def fetchall(self):
+            return []
+
+    class _Con:
+        def execute(self, sql, params):
+            with guard:
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
+            time.sleep(0.02)
+            with guard:
+                active[0] -= 1
+            return _Rows()
+
+    monkeypatch.setattr(off_parquet, "_con", _Con())
+    off_parquet.clear_search_cache()
+    threads = [threading.Thread(target=off_parquet._search_cached, args=("p", f"q{i}", 3)) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    off_parquet.clear_search_cache()
+    assert peak[0] == 1
