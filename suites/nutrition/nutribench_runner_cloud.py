@@ -31,13 +31,17 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import logging
 import os
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+import httpx
 
 # Sibling modules in this suite are imported by bare name, so the
 # suite directory has to be importable when run as a script.
@@ -53,6 +57,32 @@ from nutribench_runner import (  # noqa: E402 -- must follow the sys.path insert
 )
 
 log = logging.getLogger("assay.nutrition.nutribench_cloud")
+
+_HTTP_CLIENT_LOCK = threading.Lock()
+_HTTP_CLIENT: httpx.Client | None = None
+_HTTP_CLIENT_ATEXIT_REGISTERED = False
+
+
+def get_http_client() -> httpx.Client:
+    """Return a shared persistent httpx.Client for connection pooling."""
+    global _HTTP_CLIENT, _HTTP_CLIENT_ATEXIT_REGISTERED
+    with _HTTP_CLIENT_LOCK:
+        if _HTTP_CLIENT is None or getattr(_HTTP_CLIENT, "is_closed", False):
+            _HTTP_CLIENT = httpx.Client()
+            if not _HTTP_CLIENT_ATEXIT_REGISTERED:
+                atexit.register(close_http_client)
+                _HTTP_CLIENT_ATEXIT_REGISTERED = True
+        return _HTTP_CLIENT
+
+
+def close_http_client() -> None:
+    """Close and clear the shared httpx.Client, if open."""
+    global _HTTP_CLIENT
+    with _HTTP_CLIENT_LOCK:
+        client = _HTTP_CLIENT
+        _HTTP_CLIENT = None
+    if client is not None and not getattr(client, "is_closed", False):
+        client.close()
 
 
 # --- DD LLM Observability (manual instrumentation) ----------------------
@@ -232,6 +262,7 @@ def cloud_generate(
     meal_description: str,
     enable_thinking: bool = True,
     retry: bool = True,
+    client: httpx.Client | None = None,
 ) -> tuple[dict | None, float, str]:
     """Single chat-completion request to an OpenAI-compat provider.
 
@@ -241,7 +272,7 @@ def cloud_generate(
     Uses raw httpx (not openai SDK)  --  the upstream virtualenv had a corrupted openai
     install; raw HTTP keeps eval harness independent of SDK churn.
     """
-    import httpx
+    http_client = client if client is not None else get_http_client()
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     if provider.extra_headers:
@@ -289,7 +320,7 @@ def cloud_generate(
         # this field (Anthropic uses tool-use, Gemini errors with 400).
         if provider.name not in ("anthropic", "gemini"):
             body["response_format"] = {"type": "json_object"}
-        resp = httpx.post(
+        resp = http_client.post(
             f"{provider.base_url}/chat/completions",
             headers=headers,
             json=body,
@@ -462,36 +493,38 @@ def main() -> int:
     fail_parse = 0
     latencies: list[float] = []
 
-    for i, row in enumerate(rows):
-        parsed, elapsed, raw = cloud_generate(
-            provider=provider,
-            model=model,
-            api_key=api_key,
-            meal_description=row["meal_description"],
-            enable_thinking=enable_thinking,
-        )
-        latencies.append(elapsed)
-        if parsed is None:
-            fail_parse += 1
-            print(f"  {i + 1:3d}/{len(rows)} PARSE-FAIL  {elapsed:5.1f}s  {raw[:80]}")
-            continue
-        line = []
-        for axis in ("energy", "protein", "carb", "fat"):
-            actual = float(row[axis])
-            try:
-                pred = float(parsed.get(axis, 0))
-            except (TypeError, ValueError):
-                pred = 0.0
-            ok = within_tolerance(actual, pred)
-            if ok:
-                pass_counts[axis] += 1
-            abs_errors[axis].append(abs(pred - actual))
-            if actual > 0:
-                rel_errors[axis].append(abs(pred - actual) / actual)
-            line.append(f"{axis[0]}={'ok' if ok else 'X'}")
-        print(
-            f"  {i + 1:3d}/{len(rows)} {' '.join(line)}  {elapsed:5.1f}s  | g={row['energy']:.0f} pred={float(parsed.get('energy', 0)):.0f}"
-        )
+    with httpx.Client() as client:
+        for i, row in enumerate(rows):
+            parsed, elapsed, raw = cloud_generate(
+                provider=provider,
+                model=model,
+                api_key=api_key,
+                meal_description=row["meal_description"],
+                enable_thinking=enable_thinking,
+                client=client,
+            )
+            latencies.append(elapsed)
+            if parsed is None:
+                fail_parse += 1
+                print(f"  {i + 1:3d}/{len(rows)} PARSE-FAIL  {elapsed:5.1f}s  {raw[:80]}")
+                continue
+            line = []
+            for axis in ("energy", "protein", "carb", "fat"):
+                actual = float(row[axis])
+                try:
+                    pred = float(parsed.get(axis, 0))
+                except (TypeError, ValueError):
+                    pred = 0.0
+                ok = within_tolerance(actual, pred)
+                if ok:
+                    pass_counts[axis] += 1
+                abs_errors[axis].append(abs(pred - actual))
+                if actual > 0:
+                    rel_errors[axis].append(abs(pred - actual) / actual)
+                line.append(f"{axis[0]}={'ok' if ok else 'X'}")
+            print(
+                f"  {i + 1:3d}/{len(rows)} {' '.join(line)}  {elapsed:5.1f}s  | g={row['energy']:.0f} pred={float(parsed.get('energy', 0)):.0f}"
+            )
 
     n = len(rows)
     n_parsed = n - fail_parse
