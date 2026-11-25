@@ -50,6 +50,22 @@
       "detail": "21.6 tok/s",
       "measured": "2026-09-27",
       "caveat": "27B DENSE, Q8_0 with the MTP draft head (30.5 GB resident). The plain qwen3.8:27b-q8_0 build held the same 3/3 at 8.1 tok/s: every token reads all 27B parameters, so MTP is worth 2.7x and is what the other suites used. Vision held (the library build ships the projector). The array-argument todo probe (5 trials, as on 2026-09-26) returned a real array 5/5, never a string, at 18.1 s per call against 5.7 s for nemotron-3.5-lightning:30b."
+    },
+    {
+      "model": "RecursiveSI/flint",
+      "where": "hosted, OpenRouter free tier (serving provider and quantization not disclosed)",
+      "value": "2/3",
+      "detail": "81.7 tok/s (hosted)",
+      "measured": "2026-11-25",
+      "caveat": "Held json_object and tool_calling; vision failed with HTTP 404 because the model is text only. The decode figure is the hosted provider's, not a measurement on local hardware."
+    },
+    {
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "where": "hosted, OpenRouter free tier (serving provider and quantization not disclosed)",
+      "value": "3/3",
+      "detail": "84.5 tok/s (hosted)",
+      "measured": "2026-11-25",
+      "caveat": "Control for the Flint row, same route and day. Held all three contracts. The decode figure is the hosted provider's, not the local node's (53.6 tok/s for one stream with the speculative drafter, 2026-10-17)."
     }
   ]
 }
