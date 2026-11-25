@@ -131,7 +131,7 @@ class TestMeasurementsAreReadable(unittest.TestCase):
             "a3e597c9973edced": 5,
             runner.corpus_fingerprint(): len(list(runner.TASKS.glob("*/task.json"))),
         }
-        words = {"four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
+        words = {"four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
         for f in self._files():
             for m in _load(f)["measurements"]:
                 corpus = m.get("corpus")
