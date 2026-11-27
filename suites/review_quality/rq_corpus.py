@@ -85,12 +85,14 @@ _FILLER = (
 @dataclass(frozen=True)
 class Case:
     case_id: str
-    kind: str  # one of KINDS for a bug case, or "clean"
+    kind: str  # one of KINDS for a planted case, "historical" for a real defect, or "clean"
     size: str
     diff: str
     path: str  # the planted file
     line: int  # 1-based line of the defect in that file, 0 for clean
     keywords: tuple[str, ...]
+    locations: tuple[tuple[str, int, int], ...] = ()  # historical defect ranges (path, start, end)
+    whole_pr: bool = False  # historical defect located only to the whole change (a revert)
 
     @property
     def has_bug(self) -> bool:

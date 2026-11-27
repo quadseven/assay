@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 LINE_WINDOW = 6
 SERIOUS = {"medium", "high", "critical"}
+WHOLE_PR = {"high", "critical"}  # a reverted change is caught by any finding this severe (as pr_review)
 DEGENERATE_MAX_OUT = 50  # tokens; grug discards < 50 output tokens on > 2k input tokens
 
 
@@ -46,6 +47,34 @@ def _points_at_plant(finding: dict, path: str, line: int, keywords: tuple[str, .
     return near or any(k in message for k in keywords)
 
 
+def _in_located_range(finding: dict, locations: tuple[tuple[str, int, int], ...]) -> bool:
+    try:
+        line = int(finding.get("line", -999))
+    except (TypeError, ValueError):
+        return False
+    path = str(finding.get("path", ""))
+    return any(
+        path.endswith(p) and start - LINE_WINDOW <= line <= end + LINE_WINDOW for p, start, end in locations
+    )
+
+
+def _hits(
+    finding: dict,
+    *,
+    path: str,
+    line: int,
+    keywords: tuple[str, ...],
+    locations: tuple[tuple[str, int, int], ...],
+    whole_pr: bool,
+) -> bool:
+    """A historical defect is matched by location (or any high finding when whole-change); a plant also by keyword."""
+    if whole_pr:
+        return str(finding.get("severity", "")).lower() in WHOLE_PR
+    if locations:
+        return _in_located_range(finding, locations)
+    return _points_at_plant(finding, path, line, keywords)
+
+
 def grade(
     text: str | None,
     *,
@@ -54,8 +83,14 @@ def grade(
     line: int,
     keywords: tuple[str, ...],
     failure: str | None = None,
+    locations: tuple[tuple[str, int, int], ...] = (),
+    whole_pr: bool = False,
 ) -> Graded:
-    """Grade one answer. `failure` is "timeout" or "error" when no answer came back."""
+    """Grade one answer. `failure` is "timeout" or "error" when no answer came back.
+
+    `locations` (path, start, end) replaces `path`/`line`/`keywords` for a historical
+    defect; `whole_pr` marks a reverted change, whose defect has no narrower location.
+    """
     if failure is not None or text is None:
         return Graded(failure or "error", False, 0, 0)
     findings = parse_findings(text)
@@ -63,7 +98,8 @@ def grade(
         return Graded("bad_json", False, 0, 0)
     if not findings:
         return Graded("empty", False, 0, 0)
-    hits = [has_bug and _points_at_plant(f, path, line, keywords) for f in findings]
+    target = dict(path=path, line=line, keywords=keywords, locations=locations, whole_pr=whole_pr)
+    hits = [has_bug and _hits(f, **target) for f in findings]
     serious_misses = sum(
         1
         for f, hit in zip(findings, hits, strict=True)
