@@ -1,11 +1,13 @@
 """Run the review_quality corpus against OpenCode Go chat-completions models.
 
-    OPENCODE_GO_API_KEY=... python rq_runner.py --reps 2 [--models a,b] [--out results/DATE]
+    OPENCODE_GO_API_KEY=... python rq_runner.py --reps 2 [--models a,b] [--historical] [--out results/DATE]
+    python rq_runner.py --rows results/DATE/rows.json     # re-summarize a stored run, no model calls
 
 The request shape is what a reviewer sends: a JSON-only system prompt, the diff
 as the user message, max_tokens 8192, a hard 45 s total deadline per call.
 Cost is computed from the provider's reported token usage and the docs' list
-prices (uncached input: review prompts are different every time).
+prices (uncached input: review prompts are different every time). Every run
+ends with the chain `rq_recommend` derives from the measured rows.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ from pathlib import Path
 import httpx
 import rq_corpus
 import rq_grade
+import rq_history
+import rq_recommend
 
 URL = "https://opencode.ai/zen/go/v1/chat/completions"
 TIMEOUT_S = 45.0
@@ -29,8 +33,9 @@ SYSTEM = (
     'You review code diffs. Reply ONLY with JSON {"findings":[{"path":str,"line":int,"rule":str,'
     '"severity":"low|medium|high|critical","message":str}]}. Report real bugs; empty list only if there are none.'
 )
-# name -> (model id, extra body, $/M input, $/M output, Go monthly limit $)
-MODELS: dict[str, tuple[str, dict, float, float, float | None]] = {
+# name -> (model id, extra body, $/M input, $/M output, Go monthly limit $).
+# A None price is not yet known: such a model runs only with --price NAME=IN,OUT,LIMIT.
+MODELS: dict[str, tuple[str, dict, float | None, float | None, float | None]] = {
     "deepseek-v4.1-flash (think off)": (
         "deepseek-v4.1-flash",
         {"thinking": {"type": "disabled"}},
@@ -46,6 +51,7 @@ MODELS: dict[str, tuple[str, dict, float, float, float | None]] = {
     "kimi-k2.7-code": ("kimi-k2.7-code", {}, 0.95, 4.00, 60),
     "hy3": ("hy3", {"response_format": None}, 0.14, 0.58, 60),
     "longcat-2.0": ("longcat-2.0", {}, 0.30, 1.20, 60),
+    "qwen3.8-flash": ("qwen3.8-flash", {}, None, None, 60),
     "longcat-2.5-preview-free": ("longcat-2.5-preview-free", {}, 0.0, 0.0, None),
 }
 
@@ -97,10 +103,9 @@ async def run(
     reps: int,
     concurrency: int,
     key: str,
+    cases: list[rq_corpus.Case],
     system: str = SYSTEM,
-    sizes: tuple[str, ...] = tuple(rq_corpus.SIZES),
 ) -> list[dict]:
-    cases = [c for c in rq_corpus.build_corpus() if c.size in sizes]
     sem = asyncio.Semaphore(concurrency)
     rows: list[dict] = []
 
@@ -115,6 +120,8 @@ async def run(
             line=case.line,
             keywords=case.keywords,
             failure=out.get("failure"),
+            locations=case.locations,
+            whole_pr=case.whole_pr,
         )
         cost = ((out.get("in_tok") or 0) * p_in + (out.get("out_tok") or 0) * p_out) / 1e6
         rows.append(
@@ -139,6 +146,9 @@ async def run(
     async with httpx.AsyncClient(timeout=TIMEOUT_S + 5) as client:
         await asyncio.gather(*(one(m, c, r) for m in models for c in cases for r in range(reps)))
     return rows
+
+
+BUCKETS = (*rq_corpus.SIZES, rq_history.SIZE)
 
 
 def _pct(values: list[float], q: float) -> float:
@@ -176,7 +186,7 @@ def _summarize_one(name: str, size: str, sub: list[dict]) -> dict:
 def summarize(rows: list[dict]) -> list[dict]:
     out = []
     for name in dict.fromkeys(r["model"] for r in rows):
-        for size in rq_corpus.SIZES:
+        for size in BUCKETS:
             sub = [r for r in rows if r["model"] == name and r["size"] == size]
             if sub:
                 out.append(_summarize_one(name, size, sub))
@@ -191,7 +201,7 @@ def render(summary: list[dict]) -> str:
 
     lines = [
         f"| {s['model']} | {s['size']} | {s['n']} | {f(s['catch'])} | {f(s['empty_on_bug'])} | {f(s['fp_clean'])} | {f(s['timeout'])} | {f(s['error'])} | {s['p50']:.1f} | {s['p95']:.1f} | "
-        f"{'-' if s['cost'] != s['cost'] else format(s['cost'], '.4f')} | {'unlimited' if s['reviews_per_month'] is None and MODELS[s['model']][4] is None else ('-' if s['reviews_per_month'] is None else format(s['reviews_per_month'], ',.0f'))} |"
+        f"{'-' if s['cost'] != s['cost'] else format(s['cost'], '.4f')} | {'unlimited' if s['reviews_per_month'] is None and free_models([s['model']]) else ('-' if s['reviews_per_month'] is None else format(s['reviews_per_month'], ',.0f'))} |"
         for s in summary
     ]
     return head + "\n".join(lines) + "\n"
@@ -225,8 +235,39 @@ async def _warm(names: list[str], key: str, system: str) -> None:
             await call(client, key, model, extra, probe, system)
 
 
-def main() -> None:
-    global URL, TIMEOUT_S
+def apply_prices(overrides: list[str]) -> None:
+    """Set `NAME=IN,OUT,LIMIT` ($/M input, $/M output, monthly limit $) on known models."""
+    for item in overrides:
+        name, _, numbers = item.partition("=")
+        if name not in MODELS:
+            raise SystemExit(f"--price: unknown model {name!r}")
+        p_in, p_out, limit = (float(x) for x in numbers.split(","))
+        model, extra, *_ = MODELS[name]
+        MODELS[name] = (model, extra, p_in, p_out, limit)
+
+
+def unpriced(names: list[str]) -> list[str]:
+    return [n for n in names if MODELS[n][2] is None or MODELS[n][3] is None]
+
+
+def free_models(names: list[str]) -> set[str]:
+    """Models with no plan limit: a free tier (or a self-hosted endpoint) that can vanish."""
+    return {n for n in names if MODELS.get(n, ("", {}, 0, 0, None))[4] is None}
+
+
+def report(rows: list[dict]) -> str:
+    """The per-model table, then the recommended chain derived from it."""
+    summary = summarize(rows)
+    try:
+        chain = rq_recommend.render(
+            rq_recommend.recommend(summary, free_models([s["model"] for s in summary])), summary
+        )
+    except rq_recommend.NoChain as exc:
+        chain = f"no recommendation: {exc}\n"
+    return render(summary) + "\n" + chain
+
+
+def _args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", default=",".join(MODELS))
     ap.add_argument("--reps", type=int, default=2)
@@ -249,6 +290,18 @@ def main() -> None:
         "--sizes", default=",".join(rq_corpus.SIZES), help="comma list of corpus sizes to run (10k,40k)"
     )
     ap.add_argument(
+        "--historical",
+        action="store_true",
+        help="also run the real pull requests of suites/pr_review/cases.json (diffs read with gh)",
+    )
+    ap.add_argument(
+        "--price",
+        action="append",
+        default=[],
+        help="NAME=IN,OUT,LIMIT list prices for a model whose price is not recorded here",
+    )
+    ap.add_argument("--rows", default="", help="re-summarize a stored rows.json instead of calling models")
+    ap.add_argument(
         "--warmup", action="store_true", help="send one unscored call per model first (cold model loads)"
     )
     ap.add_argument(
@@ -256,31 +309,52 @@ def main() -> None:
         default="",
         help="use this file as the system prompt (e.g. a reviewer's real prompt, kept out of this repo)",
     )
-    args = ap.parse_args()
+    return ap.parse_args()
+
+
+def _check_plan(names: list[str], reps: int, cases: list[rq_corpus.Case], max_share: float) -> None:
+    missing = unpriced(names)
+    if missing:
+        raise SystemExit(
+            f"refusing: no list price recorded for {', '.join(missing)}; pass --price NAME=IN,OUT,LIMIT"
+        )
+    dollars, share = estimate_plan_share(names, reps, cases)
+    print(f"planned: ~${dollars:.2f} list price, ~{share:.1%} of the plan allowance (5-hour cap 20%)")
+    if share > max_share:
+        raise SystemExit(
+            f"refusing: {share:.1%} exceeds --max-plan-share {max_share:.0%}; use fewer models/reps or a key that no live reviewer shares"
+        )
+
+
+def main() -> None:
+    global URL, TIMEOUT_S
+    args = _args()
+    if args.rows:
+        print(report(json.loads(Path(args.rows).read_text())))
+        return
     TIMEOUT_S = args.timeout
+    names = [m.strip() for m in args.models.split(",") if m.strip()]
     if args.base_url:
         URL = args.base_url
-        for served in (m.strip() for m in args.models.split(",") if m.strip()):
+        for served in names:
             MODELS.setdefault(served, (served, {}, 0.0, 0.0, None))
+    apply_prices(args.price)
     key = os.environ.get("OPENCODE_GO_API_KEY", "") if args.base_url else os.environ["OPENCODE_GO_API_KEY"]
-    planned = [m.strip() for m in args.models.split(",") if m.strip()]
-    dollars, share = estimate_plan_share(planned, args.reps, rq_corpus.build_corpus())
-    print(f"planned: ~${dollars:.2f} list price, ~{share:.1%} of the plan allowance (5-hour cap 20%)")
-    if share > args.max_plan_share:
-        raise SystemExit(
-            f"refusing: {share:.1%} exceeds --max-plan-share {args.max_plan_share:.0%}; use fewer models/reps or a key that no live reviewer shares"
-        )
-    names = [m.strip() for m in args.models.split(",") if m.strip()]
+    sizes = args.sizes.split(",")
+    cases = [c for c in rq_corpus.build_corpus() if c.size in sizes]
+    if args.historical:
+        cases += rq_history.load_cases()
+    _check_plan(names, args.reps, cases, args.max_plan_share)
     system = Path(args.system_file).read_text() if args.system_file else SYSTEM
     if args.warmup:
         asyncio.run(_warm(names, key, system))
-    rows = asyncio.run(run(names, args.reps, args.concurrency, key, system, tuple(args.sizes.split(","))))
-    table = render(summarize(rows))
-    print(table)
+    rows = asyncio.run(run(names, args.reps, args.concurrency, key, cases, system))
+    text = report(rows)
+    print(text)
     if args.out:
         Path(args.out).mkdir(parents=True, exist_ok=True)
         (Path(args.out) / "rows.json").write_text(json.dumps(rows, indent=1))
-        (Path(args.out) / "summary.md").write_text(table)
+        (Path(args.out) / "summary.md").write_text(text)
 
 
 if __name__ == "__main__":

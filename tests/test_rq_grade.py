@@ -74,3 +74,104 @@ def test_plan_share_estimate_scales_with_reps_and_refuses_free_models_cost():
     d2, s2 = rq_runner.estimate_plan_share(["deepseek-v4.1-flash (think off)"], 2, cases)
     assert abs(d2 - 2 * d1) < 1e-9 and abs(s2 - 2 * s1) < 1e-9
     assert rq_runner.estimate_plan_share(["longcat-2.5-preview-free"], 2, cases) == (0.0, 0.0)
+
+
+LOCS = (("src/app.py", 40, 44),)
+
+
+def located(text, **kw):
+    base = dict(has_bug=True, path="", line=0, keywords=(), locations=LOCS)
+    base.update(kw)
+    return rq_grade.grade(text, **base)
+
+
+def test_historical_finding_inside_a_located_range_is_a_catch():
+    out = located('{"findings":[{"path":"src/app.py","line":47,"severity":"high","message":"x"}]}')
+    assert out.caught and out.false_positives == 0
+
+
+def test_historical_finding_outside_every_range_is_a_miss_and_a_false_positive():
+    out = located('{"findings":[{"path":"src/app.py","line":80,"severity":"high","message":"x"}]}')
+    assert not out.caught and out.false_positives == 1
+
+
+def test_historical_keywords_never_count_without_a_location():
+    out = located(
+        '{"findings":[{"path":"src/other.py","line":42,"severity":"high","message":"injection"}]}',
+        keywords=("injection",),
+    )
+    assert not out.caught
+
+
+def test_whole_change_defect_is_caught_by_any_high_finding_but_not_a_medium_one():
+    high = '{"findings":[{"path":"src/x.py","line":1,"severity":"high","message":"x"}]}'
+    medium = '{"findings":[{"path":"src/x.py","line":1,"severity":"medium","message":"x"}]}'
+    assert located(high, whole_pr=True).caught
+    assert not located(medium, whole_pr=True).caught
+
+
+TICKET_CANDIDATES = (
+    "kimi-k2.7-code",
+    "glm-5.3-flash",
+    "glm-5.2",
+    "mimo-v2.6-flash (think off)",
+    "hy3",
+    "qwen3.8-flash",
+    "deepseek-v4.1-flash (think on)",
+    "deepseek-v4.1-flash (think off)",
+    "longcat-2.0",
+)
+
+
+def test_every_candidate_model_is_wired_into_the_runner():
+    import rq_runner
+
+    assert set(TICKET_CANDIDATES) <= set(rq_runner.MODELS)
+
+
+def test_a_model_without_a_recorded_price_is_refused_until_priced(monkeypatch):
+    import pytest
+    import rq_runner
+
+    monkeypatch.setitem(rq_runner.MODELS, "qwen3.8-flash", rq_runner.MODELS["qwen3.8-flash"])
+    cases = [rq_corpus.build_case("off_by_one", "10k")]
+    with pytest.raises(SystemExit, match="no list price"):
+        rq_runner._check_plan(["qwen3.8-flash"], 1, cases, 1.0)
+    rq_runner.apply_prices(["qwen3.8-flash=0.1,0.4,60"])
+    assert rq_runner.unpriced(["qwen3.8-flash"]) == []
+    rq_runner._check_plan(["qwen3.8-flash"], 1, cases, 1.0)
+
+
+def _row(model, kind, size, status="ok", caught=True, fp=0, seconds=2.0, cost=0.002):
+    return {
+        "model": model,
+        "kind": kind,
+        "size": size,
+        "status": status,
+        "caught": caught,
+        "fp": fp,
+        "seconds": seconds,
+        "cost": cost,
+    }
+
+
+def test_report_ends_with_the_recommended_chain_and_counts_historical_cases():
+    import rq_runner
+
+    rows = []
+    for size in ("10k", "40k"):
+        rows += [_row("deepseek-v4.1-flash (think off)", "off_by_one", size)]
+        rows += [_row("deepseek-v4.1-flash (think off)", "clean", size, caught=False)]
+        rows += [_row("hy3", "off_by_one", size, status="timeout", caught=False, seconds=45.0)]
+    rows += [_row("hy3", "historical", "hist", caught=False)]
+    text = rq_runner.report(rows)
+    assert "| hy3 | hist | 1 | 0% |" in text
+    assert "primary: deepseek-v4.1-flash (think off)" in text
+    assert "rejected: hy3 (timeout 100% > 10%" in text
+
+
+def test_report_says_so_when_no_paid_model_qualifies():
+    import rq_runner
+
+    rows = [_row("hy3", "off_by_one", s, status="timeout", caught=False) for s in ("10k", "40k")]
+    assert "no recommendation" in rq_runner.report(rows)

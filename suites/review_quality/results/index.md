@@ -92,10 +92,34 @@ error on 20-75% of calls. Lesson: rank models with the prompt they will actually
 
 Primary `mimo-v2.6-flash` with thinking disabled: best catch of the cheap models, near-zero timeouts, the most monthly reviews. Second `deepseek-v4.1-flash` with thinking disabled: fastest and a different model family for a second opinion. Last, the free `longcat-2.5-preview-free`. The false-positive rate of the first two is high on this synthetic corpus, so a verification or dedupe step downstream matters more than the primary choice.
 
-## Recommendation (final)
+## Recommendation (superseded by the derived chain below)
 
 Primary `deepseek-v4.1-flash` with thinking disabled, second `mimo-v2.5` with thinking
 disabled, last the free `longcat-2.5-preview-free`.
+
+## Recommended chain (derived by `rq_recommend.py`)
+
+This chain is not hand-picked. It is what `rq_recommend.recommend` returns for the real-reviewer-prompt
+table above, and `tests/test_rq_recommend.py` holds it to that table. The rules are in
+the suite README: at both sizes a model needs at least 70% catch and at most 10% timeouts, 10% errors and 25% empty
+answers on defect diffs. Models are ranked by worse-size catch, then timeouts, then cost per review at 40k tokens.
+
+| place | model | catch 10k / 40k | empty on bug | FP on clean | timeout | p50 / p95 s at 40k | $/review at 40k |
+|---|---|---|---|---|---|---|---|
+| primary | deepseek-v4.1-flash (think off) | 100% / 93% | 0% / 7% | 50% / 0% | 0% / 0% | 3.8 / 5.7 | 0.0078 |
+| fallback 1 | mimo-v2.5 (think off) | 79% / 86% | 21% / 7% | 0% / 33% | 0% / 0% | 13.9 / 38.4 | 0.0072 |
+| fallback 2 | mimo-v2.6-flash (think off) | 79% / 71% | 21% / 14% | 33% / 17% | 0% / 10% | 27.5 / 44.6 | 0.0072 |
+
+Rejected under the real prompt: `kimi-k2.7-code` (35% timeouts, 64% catch), `longcat-2.0` (70% timeouts),
+`glm-5.2` (75% timeouts), `hy3` (50% errors, 29% empty answers on defect diffs), and the free
+`longcat-2.5-preview-free` (30% timeouts, 50% catch). The free tier no longer ends the chain: an offer that can end
+overnight may only lead, with a paid model behind it.
+
+Not yet measured under the real prompt, so not ranked: `glm-5.3-flash` and `deepseek-v4.1-flash`
+with thinking on (both measured only under the stand-in prompt above, where they timed out on 20-65% of calls),
+`qwen3.8-flash` (wired into the runner, refused until its list price is supplied with `--price`), and the historical
+pull-request cases (`--historical`). A run that adds them prints a new chain. Update this section from that output, and the
+reviewer's chain order from this section.
 
 ## Self-hosted GPUs (Ollama behind a gateway)
 
