@@ -36,6 +36,10 @@ import sys
 import time
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import httpx
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -46,6 +50,7 @@ from nutribench_runner_cloud import (  # noqa: E402 -- must follow the sys.path 
     PROVIDERS,
     _maybe_init_llmobs,
     _strip_fences,
+    get_http_client,
 )
 from nutribench_runner_cloud import (  # noqa: E402 -- must follow the sys.path insert above
     SYSTEM_PROMPT as CLOUD_SYSTEM_PROMPT,
@@ -74,9 +79,16 @@ def _ollama_call(*, base_url: str, model: str, meal: str) -> tuple[str, float]:
     return data.get("response") or "", time.time() - t0
 
 
-def _cloud_call(*, provider_name: str, model: str, meal: str, thinking: bool) -> tuple[str, float]:
+def _cloud_call(
+    *,
+    provider_name: str,
+    model: str,
+    meal: str,
+    thinking: bool,
+    client: httpx.Client | None = None,
+) -> tuple[str, float]:
     """Hit OpenAI-compat cloud provider via raw httpx."""
-    import httpx
+    http_client = client if client is not None else get_http_client()
 
     p = PROVIDERS[provider_name]
     api_key = os.getenv(p.api_key_env)
@@ -107,7 +119,7 @@ def _cloud_call(*, provider_name: str, model: str, meal: str, thinking: bool) ->
         body["response_format"] = {"type": "json_object"}
 
     t0 = time.time()
-    resp = httpx.post(f"{p.base_url}/chat/completions", headers=headers, json=body, timeout=timeout_s)
+    resp = http_client.post(f"{p.base_url}/chat/completions", headers=headers, json=body, timeout=timeout_s)
     elapsed = time.time() - t0
     resp.raise_for_status()
     data = resp.json()

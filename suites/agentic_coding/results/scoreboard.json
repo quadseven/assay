@@ -129,6 +129,22 @@
       "measured": "2026-10-17",
       "corpus": "8d61e9c2dbdd8b3a",
       "caveat": "Contained runner, opencode 1.18.31 against vLLM's OpenAI-compatible endpoint. 120B total / 12B active, NVFP4. Every task solved with its existing tests still green and nothing out of scope; per task 29.5-63.5s. Decode on the serving probe was 53.6 tok/s for one stream. The corpus is saturated at the top (qwen3-coder-next q4 on the same harness: 6/6 at 20.5s), so this row says the model is reliable on these tasks, not that it is the strongest; the model card reports SWE-bench Verified 71.1. A first attempt with opencode 1.18.30 failed before any request reached the server (an opencode client error) and is not recorded."
+    },
+    {
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "where": "hosted, OpenRouter free tier (serving provider and quantization not disclosed)",
+      "value": "7/9, 75s/task",
+      "measured": "2026-11-25",
+      "corpus": "7e74a3fd64a3b513",
+      "caveat": "Harness: opencode 1.18.31 with its Anthropic provider, through the runner proxy. First measurement on the nine-task corpus, and the control for the Flint row beside it: same harness, same host, same hosted route, run at the same time. Missed partial_write_atomic (no file modified) and stale_read_version (hidden test still failing); scope clean and nothing regressed on all nine; contained on every attempt. vacuous_pass took 273s, the rest 22-68s. The six-task 6/6 row above was saturated; the three harder tasks separate this model from a perfect score. A hosted free route, not the local NVFP4 build with its speculative drafter, so the times are not the local node's."
+    },
+    {
+      "model": "RecursiveSI/flint",
+      "where": "hosted, OpenRouter free tier (serving provider and quantization not disclosed)",
+      "value": "6/9, 88s/task",
+      "measured": "2026-11-25",
+      "corpus": "7e74a3fd64a3b513",
+      "caveat": "39.8B total / 2.5B active MoE, Apache 2.0, released 2026-10-21; vendor reports SWE-bench Verified 74.2. Harness: opencode 1.18.31 with its Anthropic provider, through the runner proxy. One task fewer than the Nemotron 3.5 Super VL control measured beside it on the same harness, host and route. Missed partial_write_atomic and stale_read_version (both a wrong patch, hidden test still failing; stale_read_version ran 366s) and vacuous_pass (hidden test still failing), which the control solved. Scope clean and nothing regressed on all nine; contained on every attempt (one orphan reaped after write_after_side_effect). Text only: it fails the vision contract on spark_serving. Its vendor serving kit targets other GPUs; no local build was measured."
     }
   ]
 }
