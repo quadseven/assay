@@ -1,0 +1,79 @@
+{
+  "seed": 20261120,
+  "total_rows": 50,
+  "strata": [
+    {
+      "label": "refactor",
+      "n": 11
+    },
+    {
+      "label": "bug_fix",
+      "n": 12
+    },
+    {
+      "label": "feature",
+      "n": 10
+    },
+    {
+      "label": "config",
+      "n": 12
+    },
+    {
+      "label": "dependency_bump",
+      "n": 5
+    }
+  ],
+  "row_hashes": [
+    "34769e92cc9a3f74",
+    "38b90df47f870f0b",
+    "20bb425622faffe0",
+    "abe9d4983673caae",
+    "1f138cf2f1a73fd2",
+    "62a1f5784362c5a4",
+    "09f3028777624b0b",
+    "84d64d915d98e9f2",
+    "d2160646e08bcc54",
+    "049587bad83236db",
+    "7efa39cc78451392",
+    "05a7e393d4bb5c31",
+    "18c42bae88b9493e",
+    "5b7fff883d32d723",
+    "b25424051852c6ec",
+    "9b1f610ce4b28abe",
+    "b9ca0edfdf2b9a49",
+    "c68a4b5db5f04490",
+    "d6e83d5ed6c2c176",
+    "aeacb482456924dd",
+    "a172ede1bf5a12b7",
+    "50ef3b9307750c78",
+    "32339857ad0e5695",
+    "00151d71f1ba37cf",
+    "20ac6fa66eecf928",
+    "de4d9c10a2382450",
+    "ba15b2f6ac7669ef",
+    "b5ac77d558a4f621",
+    "4189882d8a3ed3cb",
+    "bd35676fac72c1df",
+    "a68f6747db840c33",
+    "547eca0d962ab796",
+    "3ba8b13315460767",
+    "2f37d5c7d26ff705",
+    "d91c27059740fe05",
+    "1bd174383bda2f6f",
+    "e8802be11e5a7c57",
+    "319c3161039246ca",
+    "af101e3894f9afbe",
+    "88df92577e2824a3",
+    "496f0000a5a72b7f",
+    "3320eb407fc56205",
+    "2728a52ffa7a7498",
+    "21889fc6cd155316",
+    "a736e4760f4e27f2",
+    "8d3655a5437091b4",
+    "5804d3657c161701",
+    "7a098685e8974b3d",
+    "ad8e45ebec0f3cfb",
+    "c7da06f0ff635430"
+  ],
+  "digest": "2c974efaece662444fb919dc4839b2804e33dee832f8af16a2daab3ff7f66b65"
+}
