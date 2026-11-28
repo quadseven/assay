@@ -43,6 +43,13 @@ review at 40k tokens. A free or promotional tier may lead the chain but never
 end it: it is dropped when no paid model follows it. If no paid model
 qualifies, the run reports no recommendation.
 
+`--chain-out PATH` also writes the chain as JSON: each place's name, wire
+model id and request-body extras (a null extra removes that field), primary
+first. It works with `--rows` too. A reviewer's configuration reads that file,
+so no one copies model ids from a table by hand. The published chain is
+[results/chain.json](results/chain.json). No file is written when no chain
+qualifies.
+
 Results and the recommendation: [results/index.md](results/index.md).
 
 ## Cost: this spends the same allowance a live reviewer uses

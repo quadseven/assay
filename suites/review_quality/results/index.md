@@ -104,11 +104,15 @@ table above, and `tests/test_rq_recommend.py` holds it to that table. The rules 
 the suite README: at both sizes a model needs at least 70% catch and at most 10% timeouts, 10% errors and 25% empty
 answers on defect diffs. Models are ranked by worse-size catch, then timeouts, then cost per review at 40k tokens.
 
-| place | model | catch 10k / 40k | empty on bug | FP on clean | timeout | p50 / p95 s at 40k | $/review at 40k |
-|---|---|---|---|---|---|---|---|
-| primary | deepseek-v4.1-flash (think off) | 100% / 93% | 0% / 7% | 50% / 0% | 0% / 0% | 3.8 / 5.7 | 0.0078 |
-| fallback 1 | mimo-v2.5 (think off) | 79% / 86% | 21% / 7% | 0% / 33% | 0% / 0% | 13.9 / 38.4 | 0.0072 |
-| fallback 2 | mimo-v2.6-flash (think off) | 79% / 71% | 21% / 14% | 33% / 17% | 0% / 10% | 27.5 / 44.6 | 0.0072 |
+| place | model | catch 10k / 40k | empty on bug | FP on clean | timeout | p50 / p95 s at 10k | p50 / p95 s at 40k | $/review at 40k |
+|---|---|---|---|---|---|---|---|---|
+| primary | deepseek-v4.1-flash (think off) | 100% / 93% | 0% / 7% | 50% / 0% | 0% / 0% | 2.9 / 5.0 | 3.8 / 5.7 | 0.0078 |
+| fallback 1 | mimo-v2.5 (think off) | 79% / 86% | 21% / 7% | 0% / 33% | 0% / 0% | 10.5 / 24.6 | 13.9 / 38.4 | 0.0072 |
+| fallback 2 | mimo-v2.6-flash (think off) | 79% / 71% | 21% / 14% | 33% / 17% | 0% / 10% | 8.7 / 44.2 | 27.5 / 44.6 | 0.0072 |
+
+The same chain, as the requests a reviewer sends (wire model id and request-body extras, primary
+first), is [chain.json](chain.json). The same test holds it to the table above. The reviewer's
+chain order is set from that file; `rq_runner.py --chain-out` writes a new one after each run.
 
 Rejected under the real prompt: `kimi-k2.7-code` (35% timeouts, 64% catch), `longcat-2.0` (70% timeouts),
 `glm-5.2` (75% timeouts), `hy3` (50% errors, 29% empty answers on defect diffs), and the free
@@ -118,8 +122,8 @@ overnight may only lead, with a paid model behind it.
 Not yet measured under the real prompt, so not ranked: `glm-5.3-flash` and `deepseek-v4.1-flash`
 with thinking on (both measured only under the stand-in prompt above, where they timed out on 20-65% of calls),
 `qwen3.8-flash` (wired into the runner, refused until its list price is supplied with `--price`), and the historical
-pull-request cases (`--historical`). A run that adds them prints a new chain. Update this section from that output, and the
-reviewer's chain order from this section.
+pull-request cases (`--historical`). A run that adds them prints a new chain and, with `--chain-out`, a new
+`chain.json`. Update this section and `chain.json` from that output, and the reviewer's chain order from `chain.json`.
 
 ## Self-hosted GPUs (Ollama behind a gateway)
 

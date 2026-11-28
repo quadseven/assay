@@ -4,7 +4,7 @@ import pytest
 import rq_recommend
 
 
-def row(model, size, catch=1.0, empty=0.0, fp=0.0, timeout=0.0, error=0.0, cost=0.002):
+def row(model, size, catch=1.0, empty=0.0, fp=0.0, timeout=0.0, error=0.0, cost=0.002, p50=1.0, p95=2.0):
     return {
         "model": model,
         "size": size,
@@ -14,6 +14,8 @@ def row(model, size, catch=1.0, empty=0.0, fp=0.0, timeout=0.0, error=0.0, cost=
         "timeout": timeout,
         "error": error,
         "cost": cost,
+        "p50": p50,
+        "p95": p95,
     }
 
 
@@ -23,12 +25,12 @@ def both(model, **kw):
 
 # The real-reviewer-prompt table in suites/review_quality/results/index.md, 10k then 40k.
 PUBLISHED = [
-    row("mimo-v2.5 (think off)", "10k", 0.79, 0.21, 0.0, 0.0, 0.0, 0.0025),
-    row("mimo-v2.5 (think off)", "40k", 0.86, 0.07, 0.33, 0.0, 0.05, 0.0072),
-    row("mimo-v2.6-flash (think off)", "10k", 0.79, 0.21, 0.33, 0.0, 0.0, 0.0024),
-    row("mimo-v2.6-flash (think off)", "40k", 0.71, 0.14, 0.17, 0.10, 0.0, 0.0072),
-    row("deepseek-v4.1-flash (think off)", "10k", 1.0, 0.0, 0.50, 0.0, 0.0, 0.0027),
-    row("deepseek-v4.1-flash (think off)", "40k", 0.93, 0.07, 0.0, 0.0, 0.0, 0.0078),
+    row("mimo-v2.5 (think off)", "10k", 0.79, 0.21, 0.0, 0.0, 0.0, 0.0025, 10.5, 24.6),
+    row("mimo-v2.5 (think off)", "40k", 0.86, 0.07, 0.33, 0.0, 0.05, 0.0072, 13.9, 38.4),
+    row("mimo-v2.6-flash (think off)", "10k", 0.79, 0.21, 0.33, 0.0, 0.0, 0.0024, 8.7, 44.2),
+    row("mimo-v2.6-flash (think off)", "40k", 0.71, 0.14, 0.17, 0.10, 0.0, 0.0072, 27.5, 44.6),
+    row("deepseek-v4.1-flash (think off)", "10k", 1.0, 0.0, 0.50, 0.0, 0.0, 0.0027, 2.9, 5.0),
+    row("deepseek-v4.1-flash (think off)", "40k", 0.93, 0.07, 0.0, 0.0, 0.0, 0.0078, 3.8, 5.7),
     row("kimi-k2.7-code", "10k", 0.64, 0.14, 0.33, 0.35, 0.0, 0.0226),
     row("kimi-k2.7-code", "40k", 0.71, 0.14, 0.33, 0.20, 0.0, 0.0527),
     row("longcat-2.0", "10k", 0.29, 0.07, 0.0, 0.70, 0.0, 0.0081),
@@ -94,4 +96,47 @@ def test_render_names_primary_and_fallbacks_with_their_numbers():
     assert "primary: deepseek-v4.1-flash (think off)" in text
     assert "fallback 1: mimo-v2.5 (think off)" in text
     assert "catch 93%" in text and "timeout 0%" in text
+    assert "p50 2.9 s, p95 5.0 s" in text and "p50 3.8 s, p95 5.7 s" in text
     assert "rejected: hy3 (error" in text
+
+
+def test_the_published_chain_file_is_the_chain_the_published_table_derives():
+    import json
+    from pathlib import Path
+
+    import rq_runner
+
+    path = Path(__file__).parent.parent / "suites/review_quality/results/chain.json"
+    published = json.loads(path.read_text())
+    assert published["chain"] == rq_runner.chain_spec(rq_recommend.recommend(PUBLISHED, FREE))
+
+
+def test_chain_spec_gives_each_place_its_wire_model_and_request_extras():
+    import rq_runner
+
+    spec = rq_runner.chain_spec(rq_recommend.Recommendation(("deepseek-v4.1-flash (think off)", "hy3"), {}))
+    assert spec == [
+        {
+            "name": "deepseek-v4.1-flash (think off)",
+            "model": "deepseek-v4.1-flash",
+            "extra": {"thinking": {"type": "disabled"}},
+        },
+        {"name": "hy3", "model": "hy3", "extra": {"response_format": None}},
+    ]
+
+
+def test_chain_out_writes_the_derived_chain_from_stored_rows(tmp_path, monkeypatch, capsys):
+    import json
+
+    import rq_runner
+
+    table = [{**r, "n": 20, "reviews_per_month": None} for r in PUBLISHED]
+    monkeypatch.setattr(rq_runner, "summarize", lambda rows: table)
+    rows = tmp_path / "rows.json"
+    rows.write_text("[]")
+    out = tmp_path / "chain.json"
+    monkeypatch.setattr("sys.argv", ["rq_runner", "--rows", str(rows), "--chain-out", str(out)])
+    rq_runner.main()
+    chain = json.loads(out.read_text())["chain"]
+    assert [p["name"] for p in chain] == list(rq_recommend.recommend(PUBLISHED, FREE).chain)
+    assert "primary: deepseek-v4.1-flash (think off)" in capsys.readouterr().out
