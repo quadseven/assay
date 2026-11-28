@@ -86,10 +86,17 @@ def recommend(summary: list[dict], free_models: set[str]) -> Recommendation:
     return Recommendation(tuple(chain), rejected)
 
 
+def _latency(row: dict) -> str:
+    """p50 and p95 seconds, or nothing for a row that records no latency (a hand-copied table)."""
+    if "p50" not in row:
+        return ""
+    return f"p50 {row['p50']:.1f} s, p95 {row['p95']:.1f} s, "
+
+
 def _cells(row: dict) -> str:
     return (
         f"catch {row['catch']:.0%}, empty on bug {row['empty_on_bug']:.0%}, FP on clean {row['fp_clean']:.0%}, "
-        f"timeout {row['timeout']:.0%}, p50 {row['p50']:.1f} s, p95 {row['p95']:.1f} s, ${row['cost']:.4f}/review"
+        f"timeout {row['timeout']:.0%}, {_latency(row)}${row['cost']:.4f}/review"
     )
 
 
