@@ -13,6 +13,10 @@ replay of the reviewer, in this shape:
     {"cases": {"<case id>": {"findings": [{"path", "line", "severity", "text"}],
                               "verdict_seconds": 41}}}
 
+A case may instead carry `"status": "error"` and an `"error"` line (a replay
+that was degraded, partial or unreadable): it is listed, left out of every
+denominator and makes the run exit 1. `prr_replay.py` writes this file.
+
 `--rescore` re-grades a stored result from the findings it recorded and the
 current corpus, and exits 1 when the summary differs from the stored one.
 
@@ -122,6 +126,8 @@ def case_record(raw: dict, observed: dict, result: score.CaseResult) -> dict:
         "pushed_at": observed.get("pushed_at"),
         "verdict_seconds": observed.get("verdict_seconds"),
     }
+    if observed.get("error"):
+        rec["error"] = observed["error"]
     if result.score is not None:
         rec.update(
             caught=list(result.score.caught),
@@ -140,6 +146,10 @@ def run(cases: list[dict], observe, params: dict) -> tuple[list[dict], list[scor
         except (corpus.GitHubError, KeyError, ValueError) as exc:
             errors.append(f"{raw['id']}: {exc}")
             observed = {"status": "error", "findings": []}
+        else:
+            if observed.get("status") == "error":
+                # A replay that could not review the case: reported, never a miss.
+                errors.append(f"{raw['id']}: {observed.get('error', 'review failed')}")
         result = grade(raw, observed, params)
         records.append(case_record(raw, observed, result))
         results.append(result)

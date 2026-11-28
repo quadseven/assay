@@ -90,9 +90,30 @@ replay's output. `--rescore` re-grades a stored run from its own findings;
 exits 1 when any case could not be read and leaves that case out of every
 denominator.
 
-A live replay of today's reviewer on each case is follow-up work: the
-reviewer's offline eval runner and `lane_review`'s pipeline mode both run the
-shipped review on a diff, and their findings feed `--findings` unchanged.
+### Replay of today's reviewer
+
+`prr_replay.py` scores one reviewer revision instead of whatever was deployed
+at the time. It fetches each case's diff by base and head sha at run time,
+with the pull request's title and body, and runs the reviewer's own
+`dispatch_code_review` on it through `suites/lane_review/lr_pipeline.py`. No
+review logic lives here and no diff is committed.
+
+```
+LR_GATEWAY_URL=<gateway base url> python3 prr_replay.py --grug ../grug --live --out replay.json
+python3 prr_runner.py --findings replay.json --grug-sha <grug sha> --out results/<date>-<sha7>.json
+```
+
+- Off unless asked: without `--live` the command exits 2 and does nothing. A
+  full corpus takes hours.
+- No paid key: only the routes the reviewer reaches without one run (the
+  gateway's free pool and the GPU hosts behind it), at batch priority. Model
+  replies are cached under `.cache/pr_review`, so a rerun calls no model.
+- `verdict_seconds` is the wall time of the case's review call, queueing at the
+  gateway included, so it is not comparable with historical time to verdict.
+- A degraded or partial review, a review that published nothing and an
+  unreadable diff are written as `status: error`. The runner lists them, leaves
+  them out of every denominator and exits 1; none reads as a miss.
+- Public corpus only: the private overlay stays on the historical path.
 
 ## Results
 
