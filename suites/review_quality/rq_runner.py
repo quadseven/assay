@@ -2,6 +2,7 @@
 
     OPENCODE_GO_API_KEY=... python rq_runner.py --reps 2 [--models a,b] [--historical] [--out results/DATE]
     python rq_runner.py --rows results/DATE/rows.json     # re-summarize a stored run, no model calls
+    python rq_runner.py --rows results/DATE/rows.json --chain-out chain.json   # also write the chain as JSON
 
 The request shape is what a reviewer sends: a JSON-only system prompt, the diff
 as the user message, max_tokens 8192, a hard 45 s total deadline per call.
@@ -255,16 +256,29 @@ def free_models(names: list[str]) -> set[str]:
     return {n for n in names if MODELS.get(n, ("", {}, 0, 0, None))[4] is None}
 
 
-def report(rows: list[dict]) -> str:
-    """The per-model table, then the recommended chain derived from it."""
+def chain_spec(rec: rq_recommend.Recommendation) -> list[dict]:
+    """Each place of the chain, primary first, as the request a reviewer sends.
+
+    `extra` merges into the request body; a null value removes that field (hy3
+    answers HTTP 400 whenever `response_format` is sent).
+    """
+    return [{"name": n, "model": MODELS[n][0], "extra": MODELS[n][1]} for n in rec.chain]
+
+
+def report(rows: list[dict], chain_out: str = "") -> str:
+    """The per-model table, then the recommended chain derived from it.
+
+    With `chain_out`, the chain is also written there as JSON for a reviewer's
+    configuration; no file is written when no chain qualifies.
+    """
     summary = summarize(rows)
     try:
-        chain = rq_recommend.render(
-            rq_recommend.recommend(summary, free_models([s["model"] for s in summary])), summary
-        )
+        rec = rq_recommend.recommend(summary, free_models([s["model"] for s in summary]))
     except rq_recommend.NoChain as exc:
-        chain = f"no recommendation: {exc}\n"
-    return render(summary) + "\n" + chain
+        return render(summary) + "\n" + f"no recommendation: {exc}\n"
+    if chain_out:
+        Path(chain_out).write_text(json.dumps({"chain": chain_spec(rec)}, indent=1) + "\n")
+    return render(summary) + "\n" + rq_recommend.render(rec, summary)
 
 
 def _args() -> argparse.Namespace:
@@ -302,6 +316,11 @@ def _args() -> argparse.Namespace:
     )
     ap.add_argument("--rows", default="", help="re-summarize a stored rows.json instead of calling models")
     ap.add_argument(
+        "--chain-out",
+        default="",
+        help="also write the recommended chain (wire model ids and request extras, primary first) as JSON",
+    )
+    ap.add_argument(
         "--warmup", action="store_true", help="send one unscored call per model first (cold model loads)"
     )
     ap.add_argument(
@@ -330,7 +349,7 @@ def main() -> None:
     global URL, TIMEOUT_S
     args = _args()
     if args.rows:
-        print(report(json.loads(Path(args.rows).read_text())))
+        print(report(json.loads(Path(args.rows).read_text()), args.chain_out))
         return
     TIMEOUT_S = args.timeout
     names = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -349,7 +368,7 @@ def main() -> None:
     if args.warmup:
         asyncio.run(_warm(names, key, system))
     rows = asyncio.run(run(names, args.reps, args.concurrency, key, cases, system))
-    text = report(rows)
+    text = report(rows, args.chain_out)
     print(text)
     if args.out:
         Path(args.out).mkdir(parents=True, exist_ok=True)

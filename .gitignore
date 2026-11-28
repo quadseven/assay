@@ -35,3 +35,5 @@ suites/pr_review/seeds.private.json
 suites/pr_review/cases.private.json
 # pr_review run records ARE tracked: tests re-grade them to their stored summary.
 !suites/pr_review/results/20*.json
+# review_quality's derived reviewer chain IS tracked: a test holds it to the published table.
+!suites/review_quality/results/chain.json

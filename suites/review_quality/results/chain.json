@@ -1,0 +1,31 @@
+{
+ "chain": [
+  {
+   "name": "deepseek-v4.1-flash (think off)",
+   "model": "deepseek-v4.1-flash",
+   "extra": {
+    "thinking": {
+     "type": "disabled"
+    }
+   }
+  },
+  {
+   "name": "mimo-v2.5 (think off)",
+   "model": "mimo-v2.5",
+   "extra": {
+    "thinking": {
+     "type": "disabled"
+    }
+   }
+  },
+  {
+   "name": "mimo-v2.6-flash (think off)",
+   "model": "mimo-v2.6-flash",
+   "extra": {
+    "thinking": {
+     "type": "disabled"
+    }
+   }
+  }
+ ]
+}
