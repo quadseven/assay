@@ -46,6 +46,7 @@ import os
 import re
 import sys
 import threading
+import time
 from collections import Counter
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -349,43 +350,52 @@ def _trace(tier: str, what: str) -> None:
         print(f"LRDBG {tier} {what}", file=sys.stderr)
 
 
-def _review(run: _Run) -> lr_score.Verdict:
+@dataclasses.dataclass(frozen=True)
+class Review:
+    """What the checkout's review published for one fixture: the findings
+    as the reviewer built them (file, line, severity, rule, message), or the
+    reason there is no usable review. `seconds` is the wall time of the
+    dispatch call."""
+
+    fixture_id: str
+    findings: tuple = ()
+    error: str = ""
+    seconds: int | None = None
+
+
+def _review_detail(run: _Run) -> Review:
     from personas.code_reviewer import dispatch as cr
     from personas.review_publish import is_real_degradation
 
     fixture = run.fixture
-    classes = tuple(fixture.get("classes", ()))
     _CURRENT.run = run
+    started = time.monotonic()
     try:
         run.result = cr.dispatch_code_review(run.payload(), blocking=True)
     except Exception as e:  # noqa: BLE001 - one bad fixture must not hide the rest
-        return lr_score.Verdict(fixture["id"], fixture["label"], classes, error=f"{type(e).__name__}: {e}")
+        return Review(fixture["id"], error=f"{type(e).__name__}: {e}")
+    seconds = round(time.monotonic() - started)
     if not run.published:
-        return lr_score.Verdict(
-            fixture["id"], fixture["label"], classes, error=f"nothing published: {run.result}"
-        )
+        return Review(fixture["id"], error=f"nothing published: {run.result}", seconds=seconds)
     final = run.published[-1]
     if is_real_degradation(final.degraded_reason):
-        return lr_score.Verdict(
-            fixture["id"], fixture["label"], classes, error=f"degraded: {final.degraded_reason}"
-        )
+        return Review(fixture["id"], error=f"degraded: {final.degraded_reason}", seconds=seconds)
+    return Review(fixture["id"], findings=tuple(final.findings), seconds=seconds)
+
+
+def _review(run: _Run) -> lr_score.Verdict:
+    review = _review_detail(run)
+    fixture = run.fixture
     return lr_score.Verdict(
         fixture["id"],
         fixture["label"],
-        classes,
-        tuple((f.rule_name, f.severity) for f in final.findings),
+        tuple(fixture.get("classes", ())),
+        tuple((f.rule_name, f.severity) for f in review.findings),
+        error=review.error,
     )
 
 
-def replay_pipeline(
-    grug: Path,
-    corpus: list[dict],
-    *,
-    gateway_url: str,
-    cache_dir: Path,
-    workers: int = 2,
-) -> tuple[list[lr_score.Verdict], ReplyCache]:
-    """Verdicts of the checkout's full review on every fixture."""
+def _prepare(grug: Path, gateway_url: str) -> None:
     os.environ.update(production_env(grug, gateway_url))
     # No real cloud credential may be used, even by accident.
     for var in ("AWS_PROFILE", "AWS_DEFAULT_PROFILE", "AWS_SESSION_TOKEN", "AWS_CONFIG_FILE"):
@@ -397,9 +407,37 @@ def replay_pipeline(
     shared = str(grug.resolve() / "services" / "_shared")
     if shared not in sys.path:
         sys.path.insert(0, shared)
+
+
+def _drive(grug: Path, corpus: list[dict], gateway_url: str, cache_dir: Path, workers: int, review):
+    _prepare(grug, gateway_url)
     cache = ReplyCache(cache_dir / "replies.jsonl")
     runs = {i: _Run(i, f) for i, f in enumerate(corpus, start=1)}
     host = urlparse(gateway_url).hostname or ""
     with _patched(host, runs, cache), ThreadPoolExecutor(max_workers=workers) as pool:
-        verdicts = list(pool.map(_review, runs.values()))
-    return verdicts, cache
+        return list(pool.map(review, runs.values())), cache
+
+
+def replay_pipeline(
+    grug: Path,
+    corpus: list[dict],
+    *,
+    gateway_url: str,
+    cache_dir: Path,
+    workers: int = 2,
+) -> tuple[list[lr_score.Verdict], ReplyCache]:
+    """Verdicts of the checkout's full review on every fixture."""
+    return _drive(grug, corpus, gateway_url, cache_dir, workers, _review)
+
+
+def replay_reviews(
+    grug: Path,
+    corpus: list[dict],
+    *,
+    gateway_url: str,
+    cache_dir: Path,
+    workers: int = 2,
+) -> tuple[list[Review], ReplyCache]:
+    """The checkout's full review of every fixture, findings and timing kept
+    (`replay_pipeline` keeps only rule and severity)."""
+    return _drive(grug, corpus, gateway_url, cache_dir, workers, _review_detail)

@@ -189,6 +189,16 @@ def test_replay_is_isolated_and_scores_what_dispatch_published(grug, tmp_path):
     assert os.environ["AWS_ACCESS_KEY_ID"] == "replay"
 
 
+def test_replay_reviews_keeps_the_published_findings_and_wall_time(grug, tmp_path):
+    reviews, _cache = lr_pipeline.replay_reviews(
+        grug, [_fixture("a")], gateway_url="https://gw.invalid", cache_dir=tmp_path / "c", workers=1
+    )
+    (review,) = reviews
+    assert review.fixture_id == "a" and review.error == ""
+    assert [f.rule_name for f in review.findings] == ["seen-new", "seen-context"]
+    assert isinstance(review.seconds, int) and review.seconds >= 0
+
+
 def test_a_rerun_walks_the_chain_from_the_cache_failures_included(grug, tmp_path):
     corpus = [_fixture("a"), _fixture("b", "GOOD")]
     verdicts, cache = _replay(grug, tmp_path, corpus)
